@@ -1,7 +1,7 @@
 import React from "react"
 import { useState, useEffect, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCorners, useDroppable } from '@dnd-kit/core'
+import { DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors, closestCorners, useDroppable } from '@dnd-kit/core'
 import { db, ETAPES, ETAPE_MAP, avancerEtape, seedDemo } from '../data/db'
 import { calculerProjectionCA } from '../utils/aiEngine'
 import Drawer from './Drawer'
@@ -29,7 +29,10 @@ export default function Kanban() {
   const projection = calculerProjectionCA(dossiers||[])
   const rappelsUrgents = (rappels||[]).filter(r=>new Date(r.echeance)<=new Date())
   useEffect(()=>{ seedDemo() },[])
-  const sensors = useSensors(useSensor(PointerSensor,{activationConstraint:{distance:8}}))
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
+  )
   function handleDragStart({active}) { setActiveDrag((dossiers||[]).find(x=>x.id===active.id)||null) }
   async function handleDragEnd({active,over}) {
     setActiveDrag(null)
