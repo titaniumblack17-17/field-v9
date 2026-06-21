@@ -14,6 +14,7 @@ export default function Kanban() {
   const [drawerCabinet, setDrawerCabinet] = useState(null)
   const [activeDrag, setActiveDrag] = useState(null)
   const [showBrief, setShowBrief] = useState(false)
+  const [moveDossier, setMoveDossier] = useState(null)
   const colRefs = useRef({})
   const dossiers  = useLiveQuery(()=>db.dossiers.toArray(),[],[])
   const cabinets  = useLiveQuery(()=>db.cabinets.toArray(),[],[])
@@ -79,6 +80,38 @@ export default function Kanban() {
           onSwitchDossier={d=>{setDrawerDossier(d);setDrawerCabinet(cabMap[d.cabinetId])}}
           onEtapeChange={async e=>{await avancerEtape(drawerDossier.id,e);setDrawerDossier(p=>({...p,etape:e}))}}/>
       )}
+      {moveDossier&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',zIndex:60,display:'flex',alignItems:'flex-end'}} onClick={()=>setMoveDossier(null)}>
+          <div style={{background:'white',width:'100%',borderRadius:'16px 16px 0 0',padding:'16px',maxHeight:'70vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:'14px',fontWeight:600,color:'#111',marginBottom:'4px'}}>
+              {cabMap[moveDossier.cabinetId]?.praticien}
+            </div>
+            <div style={{fontSize:'12px',color:'#9ca3af',marginBottom:'16px'}}>Choisir la nouvelle étape</div>
+            <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+              {ETAPES.map(function(e) {
+                var active = e.id === moveDossier.etape
+                return (
+                  <button key={e.id}
+                    onClick={async function() {
+                      await avancerEtape(moveDossier.id, e.id)
+                      setMoveDossier(null)
+                    }}
+                    style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',borderRadius:'10px',border:'1px solid '+(active?e.color:'#e5e7eb'),background:active?e.bg:'white',cursor:'pointer',textAlign:'left'}}>
+                    <div style={{width:'8px',height:'8px',borderRadius:'50%',background:e.color,flexShrink:0}}/>
+                    <span style={{fontSize:'13px',color:active?e.color:'#374151',fontWeight:active?500:400}}>{e.label}</span>
+                    {active && <span style={{marginLeft:'auto',fontSize:'11px',color:e.color}}>✓ actuel</span>}
+                  </button>
+                )
+              })}
+            </div>
+            <button onClick={()=>setMoveDossier(null)}
+              style={{width:'100%',marginTop:'12px',padding:'12px',borderRadius:'10px',border:'none',background:'#f3f4f6',color:'#6b7280',fontSize:'13px',cursor:'pointer'}}>
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
       {showBrief&&(
         <BriefPanel onClose={()=>setShowBrief(false)}
           onOpenDossier={id=>{const d=(dossiers||[]).find(x=>x.id===id);if(d){openDrawer(d);setShowBrief(false)}}}/>
@@ -98,7 +131,7 @@ function KanbanCol({ etape, dossiers, cabMap, actMap, colRef, onOpen }) {
       <div className="flex flex-col gap-2 min-h-16 rounded-xl transition-colors p-1"
         style={{background:isOver?etape.bg:'transparent'}}>
         {dossiers.map(d=>(
-          <CardKanban key={d.id} dossier={d} cabinet={cabMap[d.cabinetId]} activites={actMap[d.id]||[]} onClick={()=>onOpen(d)}/>
+          <CardKanban key={d.id} dossier={d} cabinet={cabMap[d.cabinetId]} activites={actMap[d.id]||[]} onClick={()=>onOpen(d)} onMove={setMoveDossier}/>
         ))}
       </div>
     </div>

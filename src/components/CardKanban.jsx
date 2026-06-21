@@ -24,6 +24,12 @@ export default function CardKanban({ dossier, cabinet, activites, onClick, isDra
         {hasRappel && <div className="flex items-center gap-1 text-[10px] text-amber-600 mt-1">⏰ {dossier.rappelNote||'Rappel'}</div>}
         <div className="mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-400 hover:text-gray-600 cursor-pointer"
           onClick={e=>{e.stopPropagation();onClick&&onClick()}}>+ Note rapide</div>
+        {onMove && (
+          <div onClick={e=>{e.stopPropagation();onMove(dossier)}}
+            style={{marginTop:'4px', fontSize:'10px', color:'#378ADD', cursor:'pointer', textAlign:'right'}}>
+            Déplacer →
+          </div>
+        )}
       </div>
     </div>
   )
