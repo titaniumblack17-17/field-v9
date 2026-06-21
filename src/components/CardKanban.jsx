@@ -5,7 +5,7 @@ const TS = { projet:{bg:'#E6F1FB',color:'#0C447C',label:'Projet'}, sav:{bg:'#FAE
 const fmt = n => !n?null:n>=1000?(n/1000).toFixed(0)+' k€':n+' €'
 
 export default function CardKanban({ dossier, cabinet, activites, onClick, isDragging }) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: dossier.id })
+  const { attributes, listeners, setNodeRef, transform, isDragging: isDrag } = useDraggable({ id: dossier.id })
   const style = transform ? { transform:`translate(${transform.x}px,${transform.y}px)`,zIndex:50 } : {}
   const ts = TS[dossier.type] || TS.projet
   const montant = fmt(dossier.montantEstime)

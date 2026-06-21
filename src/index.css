@@ -8,3 +8,11 @@ body { margin: 0; font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoo
 .scrollbar-none { scrollbar-width: none; }
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+
+/* Touch drag support */
+[data-dnd-kit-draggable] {
+  touch-action: none;
+}
+.draggable {
+  touch-action: none;
+}
