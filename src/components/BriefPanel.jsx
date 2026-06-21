@@ -1,3 +1,4 @@
+import React from "react"
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../data/db'
 import { genererBrief, calculerProjectionCA } from '../utils/aiEngine'

@@ -1,3 +1,4 @@
+import React from "react"
 const fmt = n => !n?'0 €':n>=1000000?(n/1000000).toFixed(1)+' M€':n>=1000?(n/1000).toFixed(0)+' k€':n+' €'
 
 export default function TopBar({ totalPipeline, projection, rappelsUrgents, onNewDossier, onBrief }) {

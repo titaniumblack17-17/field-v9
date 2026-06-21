@@ -1,3 +1,4 @@
+import React from "react"
 import { useDraggable } from '@dnd-kit/core'
 
 const TS = { projet:{bg:'#E6F1FB',color:'#0C447C',label:'Projet'}, sav:{bg:'#FAEEDA',color:'#633806',label:'SAV'}, plan:{bg:'#EAF3DE',color:'#27500A',label:'Plan'} }
