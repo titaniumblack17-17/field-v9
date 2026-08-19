@@ -50,8 +50,13 @@ export default function ClientDetail({ client, onBack }) {
           {LIST_FIELDS.map(([key, label]) =>
             client[key]?.length ? (
               <div key={key} className="px-4 py-3">
-                <p className="text-xs text-gray-400">{label}</p>
-                <p className="text-gray-900">{client[key].join(', ')}</p>
+                <p className="text-xs text-gray-400 mb-1">{label}</p>
+                {client[key].map((person, i) => (
+                  <p key={i} className="text-gray-900">
+                    {person.prenom}
+                    {person.telephone ? ` · ${person.telephone}` : ''}
+                  </p>
+                ))}
               </div>
             ) : null
           )}

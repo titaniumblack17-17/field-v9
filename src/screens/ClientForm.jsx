@@ -11,23 +11,30 @@ const FIELDS = [
   ['email', 'E-mail', false],
 ]
 
-function NameListField({ label, names, onChange }) {
-  const setAt = (i) => (e) => {
-    const next = [...names]
-    next[i] = e.target.value
+function PersonListField({ label, people, onChange }) {
+  const setAt = (i, key) => (e) => {
+    const next = [...people]
+    next[i] = { ...next[i], [key]: e.target.value }
     onChange(next)
   }
-  const removeAt = (i) => onChange(names.filter((_, idx) => idx !== i))
-  const add = () => onChange([...names, ''])
+  const removeAt = (i) => onChange(people.filter((_, idx) => idx !== i))
+  const add = () => onChange([...people, { prenom: '', telephone: '' }])
 
   return (
     <div className="px-4 py-3">
       <label className="text-xs text-gray-400">{label}</label>
-      {names.map((name, i) => (
+      {people.map((person, i) => (
         <div key={i} className="flex items-center gap-2 mt-1">
           <input
-            value={name}
-            onChange={setAt(i)}
+            value={person.prenom}
+            onChange={setAt(i, 'prenom')}
+            placeholder="Prénom"
+            className="flex-1 text-gray-900 outline-none bg-transparent"
+          />
+          <input
+            value={person.telephone}
+            onChange={setAt(i, 'telephone')}
+            placeholder="Téléphone (portable ou cabinet)"
             className="flex-1 text-gray-900 outline-none bg-transparent"
           />
           <button
@@ -53,12 +60,17 @@ function NameListField({ label, names, onChange }) {
 
 export default function ClientForm({ onCreated, onCancel }) {
   const [values, setValues] = useState({})
-  const [associes, setAssocies] = useState([''])
-  const [assistantes, setAssistantes] = useState([''])
+  const [associes, setAssocies] = useState([{ prenom: '', telephone: '' }])
+  const [assistantes, setAssistantes] = useState([{ prenom: '', telephone: '' }])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
   const setField = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }))
+
+  const cleanPeople = (people) =>
+    people
+      .map((p) => ({ prenom: p.prenom.trim(), telephone: p.telephone.trim() }))
+      .filter((p) => p.prenom || p.telephone)
 
   const submit = async (e) => {
     e.preventDefault()
@@ -73,8 +85,8 @@ export default function ClientForm({ onCreated, onCancel }) {
       .from('clients')
       .insert({
         ...values,
-        associes: associes.map((n) => n.trim()).filter(Boolean),
-        assistantes: assistantes.map((n) => n.trim()).filter(Boolean),
+        associes: cleanPeople(associes),
+        assistantes: cleanPeople(assistantes),
       })
       .select()
       .single()
@@ -115,8 +127,8 @@ export default function ClientForm({ onCreated, onCancel }) {
               />
             </div>
           ))}
-          <NameListField label="Associé(s)" names={associes} onChange={setAssocies} />
-          <NameListField label="Assistante(s)" names={assistantes} onChange={setAssistantes} />
+          <PersonListField label="Associé(s)" people={associes} onChange={setAssocies} />
+          <PersonListField label="Assistante(s)" people={assistantes} onChange={setAssistantes} />
           <div className="px-4 py-3">
             <label className="text-xs text-gray-400" htmlFor="notes">
               Notes (collez ici un mail, SMS, ou toute info brute)
