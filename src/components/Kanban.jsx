@@ -65,7 +65,7 @@ export default function Kanban() {
         <div className="flex gap-3 px-4 py-3 overflow-x-auto flex-1 items-start">
           {ETAPES.map(etape=>(
             <KanbanCol key={etape.id} etape={etape} dossiers={byEtape[etape.id]||[]} cabMap={cabMap} actMap={actMap}
-              colRef={el=>{colRefs.current[etape.id]=el}} onOpen={openDrawer}/>
+              colRef={el=>{colRefs.current[etape.id]=el}} onOpen={openDrawer} onMove={setMoveDossier}/>
           ))}
         </div>
         <DragOverlay>
@@ -120,7 +120,7 @@ export default function Kanban() {
   )
 }
 
-function KanbanCol({ etape, dossiers, cabMap, actMap, colRef, onOpen }) {
+function KanbanCol({ etape, dossiers, cabMap, actMap, colRef, onOpen, onMove }) {
   const { setNodeRef, isOver } = useDroppable({ id: etape.id })
   return (
     <div ref={el=>{setNodeRef(el);if(colRef)colRef(el)}} className="flex-shrink-0 w-48 flex flex-col">
@@ -131,7 +131,7 @@ function KanbanCol({ etape, dossiers, cabMap, actMap, colRef, onOpen }) {
       <div className="flex flex-col gap-2 min-h-16 rounded-xl transition-colors p-1"
         style={{background:isOver?etape.bg:'transparent'}}>
         {dossiers.map(d=>(
-          <CardKanban key={d.id} dossier={d} cabinet={cabMap[d.cabinetId]} activites={actMap[d.id]||[]} onClick={()=>onOpen(d)} onMove={setMoveDossier}/>
+          <CardKanban key={d.id} dossier={d} cabinet={cabMap[d.cabinetId]} activites={actMap[d.id]||[]} onClick={()=>onOpen(d)} onMove={onMove}/>
         ))}
       </div>
     </div>

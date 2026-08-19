@@ -4,7 +4,7 @@ import { useDraggable } from '@dnd-kit/core'
 const TS = { projet:{bg:'#E6F1FB',color:'#0C447C',label:'Projet'}, sav:{bg:'#FAEEDA',color:'#633806',label:'SAV'}, plan:{bg:'#EAF3DE',color:'#27500A',label:'Plan'} }
 const fmt = n => !n?null:n>=1000?(n/1000).toFixed(0)+' k€':n+' €'
 
-export default function CardKanban({ dossier, cabinet, activites, onClick, isDragging }) {
+export default function CardKanban({ dossier, cabinet, activites, onClick, isDragging, onMove }) {
   const { attributes, listeners, setNodeRef, transform, isDragging: isDrag } = useDraggable({ id: dossier.id })
   const style = transform ? { transform:`translate(${transform.x}px,${transform.y}px)`,zIndex:50 } : {}
   const ts = TS[dossier.type] || TS.projet
