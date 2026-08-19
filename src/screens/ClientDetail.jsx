@@ -6,8 +6,10 @@ const FIELDS = [
   ['adresse', 'Adresse'],
   ['code_postal', 'Code postal'],
   ['ville', 'Ville'],
-  ['telephone_portable', 'Portable'],
-  ['email', 'E-mail'],
+  ['telephone_portable', 'Portable (praticien)'],
+  ['telephone_cabinet', 'Téléphone cabinet'],
+  ['email', 'E-mail (praticien)'],
+  ['email_cabinet', 'E-mail (cabinet)'],
 ]
 
 const LIST_FIELDS = [
@@ -36,7 +38,9 @@ export default function ClientDetail({ client, onBack }) {
       </header>
 
       <main className="px-4 pb-8">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-4">{client.nom_praticien}</h1>
+        <h1 className="text-2xl font-semibold text-gray-900 mb-4">
+          {[client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ')}
+        </h1>
 
         <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
           {FIELDS.map(([key, label]) =>
@@ -63,7 +67,7 @@ export default function ClientDetail({ client, onBack }) {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm mt-4 px-4 py-3">
-          <p className="text-xs text-gray-400 mb-1">Notes (collez ici un mail, SMS, ou toute info brute)</p>
+          <p className="text-xs text-gray-400 mb-1">Informations annexes (mail, SMS, ou toute autre info à coller)</p>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}

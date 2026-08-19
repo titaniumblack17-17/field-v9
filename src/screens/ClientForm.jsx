@@ -2,13 +2,16 @@ import React, { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 const FIELDS = [
+  ['prenom_praticien', 'Prénom du praticien', false],
   ['nom_praticien', 'Nom du praticien', true],
   ['nom_cabinet', 'Cabinet', false],
   ['adresse', 'Adresse', false],
   ['code_postal', 'Code postal', false],
   ['ville', 'Ville', false],
-  ['telephone_portable', 'Portable', false],
-  ['email', 'E-mail', false],
+  ['telephone_portable', 'Portable (praticien)', false],
+  ['telephone_cabinet', 'Téléphone cabinet', false],
+  ['email', 'E-mail (praticien)', false],
+  ['email_cabinet', 'E-mail (cabinet)', false],
 ]
 
 function PersonListField({ label, people, onChange }) {
@@ -131,7 +134,7 @@ export default function ClientForm({ onCreated, onCancel }) {
           <PersonListField label="Assistante(s)" people={assistantes} onChange={setAssistantes} />
           <div className="px-4 py-3">
             <label className="text-xs text-gray-400" htmlFor="notes">
-              Notes (collez ici un mail, SMS, ou toute info brute)
+              Informations annexes (mail, SMS, ou toute autre info à coller)
             </label>
             <textarea
               id="notes"

@@ -78,7 +78,9 @@ export default function ClientList({ onSelect, onCreate }) {
                 onClick={() => onSelect(client)}
                 className="w-full text-left bg-white rounded-xl px-4 py-3 shadow-sm active:scale-[0.98] transition"
               >
-                <p className="font-medium text-gray-900">{client.nom_praticien}</p>
+                <p className="font-medium text-gray-900">
+                  {[client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ')}
+                </p>
                 {(client.nom_cabinet || client.ville) && (
                   <p className="text-sm text-gray-500">
                     {[client.nom_cabinet, client.ville].filter(Boolean).join(' · ')}
