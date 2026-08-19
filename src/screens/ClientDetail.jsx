@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 const FIELDS = [
@@ -20,6 +20,7 @@ const LIST_FIELDS = [
 export default function ClientDetail({ client, onBack }) {
   const [notes, setNotes] = useState(client.notes ?? '')
   const [saving, setSaving] = useState(false)
+  const [journal, setJournal] = useState([])
   const dirty = notes !== (client.notes ?? '')
 
   const saveNotes = async () => {
@@ -28,6 +29,47 @@ export default function ClientDetail({ client, onBack }) {
     client.notes = notes
     setSaving(false)
   }
+
+  useEffect(() => {
+    let active = true
+
+    supabase
+      .from('captures')
+      .select('*')
+      .eq('client_id', client.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (active) setJournal(data ?? [])
+      })
+
+    const channel = supabase
+      .channel(`captures-client-${client.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'captures', filter: `client_id=eq.${client.id}` },
+        (payload) => {
+          setJournal((current) => {
+            if (payload.eventType === 'INSERT') {
+              if (current.some((c) => c.id === payload.new.id)) return current
+              return [payload.new, ...current]
+            }
+            if (payload.eventType === 'UPDATE') {
+              return current.map((c) => (c.id === payload.new.id ? payload.new : c))
+            }
+            if (payload.eventType === 'DELETE') {
+              return current.filter((c) => c.id !== payload.old.id)
+            }
+            return current
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      active = false
+      supabase.removeChannel(channel)
+    }
+  }, [client.id])
 
   return (
     <div className="min-h-screen bg-[#F5F4F0]">
@@ -84,6 +126,26 @@ export default function ClientDetail({ client, onBack }) {
             </button>
           )}
         </div>
+
+        {journal.length > 0 && (
+          <div className="mt-4">
+            <p className="text-xs text-gray-400 mb-2 px-1">Journal</p>
+            <ul className="space-y-2">
+              {journal.map((c) => (
+                <li key={c.id} className="bg-white rounded-xl px-4 py-3 shadow-sm">
+                  <p className="text-gray-900 text-sm">{c.resume || c.texte}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {new Date(c.created_at).toLocaleDateString('fr-FR')}
+                    {c.date_evenement ? ` · échéance ${c.date_evenement}` : ''}
+                  </p>
+                  {c.info_manquante && (
+                    <p className="text-xs text-amber-600 mt-1">⚠ {c.info_manquante}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </main>
     </div>
   )

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
-export default function ClientList({ onSelect, onCreate }) {
+export default function ClientList({ onSelect, onCreate, onCapture }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -54,12 +54,20 @@ export default function ClientList({ onSelect, onCreate }) {
     <div className="min-h-screen bg-[#F5F4F0]">
       <header className="sticky top-0 bg-[#F5F4F0]/90 backdrop-blur px-4 pt-6 pb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-gray-900">Clients</h1>
-        <button
-          onClick={onCreate}
-          className="w-9 h-9 rounded-full bg-[#378ADD] text-white text-xl leading-none flex items-center justify-center shadow"
-        >
-          +
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onCapture}
+            className="px-3 h-9 rounded-full bg-white text-[#378ADD] text-sm font-medium shadow"
+          >
+            Capture rapide
+          </button>
+          <button
+            onClick={onCreate}
+            className="w-9 h-9 rounded-full bg-[#378ADD] text-white text-xl leading-none flex items-center justify-center shadow"
+          >
+            +
+          </button>
+        </div>
       </header>
 
       <main className="px-4 pb-8">
