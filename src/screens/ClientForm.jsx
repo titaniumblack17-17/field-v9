@@ -9,11 +9,52 @@ const FIELDS = [
   ['ville', 'Ville', false],
   ['telephone_portable', 'Portable', false],
   ['email', 'E-mail', false],
-  ['assistante', 'Assistante', false],
 ]
+
+function NameListField({ label, names, onChange }) {
+  const setAt = (i) => (e) => {
+    const next = [...names]
+    next[i] = e.target.value
+    onChange(next)
+  }
+  const removeAt = (i) => onChange(names.filter((_, idx) => idx !== i))
+  const add = () => onChange([...names, ''])
+
+  return (
+    <div className="px-4 py-3">
+      <label className="text-xs text-gray-400">{label}</label>
+      {names.map((name, i) => (
+        <div key={i} className="flex items-center gap-2 mt-1">
+          <input
+            value={name}
+            onChange={setAt(i)}
+            className="flex-1 text-gray-900 outline-none bg-transparent"
+          />
+          <button
+            type="button"
+            onClick={() => removeAt(i)}
+            className="text-gray-300 text-lg leading-none px-1"
+            aria-label={`Retirer ${label}`}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        className="text-[#378ADD] text-sm mt-2"
+      >
+        + Ajouter
+      </button>
+    </div>
+  )
+}
 
 export default function ClientForm({ onCreated, onCancel }) {
   const [values, setValues] = useState({})
+  const [associes, setAssocies] = useState([''])
+  const [assistantes, setAssistantes] = useState([''])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
@@ -30,7 +71,11 @@ export default function ClientForm({ onCreated, onCancel }) {
 
     const { data, error: dbError } = await supabase
       .from('clients')
-      .insert({ ...values })
+      .insert({
+        ...values,
+        associes: associes.map((n) => n.trim()).filter(Boolean),
+        assistantes: assistantes.map((n) => n.trim()).filter(Boolean),
+      })
       .select()
       .single()
 
@@ -70,6 +115,8 @@ export default function ClientForm({ onCreated, onCancel }) {
               />
             </div>
           ))}
+          <NameListField label="Associé(s)" names={associes} onChange={setAssocies} />
+          <NameListField label="Assistante(s)" names={assistantes} onChange={setAssistantes} />
           <div className="px-4 py-3">
             <label className="text-xs text-gray-400" htmlFor="notes">
               Notes (collez ici un mail, SMS, ou toute info brute)

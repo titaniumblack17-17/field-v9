@@ -8,7 +8,11 @@ const FIELDS = [
   ['ville', 'Ville'],
   ['telephone_portable', 'Portable'],
   ['email', 'E-mail'],
-  ['assistante', 'Assistante'],
+]
+
+const LIST_FIELDS = [
+  ['associes', 'Associé(s)'],
+  ['assistantes', 'Assistante(s)'],
 ]
 
 export default function ClientDetail({ client, onBack }) {
@@ -40,6 +44,14 @@ export default function ClientDetail({ client, onBack }) {
               <div key={key} className="px-4 py-3">
                 <p className="text-xs text-gray-400">{label}</p>
                 <p className="text-gray-900">{client[key]}</p>
+              </div>
+            ) : null
+          )}
+          {LIST_FIELDS.map(([key, label]) =>
+            client[key]?.length ? (
+              <div key={key} className="px-4 py-3">
+                <p className="text-xs text-gray-400">{label}</p>
+                <p className="text-gray-900">{client[key].join(', ')}</p>
               </div>
             ) : null
           )}
