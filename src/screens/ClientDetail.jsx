@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import PersonListField from '../components/PersonListField'
 
 const FIELDS = [
+  ['prenom_praticien', 'Prénom du praticien'],
+  ['nom_praticien', 'Nom du praticien'],
   ['nom_cabinet', 'Cabinet'],
   ['adresse', 'Adresse'],
   ['code_postal', 'Code postal'],
@@ -12,16 +15,76 @@ const FIELDS = [
   ['email_cabinet', 'E-mail (cabinet)'],
 ]
 
-const LIST_FIELDS = [
-  ['associes', 'Associé(s)'],
-  ['assistantes', 'Assistante(s)'],
-]
+const emptyPeople = (list) => (list?.length ? list : [{ prenom: '', telephone: '' }])
 
 export default function ClientDetail({ client, onBack }) {
+  const [editing, setEditing] = useState(false)
+  const [values, setValues] = useState(client)
+  const [associes, setAssocies] = useState(emptyPeople(client.associes))
+  const [assistantes, setAssistantes] = useState(emptyPeople(client.assistantes))
+  const [savingFiche, setSavingFiche] = useState(false)
+  const [ficheError, setFicheError] = useState(null)
+
   const [notes, setNotes] = useState(client.notes ?? '')
   const [saving, setSaving] = useState(false)
   const [journal, setJournal] = useState([])
   const dirty = notes !== (client.notes ?? '')
+
+  const setField = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }))
+
+  const cleanPeople = (people) =>
+    people
+      .map((p) => ({ prenom: p.prenom.trim(), telephone: p.telephone.trim() }))
+      .filter((p) => p.prenom || p.telephone)
+
+  const startEdit = () => {
+    setValues(client)
+    setAssocies(emptyPeople(client.associes))
+    setAssistantes(emptyPeople(client.assistantes))
+    setFicheError(null)
+    setEditing(true)
+  }
+
+  const saveFiche = async () => {
+    if (!values.nom_praticien?.trim()) {
+      setFicheError('Le nom du praticien est obligatoire.')
+      return
+    }
+    setSavingFiche(true)
+    setFicheError(null)
+
+    const update = {
+      prenom_praticien: values.prenom_praticien || null,
+      nom_praticien: values.nom_praticien,
+      nom_cabinet: values.nom_cabinet || null,
+      adresse: values.adresse || null,
+      code_postal: values.code_postal || null,
+      ville: values.ville || null,
+      telephone_portable: values.telephone_portable || null,
+      telephone_cabinet: values.telephone_cabinet || null,
+      email: values.email || null,
+      email_cabinet: values.email_cabinet || null,
+      associes: cleanPeople(associes),
+      assistantes: cleanPeople(assistantes),
+    }
+
+    const { data, error } = await supabase
+      .from('clients')
+      .update(update)
+      .eq('id', client.id)
+      .select()
+      .single()
+
+    setSavingFiche(false)
+
+    if (error) {
+      setFicheError(error.message)
+      return
+    }
+
+    Object.assign(client, data)
+    setEditing(false)
+  }
 
   const saveNotes = async () => {
     setSaving(true)
@@ -73,61 +136,121 @@ export default function ClientDetail({ client, onBack }) {
 
   return (
     <div className="min-h-screen bg-[#F5F4F0]">
-      <header className="sticky top-0 bg-[#F5F4F0]/90 backdrop-blur px-4 pt-6 pb-4 flex items-center gap-3">
+      <header className="sticky top-0 bg-[#F5F4F0]/90 backdrop-blur px-4 pt-6 pb-4 flex items-center justify-between gap-3">
         <button onClick={onBack} className="text-[#378ADD] text-sm font-medium">
           ← Clients
         </button>
+        {!editing && (
+          <button onClick={startEdit} className="text-[#378ADD] text-sm font-medium">
+            Modifier
+          </button>
+        )}
       </header>
 
       <main className="px-4 pb-8">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-4">
-          {[client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ')}
-        </h1>
+        {!editing && (
+          <h1 className="text-2xl font-semibold text-gray-900 mb-4">
+            {[client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ')}
+          </h1>
+        )}
 
-        <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
-          {FIELDS.map(([key, label]) =>
-            client[key] ? (
-              <div key={key} className="px-4 py-3">
-                <p className="text-xs text-gray-400">{label}</p>
-                <p className="text-gray-900">{client[key]}</p>
-              </div>
-            ) : null
-          )}
-          {LIST_FIELDS.map(([key, label]) =>
-            client[key]?.length ? (
-              <div key={key} className="px-4 py-3">
-                <p className="text-xs text-gray-400 mb-1">{label}</p>
-                {client[key].map((person, i) => (
+        {editing ? (
+          <>
+            <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+              {FIELDS.map(([key, label]) => (
+                <div key={key} className="px-4 py-3">
+                  <label className="text-xs text-gray-400" htmlFor={key}>
+                    {label}
+                    {key === 'nom_praticien' ? ' *' : ''}
+                  </label>
+                  <input
+                    id={key}
+                    value={values[key] ?? ''}
+                    onChange={setField(key)}
+                    className="w-full text-gray-900 outline-none bg-transparent"
+                  />
+                </div>
+              ))}
+              <PersonListField label="Associé(s)" people={associes} onChange={setAssocies} />
+              <PersonListField label="Assistante(s)" people={assistantes} onChange={setAssistantes} />
+            </div>
+
+            {ficheError && <p className="text-red-500 text-sm mt-3">{ficheError}</p>}
+
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setEditing(false)}
+                className="flex-1 bg-white text-gray-500 font-medium rounded-xl py-3 shadow"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={saveFiche}
+                disabled={savingFiche}
+                className="flex-1 bg-[#378ADD] text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
+              >
+                {savingFiche ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+            {FIELDS.filter(([key]) => key !== 'prenom_praticien' && key !== 'nom_praticien').map(
+              ([key, label]) =>
+                client[key] ? (
+                  <div key={key} className="px-4 py-3">
+                    <p className="text-xs text-gray-400">{label}</p>
+                    <p className="text-gray-900">{client[key]}</p>
+                  </div>
+                ) : null
+            )}
+            {client.associes?.length ? (
+              <div className="px-4 py-3">
+                <p className="text-xs text-gray-400 mb-1">Associé(s)</p>
+                {client.associes.map((person, i) => (
                   <p key={i} className="text-gray-900">
                     {person.prenom}
                     {person.telephone ? ` · ${person.telephone}` : ''}
                   </p>
                 ))}
               </div>
-            ) : null
-          )}
-        </div>
+            ) : null}
+            {client.assistantes?.length ? (
+              <div className="px-4 py-3">
+                <p className="text-xs text-gray-400 mb-1">Assistante(s)</p>
+                {client.assistantes.map((person, i) => (
+                  <p key={i} className="text-gray-900">
+                    {person.prenom}
+                    {person.telephone ? ` · ${person.telephone}` : ''}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        )}
 
-        <div className="bg-white rounded-xl shadow-sm mt-4 px-4 py-3">
-          <p className="text-xs text-gray-400 mb-1">Informations annexes (mail, SMS, ou toute autre info à coller)</p>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={6}
-            className="w-full text-gray-900 outline-none bg-transparent resize-none"
-          />
-          {dirty && (
-            <button
-              onClick={saveNotes}
-              disabled={saving}
-              className="mt-2 bg-[#378ADD] text-white text-sm font-medium rounded-lg px-4 py-2 disabled:opacity-50"
-            >
-              {saving ? 'Enregistrement…' : 'Enregistrer les notes'}
-            </button>
-          )}
-        </div>
+        {!editing && (
+          <div className="bg-white rounded-xl shadow-sm mt-4 px-4 py-3">
+            <p className="text-xs text-gray-400 mb-1">Informations annexes (mail, SMS, ou toute autre info à coller)</p>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={6}
+              className="w-full text-gray-900 outline-none bg-transparent resize-none"
+            />
+            {dirty && (
+              <button
+                onClick={saveNotes}
+                disabled={saving}
+                className="mt-2 bg-[#378ADD] text-white text-sm font-medium rounded-lg px-4 py-2 disabled:opacity-50"
+              >
+                {saving ? 'Enregistrement…' : 'Enregistrer les notes'}
+              </button>
+            )}
+          </div>
+        )}
 
-        {journal.length > 0 && (
+        {!editing && journal.length > 0 && (
           <div className="mt-4">
             <p className="text-xs text-gray-400 mb-2 px-1">Journal</p>
             <ul className="space-y-2">

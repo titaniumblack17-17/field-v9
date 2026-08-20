@@ -115,7 +115,10 @@ export default function Capture({ onBack, onOpenClient }) {
             {lastResult.info_manquante && (
               <p className="text-sm text-amber-600 mt-1">⚠ {lastResult.info_manquante}</p>
             )}
-            {!lastResult.client_id && (
+            {lastResult.client_created && (
+              <p className="text-sm text-[#378ADD] mt-1">✓ Nouvelle fiche créée</p>
+            )}
+            {!lastResult.client_id && !lastResult.client_created && (
               <p className="text-sm text-amber-600 mt-1">⚠ Client non identifié</p>
             )}
           </div>
