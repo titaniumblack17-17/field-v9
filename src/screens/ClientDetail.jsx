@@ -17,8 +17,11 @@ const FIELDS = [
 
 const emptyPeople = (list) => (list?.length ? list : [{ prenom: '', telephone: '' }])
 
-export default function ClientDetail({ client, onBack }) {
+const TYPE_LABELS = { projet: 'Projet de vente', sav: 'SAV', plan: 'Plan / cahier des charges' }
+
+export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossier }) {
   const [editing, setEditing] = useState(false)
+  const [dossiers, setDossiers] = useState([])
   const [values, setValues] = useState(client)
   const [associes, setAssocies] = useState(emptyPeople(client.associes))
   const [assistantes, setAssistantes] = useState(emptyPeople(client.assistantes))
@@ -134,6 +137,47 @@ export default function ClientDetail({ client, onBack }) {
     }
   }, [client.id])
 
+  useEffect(() => {
+    let active = true
+
+    supabase
+      .from('dossiers')
+      .select('*')
+      .eq('client_id', client.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (active) setDossiers(data ?? [])
+      })
+
+    const channel = supabase
+      .channel(`dossiers-client-${client.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dossiers', filter: `client_id=eq.${client.id}` },
+        (payload) => {
+          setDossiers((current) => {
+            if (payload.eventType === 'INSERT') {
+              if (current.some((d) => d.id === payload.new.id)) return current
+              return [payload.new, ...current]
+            }
+            if (payload.eventType === 'UPDATE') {
+              return current.map((d) => (d.id === payload.new.id ? payload.new : d))
+            }
+            if (payload.eventType === 'DELETE') {
+              return current.filter((d) => d.id !== payload.old.id)
+            }
+            return current
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      active = false
+      supabase.removeChannel(channel)
+    }
+  }, [client.id])
+
   return (
     <div className="min-h-screen bg-[#F5F4F0]">
       <header className="sticky top-0 bg-[#F5F4F0]/90 backdrop-blur px-4 pt-6 pb-4 flex items-center justify-between gap-3">
@@ -226,6 +270,37 @@ export default function ClientDetail({ client, onBack }) {
                 ))}
               </div>
             ) : null}
+          </div>
+        )}
+
+        {!editing && (
+          <div className="mt-4">
+            <div className="flex items-center justify-between px-1 mb-2">
+              <p className="text-xs text-gray-400">Dossiers</p>
+              <button onClick={() => onNewDossier(client)} className="text-[#378ADD] text-sm font-medium">
+                + Nouveau dossier
+              </button>
+            </div>
+            {dossiers.length === 0 ? (
+              <p className="text-gray-400 text-sm px-1">Aucun dossier pour l'instant.</p>
+            ) : (
+              <ul className="space-y-2">
+                {dossiers.map((d) => (
+                  <li key={d.id}>
+                    <button
+                      onClick={() => onOpenDossier(d)}
+                      className="w-full text-left bg-white rounded-xl px-4 py-3 shadow-sm active:scale-[0.98] transition"
+                    >
+                      <p className="font-medium text-gray-900">{d.titre || TYPE_LABELS[d.type]}</p>
+                      <p className="text-sm text-gray-500">
+                        {TYPE_LABELS[d.type]} · {d.statut}
+                        {d.montant_estime != null ? ` · ${d.montant_estime} €` : ''}
+                      </p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 
