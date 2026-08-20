@@ -42,6 +42,7 @@ export default function DossierForm({ client, onCreated, onCancel }) {
   const [montantEstime, setMontantEstime] = useState('')
   const [remunerationType, setRemunerationType] = useState('integre')
   const [projetSourceId, setProjetSourceId] = useState('')
+  const [dateInstallation, setDateInstallation] = useState('')
   const [rappelDate, setRappelDate] = useState('')
   const [rappelNote, setRappelNote] = useState('')
   const [projetsClient, setProjetsClient] = useState([])
@@ -75,6 +76,7 @@ export default function DossierForm({ client, onCreated, onCancel }) {
       montant_estime: montantEstime ? Number(montantEstime) : null,
       remuneration_type: type === 'plan' ? remunerationType : null,
       projet_source_id: type === 'sav' && projetSourceId ? projetSourceId : null,
+      date_installation: dateInstallation || null,
       rappel_date: rappelDate || null,
       rappel_note: rappelNote.trim() || null,
     }
@@ -232,6 +234,19 @@ export default function DossierForm({ client, onCreated, onCancel }) {
               type="number"
               value={montantEstime}
               onChange={(e) => setMontantEstime(e.target.value)}
+              className="w-full text-gray-900 outline-none bg-transparent"
+            />
+          </div>
+
+          <div className="px-4 py-3">
+            <label className="text-xs text-gray-400" htmlFor="date_installation">
+              Date d'installation (approximative)
+            </label>
+            <input
+              id="date_installation"
+              type="date"
+              value={dateInstallation}
+              onChange={(e) => setDateInstallation(e.target.value)}
               className="w-full text-gray-900 outline-none bg-transparent"
             />
           </div>

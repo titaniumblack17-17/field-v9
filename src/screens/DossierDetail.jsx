@@ -36,6 +36,7 @@ export default function DossierDetail({ dossier, onBack }) {
   const [titre, setTitre] = useState(dossier.titre ?? '')
   const [statut, setStatut] = useState(dossier.statut)
   const [montantEstime, setMontantEstime] = useState(dossier.montant_estime ?? '')
+  const [dateInstallation, setDateInstallation] = useState(dossier.date_installation ?? '')
   const [rappelDate, setRappelDate] = useState(dossier.rappel_date ?? '')
   const [rappelNote, setRappelNote] = useState(dossier.rappel_note ?? '')
   const [saving, setSaving] = useState(false)
@@ -93,6 +94,7 @@ export default function DossierDetail({ dossier, onBack }) {
     setTitre(dossier.titre ?? '')
     setStatut(dossier.statut)
     setMontantEstime(dossier.montant_estime ?? '')
+    setDateInstallation(dossier.date_installation ?? '')
     setRappelDate(dossier.rappel_date ?? '')
     setRappelNote(dossier.rappel_note ?? '')
     setEditing(true)
@@ -104,6 +106,7 @@ export default function DossierDetail({ dossier, onBack }) {
       titre: titre.trim() || null,
       statut,
       montant_estime: montantEstime !== '' ? Number(montantEstime) : null,
+      date_installation: dateInstallation || null,
       rappel_date: rappelDate || null,
       rappel_note: rappelNote.trim() || null,
     }
@@ -202,6 +205,19 @@ export default function DossierDetail({ dossier, onBack }) {
             </div>
 
             <div className="px-4 py-3">
+              <label className="text-xs text-gray-400" htmlFor="date_installation">
+                Date d'installation (approximative)
+              </label>
+              <input
+                id="date_installation"
+                type="date"
+                value={dateInstallation}
+                onChange={(e) => setDateInstallation(e.target.value)}
+                className="w-full text-gray-900 outline-none bg-transparent"
+              />
+            </div>
+
+            <div className="px-4 py-3">
               <label className="text-xs text-gray-400" htmlFor="rappel_date">
                 Date de rappel
               </label>
@@ -250,6 +266,12 @@ export default function DossierDetail({ dossier, onBack }) {
               <div className="px-4 py-3">
                 <p className="text-xs text-gray-400">Montant estimé</p>
                 <p className="text-gray-900">{dossier.montant_estime} €</p>
+              </div>
+            )}
+            {dossier.date_installation && (
+              <div className="px-4 py-3">
+                <p className="text-xs text-gray-400">Date d'installation (approximative)</p>
+                <p className="text-gray-900">{dossier.date_installation}</p>
               </div>
             )}
             {dossier.rappel_date && (
