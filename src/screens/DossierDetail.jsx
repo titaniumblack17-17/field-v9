@@ -18,7 +18,7 @@ const CHAMPS = [
   'remuneration_type',
 ]
 
-export default function DossierDetail({ dossier, onBack }) {
+export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
   const [values, setValues] = useState(() => ({ ...dossier }))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -36,6 +36,11 @@ export default function DossierDetail({ dossier, onBack }) {
     () => CHAMPS.some((k) => String(values[k] ?? '') !== String(dossier[k] ?? '')),
     [values, dossier]
   )
+
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+    return () => onDirtyChange?.(false)
+  }, [dirty, onDirtyChange])
 
   const save = async () => {
     setSaving(true)

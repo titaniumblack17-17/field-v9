@@ -23,7 +23,7 @@ const cleanPeople = (people) =>
     .map((p) => ({ prenom: (p.prenom ?? '').trim(), telephone: (p.telephone ?? '').trim() }))
     .filter((p) => p.prenom || p.telephone)
 
-export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossier }) {
+export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossier, onDirtyChange }) {
   const [values, setValues] = useState(() => ({ ...client }))
   const [associes, setAssocies] = useState(emptyPeople(client.associes))
   const [assistantes, setAssistantes] = useState(emptyPeople(client.assistantes))
@@ -43,6 +43,11 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       JSON.stringify(cleanPeople(assistantes)) !== JSON.stringify(client.assistantes ?? [])
     return champs || gens
   }, [values, associes, assistantes, client])
+
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+    return () => onDirtyChange?.(false)
+  }, [dirty, onDirtyChange])
 
   const save = async () => {
     if (!values.nom_praticien?.trim()) {
