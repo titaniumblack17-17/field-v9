@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import ChampChoix from '../components/ChampChoix'
 import {
   TYPE_LABELS,
   ETAPES_PROJET,
@@ -172,65 +173,37 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
           </div>
 
           {dossier.type === 'projet' && (
-            <div className="px-4 py-3">
-              <label className="text-xs text-texte-faible" htmlFor="statut">
-                Étape
-              </label>
-              <select
-                id="statut"
-                value={values.statut ?? ''}
-                onChange={setField('statut')}
-                className="w-full text-texte outline-none bg-transparent"
-              >
-                {ETAPES_PROJET.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <ChampChoix
+              id="statut"
+              label="Étape"
+              value={values.statut ?? ''}
+              options={ETAPES_PROJET}
+              onChange={(v) => setValues((x) => ({ ...x, statut: v }))}
+            />
           )}
 
           {dossier.type === 'sav' && (
-            <div className="px-4 py-3">
-              <label className="text-xs text-texte-faible" htmlFor="statut">
-                Statut
-              </label>
-              <select
-                id="statut"
-                value={values.statut ?? ''}
-                onChange={setField('statut')}
-                className="w-full text-texte outline-none bg-transparent"
-              >
-                {STATUTS_SAV.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <ChampChoix
+              id="statut"
+              label="Statut"
+              value={values.statut ?? ''}
+              options={STATUTS_SAV}
+              onChange={(v) => setValues((x) => ({ ...x, statut: v }))}
+            />
           )}
 
           {dossier.type === 'plan' && (
-            <div className="px-4 py-3">
-              <label className="text-xs text-texte-faible" htmlFor="remuneration">
-                Rémunération
-              </label>
-              <select
+            <div>
+              <ChampChoix
                 id="remuneration"
+                label="Rémunération"
                 value={values.remuneration_type ?? ''}
-                onChange={setField('remuneration_type')}
-                className="w-full text-texte outline-none bg-transparent"
-              >
-                <option value="">À préciser</option>
-                {REMUNERATION_OPTIONS.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+                options={REMUNERATION_OPTIONS}
+                videLibelle="À préciser"
+                onChange={(v) => setValues((x) => ({ ...x, remuneration_type: v }))}
+              />
               {values.remuneration_type === 'partage' && (
-                <p className="text-xs text-alerte mt-1">
+                <p className="text-xs text-alerte px-4 pb-3 -mt-2">
                   ⚠ Information visible par vous seul, jamais par le collègue concerné
                 </p>
               )}

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import ChampChoix from '../components/ChampChoix'
 import { ETAPES_PROJET, STATUTS_SAV, REMUNERATION_OPTIONS } from '../constants/dossiers'
 
 const TYPES = [
@@ -114,84 +115,49 @@ export default function DossierForm({ client, onCreated, onCancel }) {
           </div>
 
           {type === 'projet' && (
-            <div className="px-4 py-3">
-              <label className="text-xs text-texte-faible" htmlFor="statut">
-                Étape
-              </label>
-              <select
-                id="statut"
-                value={statut}
-                onChange={(e) => setStatut(e.target.value)}
-                className="w-full text-texte outline-none bg-transparent"
-              >
-                {ETAPES_PROJET.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <ChampChoix
+              id="statut"
+              label="Étape"
+              value={statut}
+              options={ETAPES_PROJET}
+              onChange={setStatut}
+            />
           )}
 
           {type === 'sav' && (
             <>
-              <div className="px-4 py-3">
-                <label className="text-xs text-texte-faible" htmlFor="statut">
-                  Statut
-                </label>
-                <select
-                  id="statut"
-                  value={statut}
-                  onChange={(e) => setStatut(e.target.value)}
-                  className="w-full text-texte outline-none bg-transparent"
-                >
-                  {STATUTS_SAV.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="px-4 py-3">
-                <label className="text-xs text-texte-faible" htmlFor="projet_source">
-                  Projet d'origine
-                </label>
-                <select
-                  id="projet_source"
-                  value={projetSourceId}
-                  onChange={(e) => setProjetSourceId(e.target.value)}
-                  className="w-full text-texte outline-none bg-transparent"
-                >
-                  <option value="">Aucun / à préciser</option>
-                  {projetsClient.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.titre || new Date(p.created_at).toLocaleDateString('fr-FR')}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <ChampChoix
+                id="statut"
+                label="Statut"
+                value={statut}
+                options={STATUTS_SAV}
+                onChange={setStatut}
+              />
+              <ChampChoix
+                id="projet_source"
+                label="Projet d'origine"
+                value={projetSourceId}
+                videLibelle="Aucun / à préciser"
+                options={projetsClient.map((p) => [
+                  p.id,
+                  p.titre || new Date(p.created_at).toLocaleDateString('fr-FR'),
+                ])}
+                onChange={setProjetSourceId}
+              />
             </>
           )}
 
           {type === 'plan' && (
-            <div className="px-4 py-3">
-              <label className="text-xs text-texte-faible" htmlFor="remuneration">
-                Rémunération
-              </label>
-              <select
+            <div>
+              <ChampChoix
                 id="remuneration"
+                label="Rémunération"
                 value={remunerationType}
-                onChange={(e) => setRemunerationType(e.target.value)}
-                className="w-full text-texte outline-none bg-transparent"
-              >
-                {REMUNERATION_OPTIONS.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+                options={REMUNERATION_OPTIONS}
+                onChange={setRemunerationType}
+              />
               {remunerationType === 'partage' && (
-                <p className="text-xs text-alerte mt-1">
+                <p className="text-xs text-alerte px-4 pb-3 -mt-2">
                   ⚠ Information visible par vous seul, jamais par le collègue concerné
                 </p>
               )}
