@@ -37,8 +37,8 @@ export const REMUNERATION_OPTIONS = [
 // Liseré / code couleur du dossier (spec §4.2). Palette reprise de l'ancien
 // Kanban pour rester cohérente avec ce que Bruce connaît déjà.
 const STYLES_TYPE = {
-  projet: { bordure: '#DB2777', fond: '#FCE7F3', texte: '#831843', badge: 'Projet' },
-  sav: { bordure: '#C2740A', fond: '#FAEEDA', texte: '#633806', badge: 'SAV' },
+  projet: { bordure: '#FF2D87', fond: '#FFE4F0', texte: '#9D0F55', badge: 'Projet' },
+  sav: { bordure: '#FF6A00', fond: '#FFEBD9', texte: '#8A3A00', badge: 'SAV' },
   plan: { bordure: '#5A8F2A', fond: '#EAF3DE', texte: '#27500A', badge: 'Plan' },
 }
 
