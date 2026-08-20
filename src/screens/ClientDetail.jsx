@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import PersonListField from '../components/PersonListField'
+import MaterielInstalle from '../components/MaterielInstalle'
 import { TYPE_LABELS, styleDossier } from '../constants/dossiers'
 
 const FIELDS = [
@@ -207,6 +208,8 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
         </div>
 
         {error && <p className="text-erreur text-sm mt-3">{error}</p>}
+
+        <MaterielInstalle clientId={client.id} />
 
         <div className="mt-4">
           <div className="flex items-center justify-between px-1 mb-2">
