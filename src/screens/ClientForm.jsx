@@ -17,8 +17,8 @@ const FIELDS = [
 
 export default function ClientForm({ onCreated, onCancel }) {
   const [values, setValues] = useState({})
-  const [associes, setAssocies] = useState([{ prenom: '', telephone: '' }])
-  const [assistantes, setAssistantes] = useState([{ prenom: '', telephone: '' }])
+  const [associes, setAssocies] = useState([{ prenom: '', nom: '', telephone: '' }])
+  const [assistantes, setAssistantes] = useState([{ prenom: '', nom: '', telephone: '' }])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
@@ -26,8 +26,12 @@ export default function ClientForm({ onCreated, onCancel }) {
 
   const cleanPeople = (people) =>
     people
-      .map((p) => ({ prenom: p.prenom.trim(), telephone: p.telephone.trim() }))
-      .filter((p) => p.prenom || p.telephone)
+      .map((p) => ({
+        prenom: (p.prenom ?? '').trim(),
+        nom: (p.nom ?? '').trim(),
+        telephone: (p.telephone ?? '').trim(),
+      }))
+      .filter((p) => p.prenom || p.nom || p.telephone)
 
   const submit = async (e) => {
     e.preventDefault()

@@ -17,12 +17,25 @@ const FIELDS = [
   ['email_cabinet', 'E-mail (cabinet)'],
 ]
 
-const emptyPeople = (list) => (list?.length ? list : [{ prenom: '', telephone: '' }])
+const emptyPeople = (list) => (list?.length ? list : [{ prenom: '', nom: '', telephone: '' }])
 
 const cleanPeople = (people) =>
   people
-    .map((p) => ({ prenom: (p.prenom ?? '').trim(), telephone: (p.telephone ?? '').trim() }))
-    .filter((p) => p.prenom || p.telephone)
+    .map((p) => ({
+      prenom: (p.prenom ?? '').trim(),
+      nom: (p.nom ?? '').trim(),
+      telephone: (p.telephone ?? '').trim(),
+    }))
+    .filter((p) => p.prenom || p.nom || p.telephone)
+
+// Postgres réordonne les clés d'un jsonb (nom, prenom, telephone) alors que le
+// code les produit dans un autre ordre. JSON.stringify y étant sensible, la
+// comparaison échouerait après enregistrement et la barre resterait affichée
+// indéfiniment. On compare donc une signature à ordre fixe.
+const signaturePeople = (people) =>
+  cleanPeople(people ?? [])
+    .map((p) => [p.prenom, p.nom, p.telephone].join('\u0001'))
+    .join('\u0002')
 
 export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossier, onDirtyChange }) {
   const [values, setValues] = useState(() => ({ ...client }))
@@ -40,8 +53,8 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       (k) => (values[k] ?? '') !== (client[k] ?? '')
     )
     const gens =
-      JSON.stringify(cleanPeople(associes)) !== JSON.stringify(client.associes ?? []) ||
-      JSON.stringify(cleanPeople(assistantes)) !== JSON.stringify(client.assistantes ?? [])
+      signaturePeople(associes) !== signaturePeople(client.associes) ||
+      signaturePeople(assistantes) !== signaturePeople(client.assistantes)
     return champs || gens
   }, [values, associes, assistantes, client])
 
