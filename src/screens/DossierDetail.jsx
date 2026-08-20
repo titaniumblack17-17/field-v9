@@ -138,7 +138,9 @@ export default function DossierDetail({ dossier, onBack }) {
           >
             {s.badge}
           </span>
-          <span className="text-xs text-gray-400">{TYPE_LABELS[dossier.type]}</span>
+          {TYPE_LABELS[dossier.type] !== s.badge && (
+            <span className="text-xs text-gray-400">{TYPE_LABELS[dossier.type]}</span>
+          )}
         </div>
 
         <h1 className="text-2xl font-semibold text-gray-900 mb-4">
@@ -147,8 +149,10 @@ export default function DossierDetail({ dossier, onBack }) {
 
         <div
           style={{ borderColor: s.bordure }}
-          className="bg-white rounded-xl shadow-sm divide-y divide-gray-100 border-2"
+          className="bg-white rounded-xl shadow-sm border-2 overflow-hidden"
         >
+          <div style={{ background: s.bordure }} className="h-2.5" />
+          <div className="divide-y divide-gray-100">
           <div className="px-4 py-3">
             <label className="text-xs text-gray-400" htmlFor="titre">
               Titre
@@ -279,6 +283,7 @@ export default function DossierDetail({ dossier, onBack }) {
               placeholder="—"
               className="w-full text-gray-900 outline-none bg-transparent placeholder:text-gray-300"
             />
+            </div>
           </div>
         </div>
 

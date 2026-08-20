@@ -221,7 +221,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                     <button
                       onClick={() => onOpenDossier(d)}
                       style={{ borderColor: s.bordure }}
-                      className="w-full text-left bg-white rounded-xl px-4 py-3 shadow-sm border-l-4 active:scale-[0.98] transition"
+                      className="w-full text-left bg-white rounded-xl px-4 py-3 shadow-sm border-l-[7px] active:scale-[0.98] transition"
                     >
                       <div className="flex items-center gap-2 mb-0.5">
                         <span
