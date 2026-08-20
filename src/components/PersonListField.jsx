@@ -6,7 +6,17 @@ export default function PersonListField({ label, people, onChange }) {
     next[i] = { ...next[i], [key]: e.target.value }
     onChange(next)
   }
-  const removeAt = (i) => onChange(people.filter((_, idx) => idx !== i))
+  const removeAt = (i) => {
+    const p = people[i]
+    const rempli = (p?.prenom ?? '').trim() || (p?.telephone ?? '').trim()
+    // On ne demande confirmation que si la ligne contient quelque chose :
+    // sur une ligne vide, ce serait de la friction pour rien.
+    if (rempli) {
+      const nom = (p.prenom ?? '').trim() || (p.telephone ?? '').trim()
+      if (!window.confirm(`Retirer ${nom} de la liste « ${label} » ?`)) return
+    }
+    onChange(people.filter((_, idx) => idx !== i))
+  }
   const add = () => onChange([...people, { prenom: '', telephone: '' }])
 
   return (
