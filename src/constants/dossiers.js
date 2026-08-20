@@ -1,6 +1,11 @@
 export const TYPE_LABELS = { projet: 'Projet de vente', sav: 'SAV', plan: 'Plan / cahier des charges' }
 
 export const ETAPES_PROJET = [
+  // Colonne d'attente pour les dossiers importés dont l'étape Notion n'avait
+  // pas d'équivalent (Négociation, Rendez-vous cabinet). Placée en tête pour
+  // rester visible : en fin de pipeline, après 14 colonnes, elle passerait
+  // inaperçue.
+  ['a_classer', 'À classer'],
   ['prospect', 'Prospect'],
   ['prise_contact', 'Prise de contact'],
   ['devis_a_faire', 'Devis à faire'],
