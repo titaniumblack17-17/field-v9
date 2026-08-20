@@ -174,22 +174,22 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   }, [client.id])
 
   return (
-    <div className="min-h-screen bg-[#F5F4F0]">
-      <header className="sticky top-0 z-10 bg-[#F5F4F0]/90 backdrop-blur px-4 pt-6 pb-4 flex items-center gap-3">
-        <button onClick={onBack} className="text-[#378ADD] text-sm font-medium">
+    <div className="min-h-screen bg-fond">
+      <header className="sticky top-0 z-10 bg-fond/90 backdrop-blur px-4 pt-6 pb-4 flex items-center gap-3">
+        <button onClick={onBack} className="text-accent text-sm font-medium">
           ← Clients
         </button>
       </header>
 
       <main className={`px-4 ${dirty ? 'pb-28' : 'pb-8'}`}>
-        <h1 className="text-2xl font-semibold text-gray-900 mb-4">
+        <h1 className="text-2xl font-semibold text-texte mb-4">
           {[client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ') || 'Client'}
         </h1>
 
-        <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+        <div className="bg-carte rounded-xl shadow-sm divide-y divide-separateur">
           {FIELDS.map(([key, label]) => (
             <div key={key} className="px-4 py-3">
-              <label className="text-xs text-gray-400" htmlFor={key}>
+              <label className="text-xs text-texte-faible" htmlFor={key}>
                 {label}
                 {key === 'nom_praticien' ? ' *' : ''}
               </label>
@@ -198,7 +198,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                 value={values[key] ?? ''}
                 onChange={setField(key)}
                 placeholder="—"
-                className="w-full text-gray-900 outline-none bg-transparent placeholder:text-gray-300"
+                className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome"
               />
             </div>
           ))}
@@ -206,17 +206,17 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           <PersonListField label="Assistante(s)" people={assistantes} onChange={setAssistantes} />
         </div>
 
-        {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
+        {error && <p className="text-erreur text-sm mt-3">{error}</p>}
 
         <div className="mt-4">
           <div className="flex items-center justify-between px-1 mb-2">
-            <p className="text-xs text-gray-400">Dossiers</p>
-            <button onClick={() => onNewDossier(client)} className="text-[#378ADD] text-sm font-medium">
+            <p className="text-xs text-texte-faible">Dossiers</p>
+            <button onClick={() => onNewDossier(client)} className="text-accent text-sm font-medium">
               + Nouveau dossier
             </button>
           </div>
           {dossiers.length === 0 ? (
-            <p className="text-gray-400 text-sm px-1">Aucun dossier pour l'instant.</p>
+            <p className="text-texte-faible text-sm px-1">Aucun dossier pour l'instant.</p>
           ) : (
             <ul className="space-y-2">
               {dossiers.map((d) => {
@@ -226,7 +226,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                     <button
                       onClick={() => onOpenDossier(d)}
                       style={{ borderColor: s.bordure }}
-                      className="w-full text-left bg-white rounded-xl px-4 py-3 shadow-sm border-l-[7px] active:scale-[0.98] transition"
+                      className="w-full text-left bg-carte rounded-xl px-4 py-3 shadow-sm border-l-[7px] active:scale-[0.98] transition"
                     >
                       <div className="flex items-center gap-2 mb-0.5">
                         <span
@@ -236,8 +236,8 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                           {s.badge}
                         </span>
                       </div>
-                      <p className="font-medium text-gray-900">{d.titre || TYPE_LABELS[d.type]}</p>
-                      <p className="text-sm text-gray-500">
+                      <p className="font-medium text-texte">{d.titre || TYPE_LABELS[d.type]}</p>
+                      <p className="text-sm text-texte-doux">
                         {d.statut}
                         {d.montant_estime != null ? ` · ${d.montant_estime} €` : ''}
                       </p>
@@ -249,31 +249,31 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           )}
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm mt-4 px-4 py-3">
-          <p className="text-xs text-gray-400 mb-1">
+        <div className="bg-carte rounded-xl shadow-sm mt-4 px-4 py-3">
+          <p className="text-xs text-texte-faible mb-1">
             Informations annexes (mail, SMS, ou toute autre info à coller)
           </p>
           <textarea
             value={values.notes ?? ''}
             onChange={setField('notes')}
             rows={6}
-            className="w-full text-gray-900 outline-none bg-transparent resize-none"
+            className="w-full text-texte outline-none bg-transparent resize-none"
           />
         </div>
 
         {journal.length > 0 && (
           <div className="mt-4">
-            <p className="text-xs text-gray-400 mb-2 px-1">Journal</p>
+            <p className="text-xs text-texte-faible mb-2 px-1">Journal</p>
             <ul className="space-y-2">
               {journal.map((c) => (
-                <li key={c.id} className="bg-white rounded-xl px-4 py-3 shadow-sm">
-                  <p className="text-gray-900 text-sm">{c.resume || c.texte}</p>
-                  <p className="text-xs text-gray-400 mt-1">
+                <li key={c.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
+                  <p className="text-texte text-sm">{c.resume || c.texte}</p>
+                  <p className="text-xs text-texte-faible mt-1">
                     {new Date(c.created_at).toLocaleDateString('fr-FR')}
                     {c.date_evenement ? ` · échéance ${c.date_evenement}` : ''}
                   </p>
                   {c.info_manquante && (
-                    <p className="text-xs text-amber-600 mt-1">⚠ {c.info_manquante}</p>
+                    <p className="text-xs text-alerte mt-1">⚠ {c.info_manquante}</p>
                   )}
                 </li>
               ))}
@@ -283,17 +283,17 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       </main>
 
       {dirty && (
-        <div className="fixed bottom-0 inset-x-0 bg-[#F5F4F0]/95 backdrop-blur border-t border-gray-200 px-4 py-3 flex gap-2">
+        <div className="fixed bottom-0 inset-x-0 bg-fond/95 backdrop-blur border-t border-bordure px-4 py-3 flex gap-2">
           <button
             onClick={annuler}
-            className="flex-1 bg-white text-gray-500 font-medium rounded-xl py-3 shadow"
+            className="flex-1 bg-carte text-texte-doux font-medium rounded-xl py-3 shadow"
           >
             Annuler
           </button>
           <button
             onClick={save}
             disabled={saving}
-            className="flex-1 bg-[#378ADD] text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
+            className="flex-1 bg-accent text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
           >
             {saving ? 'Enregistrement…' : 'Enregistrer'}
           </button>

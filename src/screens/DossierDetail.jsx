@@ -128,9 +128,9 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F4F0]">
-      <header className="sticky top-0 z-10 bg-[#F5F4F0]/90 backdrop-blur px-4 pt-6 pb-4 flex items-center gap-3">
-        <button onClick={onBack} className="text-[#378ADD] text-sm font-medium">
+    <div className="min-h-screen bg-fond">
+      <header className="sticky top-0 z-10 bg-fond/90 backdrop-blur px-4 pt-6 pb-4 flex items-center gap-3">
+        <button onClick={onBack} className="text-accent text-sm font-medium">
           ← Retour
         </button>
       </header>
@@ -144,22 +144,22 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
             {s.badge}
           </span>
           {TYPE_LABELS[dossier.type] !== s.badge && (
-            <span className="text-xs text-gray-400">{TYPE_LABELS[dossier.type]}</span>
+            <span className="text-xs text-texte-faible">{TYPE_LABELS[dossier.type]}</span>
           )}
         </div>
 
-        <h1 className="text-2xl font-semibold text-gray-900 mb-4">
+        <h1 className="text-2xl font-semibold text-texte mb-4">
           {values.titre || TYPE_LABELS[dossier.type]}
         </h1>
 
         <div
           style={{ borderColor: s.bordure }}
-          className="bg-white rounded-xl shadow-sm border-2 overflow-hidden"
+          className="bg-carte rounded-xl shadow-sm border-2 overflow-hidden"
         >
           <div style={{ background: s.bordure }} className="h-2.5" />
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-separateur">
           <div className="px-4 py-3">
-            <label className="text-xs text-gray-400" htmlFor="titre">
+            <label className="text-xs text-texte-faible" htmlFor="titre">
               Titre
             </label>
             <input
@@ -167,20 +167,20 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
               value={values.titre ?? ''}
               onChange={setField('titre')}
               placeholder="—"
-              className="w-full text-gray-900 outline-none bg-transparent placeholder:text-gray-300"
+              className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome"
             />
           </div>
 
           {dossier.type === 'projet' && (
             <div className="px-4 py-3">
-              <label className="text-xs text-gray-400" htmlFor="statut">
+              <label className="text-xs text-texte-faible" htmlFor="statut">
                 Étape
               </label>
               <select
                 id="statut"
                 value={values.statut ?? ''}
                 onChange={setField('statut')}
-                className="w-full text-gray-900 outline-none bg-transparent"
+                className="w-full text-texte outline-none bg-transparent"
               >
                 {ETAPES_PROJET.map(([value, label]) => (
                   <option key={value} value={value}>
@@ -193,14 +193,14 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
 
           {dossier.type === 'sav' && (
             <div className="px-4 py-3">
-              <label className="text-xs text-gray-400" htmlFor="statut">
+              <label className="text-xs text-texte-faible" htmlFor="statut">
                 Statut
               </label>
               <select
                 id="statut"
                 value={values.statut ?? ''}
                 onChange={setField('statut')}
-                className="w-full text-gray-900 outline-none bg-transparent"
+                className="w-full text-texte outline-none bg-transparent"
               >
                 {STATUTS_SAV.map(([value, label]) => (
                   <option key={value} value={value}>
@@ -213,14 +213,14 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
 
           {dossier.type === 'plan' && (
             <div className="px-4 py-3">
-              <label className="text-xs text-gray-400" htmlFor="remuneration">
+              <label className="text-xs text-texte-faible" htmlFor="remuneration">
                 Rémunération
               </label>
               <select
                 id="remuneration"
                 value={values.remuneration_type ?? ''}
                 onChange={setField('remuneration_type')}
-                className="w-full text-gray-900 outline-none bg-transparent"
+                className="w-full text-texte outline-none bg-transparent"
               >
                 <option value="">À préciser</option>
                 {REMUNERATION_OPTIONS.map(([value, label]) => (
@@ -230,7 +230,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
                 ))}
               </select>
               {values.remuneration_type === 'partage' && (
-                <p className="text-xs text-amber-600 mt-1">
+                <p className="text-xs text-alerte mt-1">
                   ⚠ Information visible par vous seul, jamais par le collègue concerné
                 </p>
               )}
@@ -238,7 +238,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
           )}
 
           <div className="px-4 py-3">
-            <label className="text-xs text-gray-400" htmlFor="montant">
+            <label className="text-xs text-texte-faible" htmlFor="montant">
               Montant estimé (€)
             </label>
             <input
@@ -247,12 +247,12 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
               value={values.montant_estime ?? ''}
               onChange={setField('montant_estime')}
               placeholder="—"
-              className="w-full text-gray-900 outline-none bg-transparent placeholder:text-gray-300"
+              className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome"
             />
           </div>
 
           <div className="px-4 py-3">
-            <label className="text-xs text-gray-400" htmlFor="date_installation">
+            <label className="text-xs text-texte-faible" htmlFor="date_installation">
               Date d'installation (approximative)
             </label>
             <input
@@ -260,12 +260,12 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
               type="date"
               value={values.date_installation ?? ''}
               onChange={setField('date_installation')}
-              className="w-full text-gray-900 outline-none bg-transparent"
+              className="w-full text-texte outline-none bg-transparent"
             />
           </div>
 
           <div className="px-4 py-3">
-            <label className="text-xs text-gray-400" htmlFor="rappel_date">
+            <label className="text-xs text-texte-faible" htmlFor="rappel_date">
               Date de rappel
             </label>
             <input
@@ -273,12 +273,12 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
               type="date"
               value={values.rappel_date ?? ''}
               onChange={setField('rappel_date')}
-              className="w-full text-gray-900 outline-none bg-transparent"
+              className="w-full text-texte outline-none bg-transparent"
             />
           </div>
 
           <div className="px-4 py-3">
-            <label className="text-xs text-gray-400" htmlFor="rappel_note">
+            <label className="text-xs text-texte-faible" htmlFor="rappel_note">
               Note de rappel
             </label>
             <input
@@ -286,28 +286,28 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
               value={values.rappel_note ?? ''}
               onChange={setField('rappel_note')}
               placeholder="—"
-              className="w-full text-gray-900 outline-none bg-transparent placeholder:text-gray-300"
+              className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome"
             />
             </div>
           </div>
         </div>
 
-        {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
+        {error && <p className="text-erreur text-sm mt-3">{error}</p>}
 
         <div className="mt-4">
-          <p className="text-xs text-gray-400 mb-2 px-1">Notes</p>
-          <div className="bg-white rounded-xl shadow-sm p-3 flex gap-2 mb-2">
+          <p className="text-xs text-texte-faible mb-2 px-1">Notes</p>
+          <div className="bg-carte rounded-xl shadow-sm p-3 flex gap-2 mb-2">
             <input
               value={newNote}
               onChange={(e) => setNewNote(e.target.value)}
               placeholder="Ajouter une note…"
-              className="flex-1 text-gray-900 outline-none bg-transparent"
+              className="flex-1 text-texte outline-none bg-transparent"
               onKeyDown={(e) => e.key === 'Enter' && addNote()}
             />
             <button
               onClick={addNote}
               disabled={addingNote || !newNote.trim()}
-              className="text-[#378ADD] text-sm font-medium disabled:opacity-40"
+              className="text-accent text-sm font-medium disabled:opacity-40"
             >
               Ajouter
             </button>
@@ -315,9 +315,9 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
           {notes.length > 0 && (
             <ul className="space-y-2">
               {notes.map((n) => (
-                <li key={n.id} className="bg-white rounded-xl px-4 py-3 shadow-sm">
-                  <p className="text-gray-900 text-sm">{n.texte}</p>
-                  <p className="text-xs text-gray-400 mt-1">
+                <li key={n.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
+                  <p className="text-texte text-sm">{n.texte}</p>
+                  <p className="text-xs text-texte-faible mt-1">
                     {new Date(n.created_at).toLocaleString('fr-FR', {
                       day: '2-digit',
                       month: '2-digit',
@@ -334,17 +334,17 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
       </main>
 
       {dirty && (
-        <div className="fixed bottom-0 inset-x-0 bg-[#F5F4F0]/95 backdrop-blur border-t border-gray-200 px-4 py-3 flex gap-2">
+        <div className="fixed bottom-0 inset-x-0 bg-fond/95 backdrop-blur border-t border-bordure px-4 py-3 flex gap-2">
           <button
             onClick={annuler}
-            className="flex-1 bg-white text-gray-500 font-medium rounded-xl py-3 shadow"
+            className="flex-1 bg-carte text-texte-doux font-medium rounded-xl py-3 shadow"
           >
             Annuler
           </button>
           <button
             onClick={save}
             disabled={saving}
-            className="flex-1 bg-[#378ADD] text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
+            className="flex-1 bg-accent text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
           >
             {saving ? 'Enregistrement…' : 'Enregistrer'}
           </button>

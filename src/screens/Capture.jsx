@@ -77,62 +77,62 @@ export default function Capture({ onBack, onOpenClient }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F4F0]">
-      <header className="sticky top-0 bg-[#F5F4F0]/90 backdrop-blur px-4 pt-6 pb-4 flex items-center gap-3">
-        <button onClick={onBack} className="text-[#378ADD] text-sm font-medium">
+    <div className="min-h-screen bg-fond">
+      <header className="sticky top-0 bg-fond/90 backdrop-blur px-4 pt-6 pb-4 flex items-center gap-3">
+        <button onClick={onBack} className="text-accent text-sm font-medium">
           ← Clients
         </button>
-        <h1 className="text-lg font-semibold text-gray-900">Capture rapide</h1>
+        <h1 className="text-lg font-semibold text-texte">Capture rapide</h1>
       </header>
 
       <main className="px-4 pb-8">
-        <form onSubmit={submit} className="bg-white rounded-xl shadow-sm p-4">
+        <form onSubmit={submit} className="bg-carte rounded-xl shadow-sm p-4">
           <textarea
             value={texte}
             onChange={(e) => setTexte(e.target.value)}
             rows={5}
             placeholder="Client, qu'est-ce qui se passe ?"
-            className="w-full text-gray-900 outline-none bg-transparent resize-none"
+            className="w-full text-texte outline-none bg-transparent resize-none"
           />
           <button
             type="submit"
             disabled={sending || !texte.trim()}
-            className="w-full mt-3 bg-[#378ADD] text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
+            className="w-full mt-3 bg-accent text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
           >
             {sending ? 'Analyse en cours…' : 'Envoyer'}
           </button>
         </form>
 
-        {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
+        {error && <p className="text-erreur text-sm mt-3">{error}</p>}
 
         {lastResult && (
-          <div className="bg-white rounded-xl shadow-sm mt-4 px-4 py-3">
-            <p className="text-xs text-gray-400 mb-1">Retenu</p>
-            <p className="text-gray-900">{lastResult.resume}</p>
+          <div className="bg-carte rounded-xl shadow-sm mt-4 px-4 py-3">
+            <p className="text-xs text-texte-faible mb-1">Retenu</p>
+            <p className="text-texte">{lastResult.resume}</p>
             {lastResult.date_evenement && (
-              <p className="text-sm text-gray-500 mt-1">Échéance : {lastResult.date_evenement}</p>
+              <p className="text-sm text-texte-doux mt-1">Échéance : {lastResult.date_evenement}</p>
             )}
             {lastResult.info_manquante && (
-              <p className="text-sm text-amber-600 mt-1">⚠ {lastResult.info_manquante}</p>
+              <p className="text-sm text-alerte mt-1">⚠ {lastResult.info_manquante}</p>
             )}
             {lastResult.client_created && (
-              <p className="text-sm text-[#378ADD] mt-1">✓ Nouvelle fiche créée</p>
+              <p className="text-sm text-accent mt-1">✓ Nouvelle fiche créée</p>
             )}
             {!lastResult.client_id && !lastResult.client_created && (
-              <p className="text-sm text-amber-600 mt-1">⚠ Client non identifié</p>
+              <p className="text-sm text-alerte mt-1">⚠ Client non identifié</p>
             )}
           </div>
         )}
 
         {unclassified.length > 0 && (
           <div className="mt-6">
-            <p className="text-xs text-gray-400 mb-2 px-1">À relier à un client ({unclassified.length})</p>
+            <p className="text-xs text-texte-faible mb-2 px-1">À relier à un client ({unclassified.length})</p>
             <ul className="space-y-2">
               {unclassified.map((c) => (
-                <li key={c.id} className="bg-white rounded-xl px-4 py-3 shadow-sm">
-                  <p className="text-gray-900 text-sm">{c.resume || c.texte}</p>
+                <li key={c.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
+                  <p className="text-texte text-sm">{c.resume || c.texte}</p>
                   {c.info_manquante && (
-                    <p className="text-xs text-amber-600 mt-1">⚠ {c.info_manquante}</p>
+                    <p className="text-xs text-alerte mt-1">⚠ {c.info_manquante}</p>
                   )}
                 </li>
               ))}

@@ -25,21 +25,21 @@ function Card({ dossier, onOpen, onMove, isDragging }) {
       {...attributes}
       {...listeners}
       onClick={() => onOpen(dossier)}
-      className={`bg-white rounded-xl border select-none cursor-pointer transition-all p-2.5 ${
-        isDragging ? 'shadow-xl rotate-1 opacity-90' : 'border-gray-200 shadow-sm hover:border-gray-300'
+      className={`bg-carte rounded-xl border select-none cursor-pointer transition-all p-2.5 ${
+        isDragging ? 'shadow-xl rotate-1 opacity-90' : 'border-bordure shadow-sm hover:border-bordure'
       }`}
     >
-      <p className="text-[13px] font-medium text-gray-900 leading-tight mb-0.5">
+      <p className="text-[13px] font-medium text-texte leading-tight mb-0.5">
         {client ? [client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ') : '—'}
       </p>
-      {dossier.titre && <p className="text-[11px] text-gray-400 mb-1 truncate">{dossier.titre}</p>}
+      {dossier.titre && <p className="text-[11px] text-texte-faible mb-1 truncate">{dossier.titre}</p>}
       {dossier.montant_estime != null && (
-        <p className="text-[11px] text-gray-500">
-          Estimé : <span className="font-medium text-gray-800">{dossier.montant_estime} €</span>
+        <p className="text-[11px] text-texte-doux">
+          Estimé : <span className="font-medium text-texte">{dossier.montant_estime} €</span>
         </p>
       )}
       {dossier.rappel_date && (
-        <p className="text-[10px] text-amber-600 mt-1">⏰ {dossier.rappel_date}</p>
+        <p className="text-[10px] text-alerte mt-1">⏰ {dossier.rappel_date}</p>
       )}
       {/* Le glisser-déposer ne peut pas franchir 14 colonnes sur un écran de
           téléphone : ce bouton ouvre la liste des étapes. */}
@@ -52,7 +52,7 @@ function Card({ dossier, onOpen, onMove, isDragging }) {
             e.stopPropagation()
             onMove(dossier)
           }}
-          className="mt-2 pt-2 border-t border-gray-100 w-full text-right text-[11px] text-[#378ADD]"
+          className="mt-2 pt-2 border-t border-separateur w-full text-right text-[11px] text-accent"
         >
           Déplacer →
         </button>
@@ -72,9 +72,9 @@ function Column({ etape, dossiers, colRef, onOpen, onMove }) {
       className="flex-shrink-0 w-48 flex flex-col"
     >
       <div className="flex items-center justify-between px-1 pb-2">
-        <span className="text-xs font-medium uppercase tracking-wider text-gray-500">{etape[1]}</span>
+        <span className="text-xs font-medium uppercase tracking-wider text-texte-doux">{etape[1]}</span>
         {dossiers.length > 0 && (
-          <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">{dossiers.length}</span>
+          <span className="text-xs text-texte-faible bg-carte-douce px-1.5 py-0.5 rounded-full">{dossiers.length}</span>
         )}
       </div>
       <div
@@ -169,12 +169,12 @@ export default function Pipeline({ onBack, onOpenDossier }) {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-[#F5F4F0]">
+    <div className="flex flex-col h-screen bg-fond">
       <header className="px-4 pt-6 pb-4 flex items-center gap-3 flex-shrink-0">
-        <button onClick={onBack} className="text-[#378ADD] text-sm font-medium">
+        <button onClick={onBack} className="text-accent text-sm font-medium">
           ← Clients
         </button>
-        <h1 className="text-lg font-semibold text-gray-900">Pipeline</h1>
+        <h1 className="text-lg font-semibold text-texte">Pipeline</h1>
       </header>
 
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -201,17 +201,17 @@ export default function Pipeline({ onBack, onOpenDossier }) {
           onClick={() => setADeplacer(null)}
         >
           <div
-            className="bg-white w-full rounded-t-2xl p-4 max-h-[75vh] overflow-y-auto"
+            className="bg-carte w-full rounded-t-2xl p-4 max-h-[75vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-sm font-semibold text-gray-900">
+            <p className="text-sm font-semibold text-texte">
               {aDeplacer.clients
                 ? [aDeplacer.clients.prenom_praticien, aDeplacer.clients.nom_praticien]
                     .filter(Boolean)
                     .join(' ')
                 : aDeplacer.titre}
             </p>
-            <p className="text-xs text-gray-400 mb-4">Choisir la nouvelle étape</p>
+            <p className="text-xs text-texte-faible mb-4">Choisir la nouvelle étape</p>
 
             <div className="flex flex-col gap-2">
               {ETAPES_PROJET.map(([valeur, libelle]) => {
@@ -222,8 +222,8 @@ export default function Pipeline({ onBack, onOpenDossier }) {
                     onClick={() => changerEtape(aDeplacer, valeur)}
                     className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left text-sm ${
                       courante
-                        ? 'border-[#378ADD] bg-[#E6F1FB] text-[#0C447C] font-medium'
-                        : 'border-gray-200 text-gray-700'
+                        ? 'border-accent bg-accent/15 text-accent font-medium'
+                        : 'border-bordure text-texte-doux'
                     }`}
                   >
                     {libelle}
@@ -235,7 +235,7 @@ export default function Pipeline({ onBack, onOpenDossier }) {
 
             <button
               onClick={() => setADeplacer(null)}
-              className="w-full mt-3 py-3 rounded-xl bg-gray-100 text-gray-500 text-sm font-medium"
+              className="w-full mt-3 py-3 rounded-xl bg-carte-douce text-texte-doux text-sm font-medium"
             >
               Annuler
             </button>

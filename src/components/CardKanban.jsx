@@ -12,17 +12,17 @@ export default function CardKanban({ dossier, cabinet, activites, onClick, isDra
   const hasRappel = dossier.rappelDate && new Date(dossier.rappelDate) <= new Date()
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick}
-      className={`bg-white rounded-xl border select-none cursor-pointer transition-all ${isDragging?'shadow-xl rotate-1 opacity-90':'border-gray-200 shadow-sm hover:border-gray-300 hover:shadow-md'}`}>
+      className={`bg-carte rounded-xl border select-none cursor-pointer transition-all ${isDragging?'shadow-xl rotate-1 opacity-90':'border-bordure shadow-sm hover:border-bordure hover:shadow-md'}`}>
       <div className="p-2.5">
-        <div className="text-[13px] font-medium text-gray-900 leading-tight mb-0.5">{cabinet?.praticien||'—'}</div>
-        <div className="text-[11px] text-gray-400 mb-2">{cabinet?.ville}</div>
+        <div className="text-[13px] font-medium text-texte leading-tight mb-0.5">{cabinet?.praticien||'—'}</div>
+        <div className="text-[11px] text-texte-faible mb-2">{cabinet?.ville}</div>
         <div className="flex gap-1.5 flex-wrap mb-2">
           <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{background:ts.bg,color:ts.color}}>{ts.label}</span>
-          {dossier.label && <span className="text-[10px] text-gray-400 truncate max-w-[90px]">{dossier.label}</span>}
+          {dossier.label && <span className="text-[10px] text-texte-faible truncate max-w-[90px]">{dossier.label}</span>}
         </div>
-        {montant && <div className="text-[11px] text-gray-500 mb-1.5">Estimé : <span className="font-medium text-gray-800">{montant}</span></div>}
-        {hasRappel && <div className="flex items-center gap-1 text-[10px] text-amber-600 mt-1">⏰ {dossier.rappelNote||'Rappel'}</div>}
-        <div className="mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-400 hover:text-gray-600 cursor-pointer"
+        {montant && <div className="text-[11px] text-texte-doux mb-1.5">Estimé : <span className="font-medium text-texte">{montant}</span></div>}
+        {hasRappel && <div className="flex items-center gap-1 text-[10px] text-alerte mt-1">⏰ {dossier.rappelNote||'Rappel'}</div>}
+        <div className="mt-2 pt-2 border-t border-separateur text-[10px] text-texte-faible hover:text-texte-doux cursor-pointer"
           onClick={e=>{e.stopPropagation();onClick&&onClick()}}>+ Note rapide</div>
         {onMove && (
           <div onClick={e=>{e.stopPropagation();onMove(dossier)}}

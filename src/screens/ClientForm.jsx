@@ -59,20 +59,20 @@ export default function ClientForm({ onCreated, onCancel }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F4F0]">
-      <header className="sticky top-0 bg-[#F5F4F0]/90 backdrop-blur px-4 pt-6 pb-4 flex items-center justify-between">
-        <button onClick={onCancel} className="text-[#378ADD] text-sm font-medium">
+    <div className="min-h-screen bg-fond">
+      <header className="sticky top-0 bg-fond/90 backdrop-blur px-4 pt-6 pb-4 flex items-center justify-between">
+        <button onClick={onCancel} className="text-accent text-sm font-medium">
           Annuler
         </button>
-        <h1 className="text-lg font-semibold text-gray-900">Nouveau client</h1>
+        <h1 className="text-lg font-semibold text-texte">Nouveau client</h1>
         <span className="w-16" />
       </header>
 
       <main className="px-4 pb-8">
-        <form onSubmit={submit} className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+        <form onSubmit={submit} className="bg-carte rounded-xl shadow-sm divide-y divide-separateur">
           {FIELDS.map(([key, label, required]) => (
             <div key={key} className="px-4 py-3">
-              <label className="text-xs text-gray-400" htmlFor={key}>
+              <label className="text-xs text-texte-faible" htmlFor={key}>
                 {label}
                 {required ? ' *' : ''}
               </label>
@@ -80,14 +80,14 @@ export default function ClientForm({ onCreated, onCancel }) {
                 id={key}
                 value={values[key] ?? ''}
                 onChange={setField(key)}
-                className="w-full text-gray-900 outline-none bg-transparent"
+                className="w-full text-texte outline-none bg-transparent"
               />
             </div>
           ))}
           <PersonListField label="Associé(s)" people={associes} onChange={setAssocies} />
           <PersonListField label="Assistante(s)" people={assistantes} onChange={setAssistantes} />
           <div className="px-4 py-3">
-            <label className="text-xs text-gray-400" htmlFor="notes">
+            <label className="text-xs text-texte-faible" htmlFor="notes">
               Informations annexes (mail, SMS, ou toute autre info à coller)
             </label>
             <textarea
@@ -95,17 +95,17 @@ export default function ClientForm({ onCreated, onCancel }) {
               value={values.notes ?? ''}
               onChange={setField('notes')}
               rows={4}
-              className="w-full text-gray-900 outline-none bg-transparent resize-none"
+              className="w-full text-texte outline-none bg-transparent resize-none"
             />
           </div>
         </form>
 
-        {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
+        {error && <p className="text-erreur text-sm mt-3">{error}</p>}
 
         <button
           onClick={submit}
           disabled={saving}
-          className="w-full mt-5 bg-[#378ADD] text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
+          className="w-full mt-5 bg-accent text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
         >
           {saving ? 'Enregistrement…' : 'Créer le client'}
         </button>

@@ -47,9 +47,9 @@ export default function Kanban() {
   }
   function openDrawer(d) { setDrawerDossier(d); setDrawerCabinet(cabMap[d.cabinetId]||null) }
   return (
-    <div className="flex flex-col h-screen bg-gray-100 font-sans">
+    <div className="flex flex-col h-screen bg-carte-douce font-sans">
       <TopBar totalPipeline={totalPipeline} projection={projection} rappelsUrgents={rappelsUrgents} onNewDossier={()=>{}} onBrief={()=>setShowBrief(true)}/>
-      <div className="flex gap-1.5 px-4 py-2 bg-white border-b border-gray-100 overflow-x-auto flex-shrink-0" style={{scrollbarWidth:'none'}}>
+      <div className="flex gap-1.5 px-4 py-2 bg-carte border-b border-separateur overflow-x-auto flex-shrink-0" style={{scrollbarWidth:'none'}}>
         {ETAPES.map(e=>{
           const n=byEtape[e.id]?.length||0
           return(
@@ -126,7 +126,7 @@ function KanbanCol({ etape, dossiers, cabMap, actMap, colRef, onOpen, onMove }) 
     <div ref={el=>{setNodeRef(el);if(colRef)colRef(el)}} className="flex-shrink-0 w-48 flex flex-col">
       <div className="flex items-center justify-between px-1 pb-2">
         <span className="text-xs font-medium uppercase tracking-wider" style={{color:etape.color}}>{etape.label}</span>
-        {dossiers.length>0&&<span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">{dossiers.length}</span>}
+        {dossiers.length>0&&<span className="text-xs text-texte-faible bg-carte-douce px-1.5 py-0.5 rounded-full">{dossiers.length}</span>}
       </div>
       <div className="flex flex-col gap-2 min-h-16 rounded-xl transition-colors p-1"
         style={{background:isOver?etape.bg:'transparent'}}>

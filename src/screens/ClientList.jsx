@@ -84,27 +84,27 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline }
   }, [clients, query])
 
   return (
-    <div className="min-h-screen bg-[#F5F4F0]">
-      <header className="sticky top-0 z-10 bg-[#F5F4F0]/90 backdrop-blur px-4 pt-6 pb-3">
+    <div className="min-h-screen bg-fond">
+      <header className="sticky top-0 z-10 bg-fond/90 backdrop-blur px-4 pt-6 pb-3">
         <div className="flex items-center justify-between gap-2 mb-3">
-          <h1 className="text-xl font-semibold text-gray-900">Clients</h1>
+          <h1 className="text-xl font-semibold text-texte">Clients</h1>
           <div className="flex items-center gap-2">
             <button
               onClick={onPipeline}
-              className="px-3 h-9 rounded-full bg-white text-[#378ADD] text-sm font-medium shadow"
+              className="px-3 h-9 rounded-full bg-carte text-accent text-sm font-medium shadow"
             >
               Pipeline
             </button>
             <button
               onClick={onCapture}
-              className="px-3 h-9 rounded-full bg-white text-[#378ADD] text-sm font-medium shadow"
+              className="px-3 h-9 rounded-full bg-carte text-accent text-sm font-medium shadow"
             >
               Capture
             </button>
             <button
               onClick={onCreate}
               aria-label="Nouveau client"
-              className="w-9 h-9 flex-shrink-0 rounded-full bg-[#378ADD] text-white text-xl leading-none flex items-center justify-center shadow"
+              className="w-9 h-9 flex-shrink-0 rounded-full bg-accent text-white text-xl leading-none flex items-center justify-center shadow"
             >
               +
             </button>
@@ -118,13 +118,13 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline }
             type="search"
             placeholder="Rechercher un praticien, une ville…"
             aria-label="Rechercher un client"
-            className="w-full bg-white rounded-xl shadow-sm pl-4 pr-9 py-3 text-gray-900 outline-none placeholder:text-gray-400"
+            className="w-full bg-carte rounded-xl shadow-sm pl-4 pr-9 py-3 text-texte outline-none placeholder:text-texte-faible"
           />
           {query && (
             <button
               onClick={() => setQuery('')}
               aria-label="Effacer la recherche"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 text-lg leading-none"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-texte-fantome text-lg leading-none"
             >
               ×
             </button>
@@ -133,22 +133,22 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline }
       </header>
 
       <main className="px-4 pb-8">
-        {loading && <p className="text-gray-400 text-sm">Chargement…</p>}
+        {loading && <p className="text-texte-faible text-sm">Chargement…</p>}
 
         {!loading && clients.length === 0 && (
-          <p className="text-gray-400 text-sm mt-8 text-center">
+          <p className="text-texte-faible text-sm mt-8 text-center">
             Aucun client. Touchez + pour en créer un.
           </p>
         )}
 
         {!loading && clients.length > 0 && resultats.length === 0 && (
-          <p className="text-gray-400 text-sm mt-8 text-center">
+          <p className="text-texte-faible text-sm mt-8 text-center">
             Aucun client pour « {query} ».
           </p>
         )}
 
         {query && resultats.length > 0 && (
-          <p className="text-xs text-gray-400 mb-2 px-1">
+          <p className="text-xs text-texte-faible mb-2 px-1">
             {resultats.length} résultat{resultats.length > 1 ? 's' : ''}
           </p>
         )}
@@ -161,14 +161,14 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline }
               <li key={client.id}>
                 <button
                   onClick={() => onSelect(client)}
-                  className="w-full text-left bg-white rounded-xl px-4 py-3 shadow-sm active:scale-[0.98] transition"
+                  className="w-full text-left bg-carte rounded-xl px-4 py-3 shadow-sm active:scale-[0.98] transition"
                 >
-                  <p className="font-medium text-gray-900">
+                  <p className="font-medium text-texte">
                     {[client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ')}
                   </p>
-                  {sousTitre && <p className="text-sm text-gray-500">{sousTitre}</p>}
+                  {sousTitre && <p className="text-sm text-texte-doux">{sousTitre}</p>}
                   {ambigu && client.adresse && (
-                    <p className="text-xs text-gray-400 mt-0.5">{client.adresse}</p>
+                    <p className="text-xs text-texte-faible mt-0.5">{client.adresse}</p>
                   )}
                 </button>
               </li>

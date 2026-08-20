@@ -12,6 +12,7 @@ export const ETAPES_PROJET = [
   ['devis_envoye', 'Devis envoyé'],
   ['relance', 'Relance'],
   ['visite_local', 'Visite local'],
+  ['negociation', 'Négociation'],
   ['confirmation', 'Confirmation'],
   ['commande', 'Commande'],
   ['reunion_chantier', 'Réunion de chantier'],
