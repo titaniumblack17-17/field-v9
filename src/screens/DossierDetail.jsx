@@ -26,8 +26,31 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
   const [notes, setNotes] = useState([])
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
+  const [suppression, setSuppression] = useState(false)
 
   const s = styleDossier(values)
+
+  const supprimer = async () => {
+    const quoi = [
+      `« ${values.titre || TYPE_LABELS[dossier.type]} »`,
+      notes.length ? `et ses ${notes.length} note${notes.length > 1 ? 's' : ''}` : null,
+    ]
+      .filter(Boolean)
+      .join(' ')
+    if (!window.confirm(`Supprimer définitivement ${quoi} ? Cette action est irréversible.`)) return
+
+    setSuppression(true)
+    const { error: err } = await supabase.from('dossiers').delete().eq('id', dossier.id)
+    if (err) {
+      setSuppression(false)
+      setError(err.message)
+      return
+    }
+    // Le garde-fou des modifications non enregistrées n'a plus lieu d'être :
+    // le dossier n'existe plus.
+    onDirtyChange?.(false)
+    onBack()
+  }
 
   const setField = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }))
 
@@ -303,6 +326,17 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
               ))}
             </ul>
           )}
+        </div>
+        {/* Discret et en fin de fiche : une suppression ne doit pas se cliquer
+            par réflexe en descendant la page. */}
+        <div className="mt-8 pt-4 border-t border-separateur">
+          <button
+            onClick={supprimer}
+            disabled={suppression}
+            className="w-full text-erreur text-sm py-2 disabled:opacity-50"
+          >
+            {suppression ? 'Suppression…' : 'Supprimer ce dossier'}
+          </button>
         </div>
       </main>
 
