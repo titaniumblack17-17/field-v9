@@ -37,7 +37,7 @@ export const REMUNERATION_OPTIONS = [
 // Liseré / code couleur du dossier (spec §4.2). Palette reprise de l'ancien
 // Kanban pour rester cohérente avec ce que Bruce connaît déjà.
 const STYLES_TYPE = {
-  projet: { bordure: '#378ADD', fond: '#E6F1FB', texte: '#0C447C', badge: 'Projet' },
+  projet: { bordure: '#DB2777', fond: '#FCE7F3', texte: '#831843', badge: 'Projet' },
   sav: { bordure: '#C2740A', fond: '#FAEEDA', texte: '#633806', badge: 'SAV' },
   plan: { bordure: '#5A8F2A', fond: '#EAF3DE', texte: '#27500A', badge: 'Plan' },
 }
@@ -46,7 +46,7 @@ const STYLES_TYPE = {
 // le liseré la rend lisible sans ouvrir la fiche.
 const STYLES_PLAN = {
   facture: { bordure: '#5A8F2A', fond: '#EAF3DE', texte: '#27500A', badge: 'Plan facturé' },
-  integre: { bordure: '#0F766E', fond: '#DCF2EF', texte: '#0B4F4A', badge: 'Plan intégré' },
+  integre: { bordure: '#378ADD', fond: '#E6F1FB', texte: '#0C447C', badge: 'Plan intégré' },
   partage: { bordure: '#7C3AED', fond: '#EDE7FB', texte: '#4C1D95', badge: 'Plan partagé' },
 }
 
