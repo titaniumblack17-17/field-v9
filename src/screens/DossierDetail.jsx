@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabaseClient'
 import ChampChoix from '../components/ChampChoix'
 import {
   TYPE_LABELS,
+  TYPE_OPTIONS,
+  STATUT_PAR_DEFAUT,
   ETAPES_PROJET,
   STATUTS_SAV,
   REMUNERATION_OPTIONS,
@@ -10,6 +12,7 @@ import {
 } from '../constants/dossiers'
 
 const CHAMPS = [
+  'type',
   'titre',
   'statut',
   'montant_estime',
@@ -32,7 +35,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
 
   const supprimer = async () => {
     const quoi = [
-      `« ${values.titre || TYPE_LABELS[dossier.type]} »`,
+      `« ${values.titre || TYPE_LABELS[values.type]} »`,
       notes.length ? `et ses ${notes.length} note${notes.length > 1 ? 's' : ''}` : null,
     ]
       .filter(Boolean)
@@ -53,6 +56,30 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
   }
 
   const setField = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }))
+
+  // Changer de type invalide le statut courant, exprimé dans le vocabulaire de
+  // l'ancien type. On le réinitialise, et on abandonne les champs propres au
+  // type quitté — en prévenant quand ils portaient une information.
+  const changerType = (nouveau) => {
+    if (nouveau === values.type) return
+    if (
+      values.type === 'plan' &&
+      values.remuneration_type &&
+      !window.confirm(
+        `Ce dossier devient « ${TYPE_LABELS[nouveau]} ». Sa rémunération (${
+          REMUNERATION_OPTIONS.find(([v]) => v === values.remuneration_type)?.[1]
+        }) sera effacée. Continuer ?`
+      )
+    ) {
+      return
+    }
+    setValues((v) => ({
+      ...v,
+      type: nouveau,
+      statut: STATUT_PAR_DEFAUT[nouveau],
+      remuneration_type: nouveau === 'plan' ? v.remuneration_type : null,
+    }))
+  }
 
   // Un input number renvoie une chaîne : on compare en chaîne pour ne pas
   // signaler une modification quand la valeur retapée est identique.
@@ -79,7 +106,10 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
       date_installation: values.date_installation || null,
       rappel_date: values.rappel_date || null,
       rappel_note: (values.rappel_note ?? '').trim() || null,
-      remuneration_type: dossier.type === 'plan' ? values.remuneration_type || null : null,
+      type: values.type,
+      remuneration_type: values.type === 'plan' ? values.remuneration_type || null : null,
+      // Un dossier qui n'est plus un SAV n'a plus de projet d'origine.
+      projet_source_id: values.type === 'sav' ? dossier.projet_source_id ?? null : null,
     }
 
     const { data, error: dbError } = await supabase
@@ -167,13 +197,13 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
           >
             {s.badge}
           </span>
-          {TYPE_LABELS[dossier.type] !== s.badge && (
-            <span className="text-xs text-texte-faible">{TYPE_LABELS[dossier.type]}</span>
+          {TYPE_LABELS[values.type] !== s.badge && (
+            <span className="text-xs text-texte-faible">{TYPE_LABELS[values.type]}</span>
           )}
         </div>
 
         <h1 className="text-2xl font-semibold text-texte mb-4">
-          {values.titre || TYPE_LABELS[dossier.type]}
+          {values.titre || TYPE_LABELS[values.type]}
         </h1>
 
         <div
@@ -182,6 +212,13 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
         >
           <div style={{ background: s.bordure }} className="h-2.5" />
           <div className="divide-y divide-separateur">
+          <ChampChoix
+            id="type"
+            label="Type de dossier"
+            value={values.type}
+            options={TYPE_OPTIONS}
+            onChange={changerType}
+          />
           <div className="px-4 py-3">
             <label className="text-xs text-texte-faible" htmlFor="titre">
               Titre
@@ -195,7 +232,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
             />
           </div>
 
-          {dossier.type === 'projet' && (
+          {values.type === 'projet' && (
             <ChampChoix
               id="statut"
               label="Étape"
@@ -205,7 +242,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
             />
           )}
 
-          {dossier.type === 'sav' && (
+          {values.type === 'sav' && (
             <ChampChoix
               id="statut"
               label="Statut"
@@ -215,7 +252,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
             />
           )}
 
-          {dossier.type === 'plan' && (
+          {values.type === 'plan' && (
             <div>
               <ChampChoix
                 id="remuneration"

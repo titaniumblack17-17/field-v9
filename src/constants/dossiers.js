@@ -1,5 +1,17 @@
 export const TYPE_LABELS = { projet: 'Projet de vente', sav: 'SAV', plan: 'Plan / cahier des charges' }
 
+export const TYPE_OPTIONS = [
+  ['projet', 'Projet de vente'],
+  ['sav', 'SAV'],
+  ['plan', 'Plan / cahier des charges'],
+]
+
+// Statut d'accueil quand un dossier change de type : le statut courant
+// appartient au vocabulaire de l'ancien type et n'a plus de sens.
+// Un projet atterrit dans « À classer » plutôt qu'à une étape arbitraire —
+// c'est à Bruce de le situer dans son pipeline.
+export const STATUT_PAR_DEFAUT = { projet: 'a_classer', sav: 'ouvert', plan: 'nouveau' }
+
 export const ETAPES_PROJET = [
   // Colonne d'attente pour les dossiers importés dont l'étape Notion n'avait
   // pas d'équivalent (Négociation, Rendez-vous cabinet). Placée en tête pour
