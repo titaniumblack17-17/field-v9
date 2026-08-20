@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 const TYPE_LABELS = { projet: 'Projet de vente', sav: 'SAV', plan: 'Plan / cahier des charges' }
@@ -39,6 +39,55 @@ export default function DossierDetail({ dossier, onBack }) {
   const [rappelDate, setRappelDate] = useState(dossier.rappel_date ?? '')
   const [rappelNote, setRappelNote] = useState(dossier.rappel_note ?? '')
   const [saving, setSaving] = useState(false)
+  const [notes, setNotes] = useState([])
+  const [newNote, setNewNote] = useState('')
+  const [addingNote, setAddingNote] = useState(false)
+
+  useEffect(() => {
+    let active = true
+
+    supabase
+      .from('dossier_notes')
+      .select('*')
+      .eq('dossier_id', dossier.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (active) setNotes(data ?? [])
+      })
+
+    const channel = supabase
+      .channel(`dossier-notes-${dossier.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dossier_notes', filter: `dossier_id=eq.${dossier.id}` },
+        (payload) => {
+          setNotes((current) => {
+            if (payload.eventType === 'INSERT') {
+              if (current.some((n) => n.id === payload.new.id)) return current
+              return [payload.new, ...current]
+            }
+            if (payload.eventType === 'DELETE') {
+              return current.filter((n) => n.id !== payload.old.id)
+            }
+            return current
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      active = false
+      supabase.removeChannel(channel)
+    }
+  }, [dossier.id])
+
+  const addNote = async () => {
+    if (!newNote.trim()) return
+    setAddingNote(true)
+    await supabase.from('dossier_notes').insert({ dossier_id: dossier.id, texte: newNote.trim() })
+    setNewNote('')
+    setAddingNote(false)
+  }
 
   const startEdit = () => {
     setTitre(dossier.titre ?? '')
@@ -230,6 +279,46 @@ export default function DossierDetail({ dossier, onBack }) {
             >
               {saving ? 'Enregistrement…' : 'Enregistrer'}
             </button>
+          </div>
+        )}
+
+        {!editing && (
+          <div className="mt-4">
+            <p className="text-xs text-gray-400 mb-2 px-1">Notes</p>
+            <div className="bg-white rounded-xl shadow-sm p-3 flex gap-2 mb-2">
+              <input
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                placeholder="Ajouter une note…"
+                className="flex-1 text-gray-900 outline-none bg-transparent"
+                onKeyDown={(e) => e.key === 'Enter' && addNote()}
+              />
+              <button
+                onClick={addNote}
+                disabled={addingNote || !newNote.trim()}
+                className="text-[#378ADD] text-sm font-medium disabled:opacity-40"
+              >
+                Ajouter
+              </button>
+            </div>
+            {notes.length > 0 && (
+              <ul className="space-y-2">
+                {notes.map((n) => (
+                  <li key={n.id} className="bg-white rounded-xl px-4 py-3 shadow-sm">
+                    <p className="text-gray-900 text-sm">{n.texte}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {new Date(n.created_at).toLocaleString('fr-FR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </main>
