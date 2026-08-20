@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import PersonListField from '../components/PersonListField'
+import { TYPE_LABELS, styleDossier } from '../constants/dossiers'
 
 const FIELDS = [
   ['prenom_praticien', 'Prénom du praticien'],
@@ -17,83 +18,72 @@ const FIELDS = [
 
 const emptyPeople = (list) => (list?.length ? list : [{ prenom: '', telephone: '' }])
 
-const TYPE_LABELS = { projet: 'Projet de vente', sav: 'SAV', plan: 'Plan / cahier des charges' }
+const cleanPeople = (people) =>
+  people
+    .map((p) => ({ prenom: (p.prenom ?? '').trim(), telephone: (p.telephone ?? '').trim() }))
+    .filter((p) => p.prenom || p.telephone)
 
 export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossier }) {
-  const [editing, setEditing] = useState(false)
-  const [dossiers, setDossiers] = useState([])
-  const [values, setValues] = useState(client)
+  const [values, setValues] = useState(() => ({ ...client }))
   const [associes, setAssocies] = useState(emptyPeople(client.associes))
   const [assistantes, setAssistantes] = useState(emptyPeople(client.assistantes))
-  const [savingFiche, setSavingFiche] = useState(false)
-  const [ficheError, setFicheError] = useState(null)
-
-  const [notes, setNotes] = useState(client.notes ?? '')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
   const [journal, setJournal] = useState([])
-  const dirty = notes !== (client.notes ?? '')
+  const [dossiers, setDossiers] = useState([])
 
   const setField = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }))
 
-  const cleanPeople = (people) =>
-    people
-      .map((p) => ({ prenom: p.prenom.trim(), telephone: p.telephone.trim() }))
-      .filter((p) => p.prenom || p.telephone)
+  const dirty = useMemo(() => {
+    const champs = [...FIELDS.map(([k]) => k), 'notes'].some(
+      (k) => (values[k] ?? '') !== (client[k] ?? '')
+    )
+    const gens =
+      JSON.stringify(cleanPeople(associes)) !== JSON.stringify(client.associes ?? []) ||
+      JSON.stringify(cleanPeople(assistantes)) !== JSON.stringify(client.assistantes ?? [])
+    return champs || gens
+  }, [values, associes, assistantes, client])
 
-  const startEdit = () => {
-    setValues(client)
-    setAssocies(emptyPeople(client.associes))
-    setAssistantes(emptyPeople(client.assistantes))
-    setFicheError(null)
-    setEditing(true)
-  }
-
-  const saveFiche = async () => {
+  const save = async () => {
     if (!values.nom_praticien?.trim()) {
-      setFicheError('Le nom du praticien est obligatoire.')
+      setError('Le nom du praticien est obligatoire.')
       return
     }
-    setSavingFiche(true)
-    setFicheError(null)
+    setSaving(true)
+    setError(null)
 
-    const update = {
-      prenom_praticien: values.prenom_praticien || null,
-      nom_praticien: values.nom_praticien,
-      nom_cabinet: values.nom_cabinet || null,
-      adresse: values.adresse || null,
-      code_postal: values.code_postal || null,
-      ville: values.ville || null,
-      telephone_portable: values.telephone_portable || null,
-      telephone_cabinet: values.telephone_cabinet || null,
-      email: values.email || null,
-      email_cabinet: values.email_cabinet || null,
-      associes: cleanPeople(associes),
-      assistantes: cleanPeople(assistantes),
-    }
+    const update = Object.fromEntries(
+      FIELDS.map(([k]) => [k, (values[k] ?? '').trim() || null])
+    )
+    update.notes = (values.notes ?? '').trim() || null
+    update.associes = cleanPeople(associes)
+    update.assistantes = cleanPeople(assistantes)
 
-    const { data, error } = await supabase
+    const { data, error: dbError } = await supabase
       .from('clients')
       .update(update)
       .eq('id', client.id)
       .select()
       .single()
 
-    setSavingFiche(false)
+    setSaving(false)
 
-    if (error) {
-      setFicheError(error.message)
+    if (dbError) {
+      setError(dbError.message)
       return
     }
 
     Object.assign(client, data)
-    setEditing(false)
+    setValues({ ...data })
+    setAssocies(emptyPeople(data.associes))
+    setAssistantes(emptyPeople(data.assistantes))
   }
 
-  const saveNotes = async () => {
-    setSaving(true)
-    await supabase.from('clients').update({ notes }).eq('id', client.id)
-    client.notes = notes
-    setSaving(false)
+  const annuler = () => {
+    setValues({ ...client })
+    setAssocies(emptyPeople(client.associes))
+    setAssistantes(emptyPeople(client.assistantes))
+    setError(null)
   }
 
   useEffect(() => {
@@ -180,152 +170,93 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
   return (
     <div className="min-h-screen bg-[#F5F4F0]">
-      <header className="sticky top-0 bg-[#F5F4F0]/90 backdrop-blur px-4 pt-6 pb-4 flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-10 bg-[#F5F4F0]/90 backdrop-blur px-4 pt-6 pb-4 flex items-center gap-3">
         <button onClick={onBack} className="text-[#378ADD] text-sm font-medium">
           ← Clients
         </button>
-        {!editing && (
-          <button onClick={startEdit} className="text-[#378ADD] text-sm font-medium">
-            Modifier
-          </button>
-        )}
       </header>
 
-      <main className="px-4 pb-8">
-        {!editing && (
-          <h1 className="text-2xl font-semibold text-gray-900 mb-4">
-            {[client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ')}
-          </h1>
-        )}
+      <main className={`px-4 ${dirty ? 'pb-28' : 'pb-8'}`}>
+        <h1 className="text-2xl font-semibold text-gray-900 mb-4">
+          {[client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ') || 'Client'}
+        </h1>
 
-        {editing ? (
-          <>
-            <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
-              {FIELDS.map(([key, label]) => (
-                <div key={key} className="px-4 py-3">
-                  <label className="text-xs text-gray-400" htmlFor={key}>
-                    {label}
-                    {key === 'nom_praticien' ? ' *' : ''}
-                  </label>
-                  <input
-                    id={key}
-                    value={values[key] ?? ''}
-                    onChange={setField(key)}
-                    className="w-full text-gray-900 outline-none bg-transparent"
-                  />
-                </div>
-              ))}
-              <PersonListField label="Associé(s)" people={associes} onChange={setAssocies} />
-              <PersonListField label="Assistante(s)" people={assistantes} onChange={setAssistantes} />
+        <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+          {FIELDS.map(([key, label]) => (
+            <div key={key} className="px-4 py-3">
+              <label className="text-xs text-gray-400" htmlFor={key}>
+                {label}
+                {key === 'nom_praticien' ? ' *' : ''}
+              </label>
+              <input
+                id={key}
+                value={values[key] ?? ''}
+                onChange={setField(key)}
+                placeholder="—"
+                className="w-full text-gray-900 outline-none bg-transparent placeholder:text-gray-300"
+              />
             </div>
+          ))}
+          <PersonListField label="Associé(s)" people={associes} onChange={setAssocies} />
+          <PersonListField label="Assistante(s)" people={assistantes} onChange={setAssistantes} />
+        </div>
 
-            {ficheError && <p className="text-red-500 text-sm mt-3">{ficheError}</p>}
+        {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
 
-            <div className="flex gap-2 mt-4">
-              <button
-                onClick={() => setEditing(false)}
-                className="flex-1 bg-white text-gray-500 font-medium rounded-xl py-3 shadow"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={saveFiche}
-                disabled={savingFiche}
-                className="flex-1 bg-[#378ADD] text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
-              >
-                {savingFiche ? 'Enregistrement…' : 'Enregistrer'}
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
-            {FIELDS.filter(([key]) => key !== 'prenom_praticien' && key !== 'nom_praticien').map(
-              ([key, label]) =>
-                client[key] ? (
-                  <div key={key} className="px-4 py-3">
-                    <p className="text-xs text-gray-400">{label}</p>
-                    <p className="text-gray-900">{client[key]}</p>
-                  </div>
-                ) : null
-            )}
-            {client.associes?.length ? (
-              <div className="px-4 py-3">
-                <p className="text-xs text-gray-400 mb-1">Associé(s)</p>
-                {client.associes.map((person, i) => (
-                  <p key={i} className="text-gray-900">
-                    {person.prenom}
-                    {person.telephone ? ` · ${person.telephone}` : ''}
-                  </p>
-                ))}
-              </div>
-            ) : null}
-            {client.assistantes?.length ? (
-              <div className="px-4 py-3">
-                <p className="text-xs text-gray-400 mb-1">Assistante(s)</p>
-                {client.assistantes.map((person, i) => (
-                  <p key={i} className="text-gray-900">
-                    {person.prenom}
-                    {person.telephone ? ` · ${person.telephone}` : ''}
-                  </p>
-                ))}
-              </div>
-            ) : null}
+        <div className="mt-4">
+          <div className="flex items-center justify-between px-1 mb-2">
+            <p className="text-xs text-gray-400">Dossiers</p>
+            <button onClick={() => onNewDossier(client)} className="text-[#378ADD] text-sm font-medium">
+              + Nouveau dossier
+            </button>
           </div>
-        )}
-
-        {!editing && (
-          <div className="mt-4">
-            <div className="flex items-center justify-between px-1 mb-2">
-              <p className="text-xs text-gray-400">Dossiers</p>
-              <button onClick={() => onNewDossier(client)} className="text-[#378ADD] text-sm font-medium">
-                + Nouveau dossier
-              </button>
-            </div>
-            {dossiers.length === 0 ? (
-              <p className="text-gray-400 text-sm px-1">Aucun dossier pour l'instant.</p>
-            ) : (
-              <ul className="space-y-2">
-                {dossiers.map((d) => (
+          {dossiers.length === 0 ? (
+            <p className="text-gray-400 text-sm px-1">Aucun dossier pour l'instant.</p>
+          ) : (
+            <ul className="space-y-2">
+              {dossiers.map((d) => {
+                const s = styleDossier(d)
+                return (
                   <li key={d.id}>
                     <button
                       onClick={() => onOpenDossier(d)}
-                      className="w-full text-left bg-white rounded-xl px-4 py-3 shadow-sm active:scale-[0.98] transition"
+                      style={{ borderColor: s.bordure }}
+                      className="w-full text-left bg-white rounded-xl px-4 py-3 shadow-sm border-l-4 active:scale-[0.98] transition"
                     >
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span
+                          style={{ background: s.fond, color: s.texte }}
+                          className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                        >
+                          {s.badge}
+                        </span>
+                      </div>
                       <p className="font-medium text-gray-900">{d.titre || TYPE_LABELS[d.type]}</p>
                       <p className="text-sm text-gray-500">
-                        {TYPE_LABELS[d.type]} · {d.statut}
+                        {d.statut}
                         {d.montant_estime != null ? ` · ${d.montant_estime} €` : ''}
                       </p>
                     </button>
                   </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
+                )
+              })}
+            </ul>
+          )}
+        </div>
 
-        {!editing && (
-          <div className="bg-white rounded-xl shadow-sm mt-4 px-4 py-3">
-            <p className="text-xs text-gray-400 mb-1">Informations annexes (mail, SMS, ou toute autre info à coller)</p>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={6}
-              className="w-full text-gray-900 outline-none bg-transparent resize-none"
-            />
-            {dirty && (
-              <button
-                onClick={saveNotes}
-                disabled={saving}
-                className="mt-2 bg-[#378ADD] text-white text-sm font-medium rounded-lg px-4 py-2 disabled:opacity-50"
-              >
-                {saving ? 'Enregistrement…' : 'Enregistrer les notes'}
-              </button>
-            )}
-          </div>
-        )}
+        <div className="bg-white rounded-xl shadow-sm mt-4 px-4 py-3">
+          <p className="text-xs text-gray-400 mb-1">
+            Informations annexes (mail, SMS, ou toute autre info à coller)
+          </p>
+          <textarea
+            value={values.notes ?? ''}
+            onChange={setField('notes')}
+            rows={6}
+            className="w-full text-gray-900 outline-none bg-transparent resize-none"
+          />
+        </div>
 
-        {!editing && journal.length > 0 && (
+        {journal.length > 0 && (
           <div className="mt-4">
             <p className="text-xs text-gray-400 mb-2 px-1">Journal</p>
             <ul className="space-y-2">
@@ -345,6 +276,24 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           </div>
         )}
       </main>
+
+      {dirty && (
+        <div className="fixed bottom-0 inset-x-0 bg-[#F5F4F0]/95 backdrop-blur border-t border-gray-200 px-4 py-3 flex gap-2">
+          <button
+            onClick={annuler}
+            className="flex-1 bg-white text-gray-500 font-medium rounded-xl py-3 shadow"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="flex-1 bg-[#378ADD] text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
+          >
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
