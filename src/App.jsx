@@ -7,6 +7,48 @@ import DossierForm from './screens/DossierForm'
 import DossierDetail from './screens/DossierDetail'
 import Pipeline from './screens/Pipeline'
 
+// Balayage depuis le bord gauche pour revenir. Le geste natif d'iOS est
+// capricieux sur une application à écran unique, et le défilement horizontal
+// du Pipeline le capte de toute façon : on le gère donc nous-mêmes.
+// Déclenchement volontairement étroit — départ collé au bord, trajet nettement
+// horizontal — pour ne jamais se confondre avec un défilement ou un glissé.
+function useSwipeRetour(actif, onRetour) {
+  useEffect(() => {
+    if (!actif) return
+
+    let departX = null
+    let departY = 0
+
+    const debut = (e) => {
+      const t = e.touches[0]
+      departX = t.clientX <= 28 ? t.clientX : null
+      departY = t.clientY
+    }
+    const fin = (e) => {
+      if (departX === null) return
+      const t = e.changedTouches[0]
+      const dx = t.clientX - departX
+      const dy = Math.abs(t.clientY - departY)
+      departX = null
+      if (dx > 70 && dy < 50) onRetour()
+    }
+    // iOS émet touchcancel quand il prend la main pour son propre geste :
+    // on abandonne alors, pour ne pas revenir deux fois.
+    const annule = () => {
+      departX = null
+    }
+
+    document.addEventListener('touchstart', debut, { passive: true })
+    document.addEventListener('touchend', fin, { passive: true })
+    document.addEventListener('touchcancel', annule, { passive: true })
+    return () => {
+      document.removeEventListener('touchstart', debut)
+      document.removeEventListener('touchend', fin)
+      document.removeEventListener('touchcancel', annule)
+    }
+  }, [actif, onRetour])
+}
+
 export default function App() {
   // Pile d'écrans doublée d'entrées dans l'historique du navigateur : le swipe
   // natif iOS et le bouton Retour du navigateur reviennent d'un écran, sans
@@ -54,9 +96,23 @@ export default function App() {
   // alignée sur la pile.
   const replace = (v) => setStack((s) => [...s.slice(0, -1), v])
 
-  const back = () => {
-    if (stack.length > 1) window.history.back()
-  }
+  // Filet contre un double retour si le geste natif d'iOS s'est déclenché en
+  // plus du nôtre.
+  const dernierRetourRef = useRef(0)
+
+  const profond = stack.length > 1
+
+  const back = React.useCallback(() => {
+    if (!profond) return
+    const maintenant = Date.now()
+    if (maintenant - dernierRetourRef.current < 600) return
+    dernierRetourRef.current = maintenant
+    window.history.back()
+  }, [profond])
+
+  // Pas de balayage sur le Pipeline : on y fait glisser des cartes
+  // horizontalement, et le tableau défile lui-même de gauche à droite.
+  useSwipeRetour(profond && view.name !== 'pipeline', back)
 
   if (view.name === 'detail') {
     return (
