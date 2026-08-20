@@ -6,6 +6,17 @@ export const TYPE_OPTIONS = [
   ['plan', 'Plan / cahier des charges'],
 ]
 
+// Plan d'implantation rattaché à une vente : c'est une tâche du projet, pas un
+// dossier à part. Le type « plan » reste réservé aux plans faits pour un autre
+// commercial ou en projet partagé, où le plan est la prestation elle-même.
+export const PLAN_STATUT_OPTIONS = [
+  ['a_faire', 'À faire'],
+  ['en_cours', 'En cours'],
+  ['fait', 'Fait'],
+]
+
+export const PLAN_STATUT_LABELS = Object.fromEntries(PLAN_STATUT_OPTIONS)
+
 // Statut d'accueil quand un dossier change de type : le statut courant
 // appartient au vocabulaire de l'ancien type et n'a plus de sens.
 // Un projet atterrit dans « À classer » plutôt qu'à une étape arbitraire —

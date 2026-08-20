@@ -8,11 +8,13 @@ import {
   ETAPES_PROJET,
   STATUTS_SAV,
   REMUNERATION_OPTIONS,
+  PLAN_STATUT_OPTIONS,
   styleDossier,
 } from '../constants/dossiers'
 
 const CHAMPS = [
   'type',
+  'plan_statut',
   'titre',
   'statut',
   'montant_estime',
@@ -78,6 +80,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
       type: nouveau,
       statut: STATUT_PAR_DEFAUT[nouveau],
       remuneration_type: nouveau === 'plan' ? v.remuneration_type : null,
+      plan_statut: nouveau === 'projet' ? v.plan_statut : null,
     }))
   }
 
@@ -107,6 +110,8 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
       rappel_date: values.rappel_date || null,
       rappel_note: (values.rappel_note ?? '').trim() || null,
       type: values.type,
+      // Le plan intégré n'a de sens que sur une vente.
+      plan_statut: values.type === 'projet' ? values.plan_statut || null : null,
       remuneration_type: values.type === 'plan' ? values.remuneration_type || null : null,
       // Un dossier qui n'est plus un SAV n'a plus de projet d'origine.
       projet_source_id: values.type === 'sav' ? dossier.projet_source_id ?? null : null,
@@ -239,6 +244,19 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
               value={values.statut ?? ''}
               options={ETAPES_PROJET}
               onChange={(v) => setValues((x) => ({ ...x, statut: v }))}
+            />
+          )}
+
+          {/* Plan intégré à la vente (spec §4.2, cas 2) : une tâche du projet,
+              pas un dossier séparé — donc pas de rémunération associée. */}
+          {values.type === 'projet' && (
+            <ChampChoix
+              id="plan_statut"
+              label="Plan d'implantation"
+              value={values.plan_statut ?? ''}
+              options={PLAN_STATUT_OPTIONS}
+              videLibelle="Aucun plan à faire"
+              onChange={(v) => setValues((x) => ({ ...x, plan_statut: v || null }))}
             />
           )}
 

@@ -11,7 +11,7 @@ import {
   useDraggable,
 } from '@dnd-kit/core'
 import { supabase } from '../lib/supabaseClient'
-import { ETAPES_PROJET } from '../constants/dossiers'
+import { ETAPES_PROJET, PLAN_STATUT_LABELS } from '../constants/dossiers'
 
 function Card({ dossier, onOpen, onMove, isDragging }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: dossier.id })
@@ -40,6 +40,13 @@ function Card({ dossier, onOpen, onMove, isDragging }) {
       )}
       {dossier.rappel_date && (
         <p className="text-[10px] text-alerte mt-1">⏰ {dossier.rappel_date}</p>
+      )}
+      {/* Un plan encore dû se voit sans ouvrir le dossier : c'est du travail
+          technique à produire, pas un simple attribut. */}
+      {dossier.plan_statut && dossier.plan_statut !== 'fait' && (
+        <p className="text-[10px] text-accent mt-1">
+          📐 Plan {PLAN_STATUT_LABELS[dossier.plan_statut]?.toLowerCase()}
+        </p>
       )}
       {/* Le glisser-déposer ne peut pas franchir 14 colonnes sur un écran de
           téléphone : ce bouton ouvre la liste des étapes. */}
@@ -79,7 +86,7 @@ function Column({ etape, dossiers, colRef, onOpen, onMove }) {
       </div>
       <div
         className="flex flex-col gap-2 min-h-16 rounded-xl transition-colors p-1"
-        style={{ background: isOver ? '#E6F1FB' : 'transparent' }}
+        style={{ background: isOver ? 'rgb(var(--accent) / 0.15)' : 'transparent' }}
       >
         {dossiers.map((d) => (
           <Card key={d.id} dossier={d} onOpen={onOpen} onMove={onMove} />
