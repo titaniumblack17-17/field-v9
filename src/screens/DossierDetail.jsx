@@ -1,35 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-
-const TYPE_LABELS = { projet: 'Projet de vente', sav: 'SAV', plan: 'Plan / cahier des charges' }
-
-const ETAPES_PROJET = [
-  ['prospect', 'Prospect'],
-  ['prise_contact', 'Prise de contact'],
-  ['devis_a_faire', 'Devis à faire'],
-  ['devis_envoye', 'Devis envoyé'],
-  ['relance', 'Relance'],
-  ['visite_local', 'Visite local'],
-  ['confirmation', 'Confirmation'],
-  ['commande', 'Commande'],
-  ['reunion_chantier', 'Réunion de chantier'],
-  ['installation', 'Installation'],
-  ['finition', 'Finition'],
-  ['financement', 'Financement'],
-  ['perdu', 'Dossier perdu'],
-  ['sav', 'SAV'],
-]
-
-const STATUTS_SAV = [
-  ['ouvert', 'Ouvert'],
-  ['clos', 'Clos'],
-]
-
-const REMUNERATION = {
-  facture: 'Facturé 500 € TTC',
-  integre: 'Intégré au suivi normal',
-  partage: 'Partagé avec un collègue',
-}
+import { TYPE_LABELS, ETAPES_PROJET, STATUTS_SAV, REMUNERATION } from '../constants/dossiers'
 
 export default function DossierDetail({ dossier, onBack }) {
   const [editing, setEditing] = useState(false)

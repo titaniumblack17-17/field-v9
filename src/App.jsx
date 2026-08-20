@@ -5,6 +5,7 @@ import ClientForm from './screens/ClientForm'
 import Capture from './screens/Capture'
 import DossierForm from './screens/DossierForm'
 import DossierDetail from './screens/DossierDetail'
+import Pipeline from './screens/Pipeline'
 
 export default function App() {
   const [view, setView] = useState({ name: 'list' })
@@ -15,7 +16,9 @@ export default function App() {
         client={view.client}
         onBack={() => setView({ name: 'list' })}
         onNewDossier={(client) => setView({ name: 'dossier-create', client })}
-        onOpenDossier={(dossier) => setView({ name: 'dossier-detail', dossier, client: view.client })}
+        onOpenDossier={(dossier) =>
+          setView({ name: 'dossier-detail', dossier, client: view.client, returnTo: 'detail' })
+        }
       />
     )
   }
@@ -33,6 +36,17 @@ export default function App() {
     return <Capture onBack={() => setView({ name: 'list' })} />
   }
 
+  if (view.name === 'pipeline') {
+    return (
+      <Pipeline
+        onBack={() => setView({ name: 'list' })}
+        onOpenDossier={(dossier) =>
+          setView({ name: 'dossier-detail', dossier, client: dossier.clients, returnTo: 'pipeline' })
+        }
+      />
+    )
+  }
+
   if (view.name === 'dossier-create') {
     return (
       <DossierForm
@@ -47,7 +61,11 @@ export default function App() {
     return (
       <DossierDetail
         dossier={view.dossier}
-        onBack={() => setView({ name: 'detail', client: view.client })}
+        onBack={() =>
+          view.returnTo === 'pipeline'
+            ? setView({ name: 'pipeline' })
+            : setView({ name: 'detail', client: view.client })
+        }
       />
     )
   }
@@ -57,6 +75,7 @@ export default function App() {
       onSelect={(client) => setView({ name: 'detail', client })}
       onCreate={() => setView({ name: 'create' })}
       onCapture={() => setView({ name: 'capture' })}
+      onPipeline={() => setView({ name: 'pipeline' })}
     />
   )
 }

@@ -1,38 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { ETAPES_PROJET, STATUTS_SAV, REMUNERATION_OPTIONS } from '../constants/dossiers'
 
 const TYPES = [
   ['projet', 'Projet de vente'],
   ['sav', 'SAV'],
   ['plan', 'Plan / cahier des charges'],
-]
-
-const ETAPES_PROJET = [
-  ['prospect', 'Prospect'],
-  ['prise_contact', 'Prise de contact'],
-  ['devis_a_faire', 'Devis à faire'],
-  ['devis_envoye', 'Devis envoyé'],
-  ['relance', 'Relance'],
-  ['visite_local', 'Visite local'],
-  ['confirmation', 'Confirmation'],
-  ['commande', 'Commande'],
-  ['reunion_chantier', 'Réunion de chantier'],
-  ['installation', 'Installation'],
-  ['finition', 'Finition'],
-  ['financement', 'Financement'],
-  ['perdu', 'Dossier perdu'],
-  ['sav', 'SAV'],
-]
-
-const STATUTS_SAV = [
-  ['ouvert', 'Ouvert'],
-  ['clos', 'Clos'],
-]
-
-const REMUNERATION = [
-  ['facture', 'Facturé 500 € TTC'],
-  ['integre', 'Intégré au suivi normal'],
-  ['partage', 'Partagé avec un collègue'],
 ]
 
 export default function DossierForm({ client, onCreated, onCancel }) {
@@ -211,7 +184,7 @@ export default function DossierForm({ client, onCreated, onCancel }) {
                 onChange={(e) => setRemunerationType(e.target.value)}
                 className="w-full text-gray-900 outline-none bg-transparent"
               >
-                {REMUNERATION.map(([value, label]) => (
+                {REMUNERATION_OPTIONS.map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
                   </option>

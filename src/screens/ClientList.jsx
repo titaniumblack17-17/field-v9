@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
-export default function ClientList({ onSelect, onCreate, onCapture }) {
+export default function ClientList({ onSelect, onCreate, onCapture, onPipeline }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -55,6 +55,12 @@ export default function ClientList({ onSelect, onCreate, onCapture }) {
       <header className="sticky top-0 bg-[#F5F4F0]/90 backdrop-blur px-4 pt-6 pb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-gray-900">Clients</h1>
         <div className="flex items-center gap-2">
+          <button
+            onClick={onPipeline}
+            className="px-3 h-9 rounded-full bg-white text-[#378ADD] text-sm font-medium shadow"
+          >
+            Pipeline
+          </button>
           <button
             onClick={onCapture}
             className="px-3 h-9 rounded-full bg-white text-[#378ADD] text-sm font-medium shadow"
