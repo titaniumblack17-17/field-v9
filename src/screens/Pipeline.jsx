@@ -146,8 +146,12 @@ export default function Pipeline({ onBack, onOpenDossier }) {
   ETAPES_PROJET.forEach(([id]) => {
     byEtape[id] = []
   })
+  // Un statut sans colonne correspondante (valeur par défaut de la base,
+  // import futur, étape retirée du code) atterrit dans « À classer » plutôt
+  // que de disparaître du tableau sans un mot.
   dossiers.forEach((d) => {
-    if (byEtape[d.statut]) byEtape[d.statut].push(d)
+    const colonne = byEtape[d.statut] ? d.statut : 'a_classer'
+    byEtape[colonne].push(d)
   })
 
   const sensors = useSensors(
