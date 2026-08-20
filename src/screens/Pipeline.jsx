@@ -13,7 +13,7 @@ import {
 import { supabase } from '../lib/supabaseClient'
 import { ETAPES_PROJET } from '../constants/dossiers'
 
-function Card({ dossier, onOpen, isDragging }) {
+function Card({ dossier, onOpen, onMove, isDragging }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: dossier.id })
   const style = transform ? { transform: `translate(${transform.x}px,${transform.y}px)`, zIndex: 50 } : {}
   const client = dossier.clients
@@ -41,11 +41,27 @@ function Card({ dossier, onOpen, isDragging }) {
       {dossier.rappel_date && (
         <p className="text-[10px] text-amber-600 mt-1">⏰ {dossier.rappel_date}</p>
       )}
+      {/* Le glisser-déposer ne peut pas franchir 14 colonnes sur un écran de
+          téléphone : ce bouton ouvre la liste des étapes. */}
+      {onMove && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            onMove(dossier)
+          }}
+          className="mt-2 pt-2 border-t border-gray-100 w-full text-right text-[11px] text-[#378ADD]"
+        >
+          Déplacer →
+        </button>
+      )}
     </div>
   )
 }
 
-function Column({ etape, dossiers, colRef, onOpen }) {
+function Column({ etape, dossiers, colRef, onOpen, onMove }) {
   const { setNodeRef, isOver } = useDroppable({ id: etape[0] })
   return (
     <div
@@ -66,7 +82,7 @@ function Column({ etape, dossiers, colRef, onOpen }) {
         style={{ background: isOver ? '#E6F1FB' : 'transparent' }}
       >
         {dossiers.map((d) => (
-          <Card key={d.id} dossier={d} onOpen={onOpen} />
+          <Card key={d.id} dossier={d} onOpen={onOpen} onMove={onMove} />
         ))}
       </div>
     </div>
@@ -76,7 +92,15 @@ function Column({ etape, dossiers, colRef, onOpen }) {
 export default function Pipeline({ onBack, onOpenDossier }) {
   const [dossiers, setDossiers] = useState([])
   const [activeDrag, setActiveDrag] = useState(null)
+  const [aDeplacer, setADeplacer] = useState(null)
   const colRefs = useRef({})
+
+  const changerEtape = async (dossier, etape) => {
+    setADeplacer(null)
+    if (dossier.statut === etape) return
+    setDossiers((current) => current.map((d) => (d.id === dossier.id ? { ...d, statut: etape } : d)))
+    await supabase.from('dossiers').update({ statut: etape }).eq('id', dossier.id)
+  }
 
   useEffect(() => {
     let active = true
@@ -164,11 +188,60 @@ export default function Pipeline({ onBack, onOpenDossier }) {
                 colRefs.current[etape[0]] = el
               }}
               onOpen={onOpenDossier}
+              onMove={setADeplacer}
             />
           ))}
         </div>
         <DragOverlay>{activeDrag && <Card dossier={activeDrag} onOpen={() => {}} isDragging />}</DragOverlay>
       </DndContext>
+
+      {aDeplacer && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-end"
+          onClick={() => setADeplacer(null)}
+        >
+          <div
+            className="bg-white w-full rounded-t-2xl p-4 max-h-[75vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-sm font-semibold text-gray-900">
+              {aDeplacer.clients
+                ? [aDeplacer.clients.prenom_praticien, aDeplacer.clients.nom_praticien]
+                    .filter(Boolean)
+                    .join(' ')
+                : aDeplacer.titre}
+            </p>
+            <p className="text-xs text-gray-400 mb-4">Choisir la nouvelle étape</p>
+
+            <div className="flex flex-col gap-2">
+              {ETAPES_PROJET.map(([valeur, libelle]) => {
+                const courante = valeur === aDeplacer.statut
+                return (
+                  <button
+                    key={valeur}
+                    onClick={() => changerEtape(aDeplacer, valeur)}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left text-sm ${
+                      courante
+                        ? 'border-[#378ADD] bg-[#E6F1FB] text-[#0C447C] font-medium'
+                        : 'border-gray-200 text-gray-700'
+                    }`}
+                  >
+                    {libelle}
+                    {courante && <span className="ml-auto text-xs">✓ actuelle</span>}
+                  </button>
+                )
+              })}
+            </div>
+
+            <button
+              onClick={() => setADeplacer(null)}
+              className="w-full mt-3 py-3 rounded-xl bg-gray-100 text-gray-500 text-sm font-medium"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
