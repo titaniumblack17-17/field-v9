@@ -6,6 +6,7 @@ import Capture from './screens/Capture'
 import DossierForm from './screens/DossierForm'
 import DossierDetail from './screens/DossierDetail'
 import Pipeline from './screens/Pipeline'
+import BriefSoir from './screens/BriefSoir'
 
 // Balayage depuis le bord gauche pour revenir. Le geste natif d'iOS est
 // capricieux sur une application à écran unique, et le défilement horizontal
@@ -139,6 +140,15 @@ export default function App() {
     return <Capture onBack={back} />
   }
 
+  if (view.name === 'brief') {
+    return (
+      <BriefSoir
+        onBack={back}
+        onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
+      />
+    )
+  }
+
   if (view.name === 'pipeline') {
     return (
       <Pipeline
@@ -168,6 +178,7 @@ export default function App() {
       onCreate={() => push({ name: 'create' })}
       onCapture={() => push({ name: 'capture' })}
       onPipeline={() => push({ name: 'pipeline' })}
+      onBrief={() => push({ name: 'brief' })}
     />
   )
 }

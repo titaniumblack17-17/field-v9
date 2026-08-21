@@ -8,7 +8,7 @@ const normalize = (s) =>
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
 
-export default function ClientList({ onSelect, onCreate, onCapture, onPipeline }) {
+export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, onBrief }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
@@ -89,6 +89,13 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline }
         <div className="flex items-center justify-between gap-2 mb-3">
           <h1 className="text-xl font-semibold text-texte">Clients</h1>
           <div className="flex items-center gap-2">
+            <button
+              onClick={onBrief}
+              aria-label="Brief soir"
+              className="px-3 h-9 rounded-full bg-carte text-accent text-sm font-medium shadow"
+            >
+              Brief
+            </button>
             <button
               onClick={onPipeline}
               className="px-3 h-9 rounded-full bg-carte text-accent text-sm font-medium shadow"
