@@ -65,6 +65,28 @@ export const STATUTS_SAV = [
   ['clos', 'Clos'],
 ]
 
+// Les commerciaux pour qui Bruce produit des plans. BDS, c'est lui : un plan
+// à son propre nom est intégré à sa vente, pas facturé.
+export const COMMERCIAUX = [
+  ['JYM', 'Jean-Yves Mevel'],
+  ['AB', 'Alain Bailleul'],
+  ['PL', 'Pierre Lecomte'],
+  ['PF', 'Paul Fouillet'],
+  ['SDR', 'Stéphane Do Rego'],
+  ['LG', 'Laurent Gaston'],
+  ['DB', 'Didier Bellaz'],
+  ['BDS', 'Bruce Da Silva'],
+]
+
+export const COMMERCIAUX_LABELS = Object.fromEntries(COMMERCIAUX)
+
+export const COMMERCIAL_OPTIONS = COMMERCIAUX.map(([code, nom]) => [code, `${code} — ${nom}`])
+
+// Un plan encore à produire sans commercial désigné : on sait qu'il y a du
+// travail, pas pour qui. C'est la question à poser en premier.
+export const PLAN_SANS_COMMERCIAL = (d) =>
+  d?.type === 'plan' && !d.commercial && ['a_planifier', 'en_cours'].includes(d.statut)
+
 export const REMUNERATION = {
   facture: 'Facturé 500 € TTC',
   integre: 'Intégré au suivi normal',

@@ -4,7 +4,22 @@ import { synchroniserRappel } from '../lib/todoist'
 import PersonListField from '../components/PersonListField'
 import MaterielInstalle from '../components/MaterielInstalle'
 import PiecesJointes from '../components/PiecesJointes'
-import { TYPE_LABELS, styleDossier } from '../constants/dossiers'
+import {
+  TYPE_LABELS,
+  ETAPES_PROJET,
+  STATUTS_PLAN_LABELS,
+  STATUTS_SAV,
+  PLAN_SANS_COMMERCIAL,
+  styleDossier,
+} from '../constants/dossiers'
+
+// Le statut est stocké en clé technique (« a_planifier ») : sans traduction,
+// la liste des dossiers affiche du jargon de base de données.
+const libelleStatut = (d) => {
+  if (d.type === 'plan') return STATUTS_PLAN_LABELS[d.statut] ?? d.statut
+  if (d.type === 'sav') return STATUTS_SAV.find(([k]) => k === d.statut)?.[1] ?? d.statut
+  return ETAPES_PROJET.find(([k]) => k === d.statut)?.[1] ?? d.statut
+}
 
 const FIELDS = [
   ['prenom_praticien', 'Prénom du praticien'],
@@ -641,10 +656,20 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                         >
                           {s.badge}
                         </span>
+                        {d.commercial && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-carte-douce text-texte-doux">
+                            {d.commercial}
+                          </span>
+                        )}
+                        {PLAN_SANS_COMMERCIAL(d) && (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-alerte/15 text-alerte">
+                            Commercial ?
+                          </span>
+                        )}
                       </div>
                       <p className="font-medium text-texte">{d.titre || TYPE_LABELS[d.type]}</p>
                       <p className="text-sm text-texte-doux">
-                        {d.statut}
+                        {libelleStatut(d)}
                         {d.montant_estime != null ? ` · ${d.montant_estime} €` : ''}
                       </p>
                     </button>

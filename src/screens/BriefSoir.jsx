@@ -5,6 +5,7 @@ import {
   ETAPES_PROJET,
   PLAN_STATUT_LABELS,
   STATUTS_PLAN_LABELS,
+  PLAN_SANS_COMMERCIAL,
   TYPE_LABELS,
   styleDossier,
 } from '../constants/dossiers'
@@ -35,8 +36,12 @@ function Ligne({ dossier, onOuvrir, droite, alerte }) {
         <div className="flex-1 min-w-0">
           <p className="font-medium text-texte truncate">{nomClient(dossier.clients)}</p>
           <p className="text-sm text-texte-doux truncate">
+            {dossier.commercial ? `${dossier.commercial} · ` : ''}
             {dossier.titre || TYPE_LABELS[dossier.type]}
           </p>
+          {PLAN_SANS_COMMERCIAL(dossier) && (
+            <p className="text-xs text-alerte mt-0.5">Commercial à préciser</p>
+          )}
         </div>
         {droite && (
           <span className={`text-sm flex-shrink-0 ${alerte ? 'text-alerte font-medium' : 'text-texte-doux'}`}>

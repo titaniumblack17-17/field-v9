@@ -10,6 +10,9 @@ import {
   ETAPES_PROJET,
   STATUTS_SAV,
   STATUTS_PLAN,
+  COMMERCIAL_OPTIONS,
+  COMMERCIAUX_LABELS,
+  PLAN_SANS_COMMERCIAL,
   REMUNERATION_OPTIONS,
   PLAN_STATUT_OPTIONS,
   styleDossier,
@@ -25,6 +28,7 @@ const CHAMPS = [
   'rappel_date',
   'rappel_note',
   'remuneration_type',
+  'commercial',
 ]
 
 export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
@@ -95,6 +99,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
       type: nouveau,
       statut: STATUT_PAR_DEFAUT[nouveau],
       remuneration_type: nouveau === 'plan' ? v.remuneration_type : null,
+      commercial: nouveau === 'plan' ? v.commercial : null,
       plan_statut: nouveau === 'projet' ? v.plan_statut : null,
     }))
   }
@@ -128,6 +133,8 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
       // Le plan intégré n'a de sens que sur une vente.
       plan_statut: values.type === 'projet' ? values.plan_statut || null : null,
       remuneration_type: values.type === 'plan' ? values.remuneration_type || null : null,
+      // Un projet ou un SAV n'est fait pour personne d'autre que Bruce.
+      commercial: values.type === 'plan' ? values.commercial || null : null,
       // Un dossier qui n'est plus un SAV n'a plus de projet d'origine.
       projet_source_id: values.type === 'sav' ? dossier.projet_source_id ?? null : null,
     }
@@ -224,6 +231,19 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
           >
             {s.badge}
           </span>
+          {values.commercial && (
+            <span
+              title={COMMERCIAUX_LABELS[values.commercial] ?? values.commercial}
+              className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-carte-douce text-texte-doux"
+            >
+              {values.commercial}
+            </span>
+          )}
+          {PLAN_SANS_COMMERCIAL(values) && (
+            <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-alerte/15 text-alerte">
+              Commercial ?
+            </span>
+          )}
           {TYPE_LABELS[values.type] !== s.badge && (
             <span className="text-xs text-texte-faible">{TYPE_LABELS[values.type]}</span>
           )}
@@ -300,6 +320,14 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
                 value={values.statut ?? ''}
                 options={STATUTS_PLAN}
                 onChange={(v) => setValues((x) => ({ ...x, statut: v }))}
+              />
+              <ChampChoix
+                id="commercial"
+                label="Commercial"
+                value={values.commercial ?? ''}
+                options={COMMERCIAL_OPTIONS}
+                videLibelle="À préciser"
+                onChange={(v) => setValues((x) => ({ ...x, commercial: v || null }))}
               />
               <ChampChoix
                 id="remuneration"
