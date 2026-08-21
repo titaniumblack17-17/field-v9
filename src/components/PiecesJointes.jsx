@@ -248,14 +248,14 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                 <button
                   onClick={() => supprimer(f)}
                   aria-label={`Supprimer ${f.nom}`}
-                  className="text-texte-fantome text-lg leading-none"
+                  className="text-texte-fantome text-lg leading-none w-11 h-11 flex items-center justify-center -mr-3"
                 >
                   ×
                 </button>
                 {dossierId && estPdf(f.type_mime) && !analyse.has(f.id) && (
                   <button
                     onClick={() => lireDevis(f)}
-                    className="text-accent text-[11px] font-medium"
+                    className="text-accent text-[11px] font-medium h-9 px-2 -mr-2 flex items-center"
                   >
                     {f.analyse_at ? 'Relire' : 'Lire le devis'}
                   </button>

@@ -71,12 +71,23 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
       await synchroniserRappel(dossier.id)
     }
 
+    // La cascade efface les lignes « fichiers », pas les objets du dépôt : sans
+    // ce relevé, chaque dossier supprimé abandonne ses PDF, invisibles et
+    // impossibles à retrouver.
+    const { data: joints } = await supabase
+      .from('fichiers')
+      .select('chemin')
+      .eq('dossier_id', dossier.id)
+
     const { error: err } = await supabase.from('dossiers').delete().eq('id', dossier.id)
     if (err) {
       setSuppression(false)
       setError(err.message)
       return
     }
+
+    const chemins = (joints ?? []).map((f) => f.chemin).filter(Boolean)
+    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
     // Le garde-fou des modifications non enregistrées n'a plus lieu d'être :
     // le dossier n'existe plus.
     onDirtyChange?.(false)

@@ -174,7 +174,7 @@ export default function MaterielInstalle({ clientId }) {
                 <button
                   onClick={() => supprimer(m.id)}
                   aria-label="Retirer cet équipement"
-                  className="text-texte-fantome text-lg leading-none flex-shrink-0"
+                  className="text-texte-fantome text-lg leading-none flex-shrink-0 w-11 h-11 flex items-center justify-center -mr-3 -my-2"
                 >
                   ×
                 </button>

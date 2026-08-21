@@ -92,11 +92,22 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       (await supabase.from(table).select('id', { count: 'exact', head: true }).eq(colonne, valeur))
         .count ?? 0
 
-    const idsDossiers = dossiers.map((d) => d.id)
-    const [nbMateriel, nbFichiersClient, nbCaptures] = await Promise.all([
+    // On relit les dossiers plutôt que de croire l'état local : la liste peut
+    // ne pas être encore chargée, ou un dossier avoir été créé sur l'iPhone
+    // sans que le temps réel soit arrivé. Se tromper ici, c'est annoncer une
+    // suppression incomplète et laisser des rappels sonner pour un client
+    // disparu.
+    const { data: dossiersBase } = await supabase
+      .from('dossiers')
+      .select('id, rappel_date, todoist_task_id')
+      .eq('client_id', client.id)
+    const dossiersReels = dossiersBase ?? []
+    const idsDossiers = dossiersReels.map((d) => d.id)
+    // Les captures ne sont pas comptées : la contrainte les délie au lieu de
+    // les supprimer, la dictée brute survit à la fiche.
+    const [nbMateriel, nbFichiersClient] = await Promise.all([
       compter('materiel', 'client_id', client.id),
       compter('fichiers', 'client_id', client.id),
-      compter('captures', 'client_id', client.id),
     ])
     const { count: nbNotes } = idsDossiers.length
       ? await supabase
@@ -110,7 +121,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
     const pluriel = (n, mot, motPluriel) => `${n} ${n > 1 ? motPluriel : mot}`
     const emporte = [
-      dossiers.length && pluriel(dossiers.length, 'dossier', 'dossiers'),
+      dossiersReels.length && pluriel(dossiersReels.length, 'dossier', 'dossiers'),
       nbNotes && pluriel(nbNotes, 'note de dossier', 'notes de dossier'),
       nbMateriel && pluriel(nbMateriel, 'équipement', 'équipements'),
       (nbFichiersClient + (fichiersDossiers?.length ?? 0)) &&
@@ -128,15 +139,15 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
     // Les rappels poussés dans Todoist ne disparaissent pas d'eux-mêmes : sans
     // ça, ils sonneraient pour un client qui n'existe plus.
-    for (const d of dossiers) {
+    for (const d of dossiersReels) {
       if (d.rappel_date || d.todoist_task_id) {
         await supabase.from('dossiers').update({ rappel_date: null }).eq('id', d.id)
         await synchroniserRappel(d.id)
       }
     }
 
-    // Le dépôt de fichiers ignore les clés étrangères : sans ce retrait, les
-    // PDF resteraient stockés sans plus aucune référence pour les retrouver.
+    // On relève les chemins avant la suppression — après, plus rien ne permet
+    // de les retrouver.
     const { data: fichiersClient } = await supabase
       .from('fichiers')
       .select('chemin')
@@ -144,7 +155,6 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     const chemins = [...(fichiersClient ?? []), ...(fichiersDossiers ?? [])]
       .map((f) => f.chemin)
       .filter(Boolean)
-    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
 
     const { error: err } = await supabase.from('clients').delete().eq('id', client.id)
     if (err) {
@@ -152,6 +162,12 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       setError(err.message)
       return
     }
+
+    // Le dépôt ignore les clés étrangères : sans ce retrait, les PDF
+    // resteraient stockés sans plus aucune référence. Après la base et non
+    // avant : un échec de suppression ne doit pas emporter les fichiers d'un
+    // client qui existe toujours.
+    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
 
     onDirtyChange?.(false)
     onBack()
@@ -249,11 +265,22 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       (await supabase.from(table).select('id', { count: 'exact', head: true }).eq(colonne, valeur))
         .count ?? 0
 
-    const idsDossiers = dossiers.map((d) => d.id)
-    const [nbMateriel, nbFichiersClient, nbCaptures] = await Promise.all([
+    // On relit les dossiers plutôt que de croire l'état local : la liste peut
+    // ne pas être encore chargée, ou un dossier avoir été créé sur l'iPhone
+    // sans que le temps réel soit arrivé. Se tromper ici, c'est annoncer une
+    // suppression incomplète et laisser des rappels sonner pour un client
+    // disparu.
+    const { data: dossiersBase } = await supabase
+      .from('dossiers')
+      .select('id, rappel_date, todoist_task_id')
+      .eq('client_id', client.id)
+    const dossiersReels = dossiersBase ?? []
+    const idsDossiers = dossiersReels.map((d) => d.id)
+    // Les captures ne sont pas comptées : la contrainte les délie au lieu de
+    // les supprimer, la dictée brute survit à la fiche.
+    const [nbMateriel, nbFichiersClient] = await Promise.all([
       compter('materiel', 'client_id', client.id),
       compter('fichiers', 'client_id', client.id),
-      compter('captures', 'client_id', client.id),
     ])
     const { count: nbNotes } = idsDossiers.length
       ? await supabase
@@ -267,7 +294,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
     const pluriel = (n, mot, motPluriel) => `${n} ${n > 1 ? motPluriel : mot}`
     const emporte = [
-      dossiers.length && pluriel(dossiers.length, 'dossier', 'dossiers'),
+      dossiersReels.length && pluriel(dossiersReels.length, 'dossier', 'dossiers'),
       nbNotes && pluriel(nbNotes, 'note de dossier', 'notes de dossier'),
       nbMateriel && pluriel(nbMateriel, 'équipement', 'équipements'),
       (nbFichiersClient + (fichiersDossiers?.length ?? 0)) &&
@@ -285,15 +312,15 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
     // Les rappels poussés dans Todoist ne disparaissent pas d'eux-mêmes : sans
     // ça, ils sonneraient pour un client qui n'existe plus.
-    for (const d of dossiers) {
+    for (const d of dossiersReels) {
       if (d.rappel_date || d.todoist_task_id) {
         await supabase.from('dossiers').update({ rappel_date: null }).eq('id', d.id)
         await synchroniserRappel(d.id)
       }
     }
 
-    // Le dépôt de fichiers ignore les clés étrangères : sans ce retrait, les
-    // PDF resteraient stockés sans plus aucune référence pour les retrouver.
+    // On relève les chemins avant la suppression — après, plus rien ne permet
+    // de les retrouver.
     const { data: fichiersClient } = await supabase
       .from('fichiers')
       .select('chemin')
@@ -301,7 +328,6 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     const chemins = [...(fichiersClient ?? []), ...(fichiersDossiers ?? [])]
       .map((f) => f.chemin)
       .filter(Boolean)
-    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
 
     const { error: err } = await supabase.from('clients').delete().eq('id', client.id)
     if (err) {
@@ -309,6 +335,12 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       setError(err.message)
       return
     }
+
+    // Le dépôt ignore les clés étrangères : sans ce retrait, les PDF
+    // resteraient stockés sans plus aucune référence. Après la base et non
+    // avant : un échec de suppression ne doit pas emporter les fichiers d'un
+    // client qui existe toujours.
+    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
 
     onDirtyChange?.(false)
     onBack()
@@ -367,11 +399,22 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       (await supabase.from(table).select('id', { count: 'exact', head: true }).eq(colonne, valeur))
         .count ?? 0
 
-    const idsDossiers = dossiers.map((d) => d.id)
-    const [nbMateriel, nbFichiersClient, nbCaptures] = await Promise.all([
+    // On relit les dossiers plutôt que de croire l'état local : la liste peut
+    // ne pas être encore chargée, ou un dossier avoir été créé sur l'iPhone
+    // sans que le temps réel soit arrivé. Se tromper ici, c'est annoncer une
+    // suppression incomplète et laisser des rappels sonner pour un client
+    // disparu.
+    const { data: dossiersBase } = await supabase
+      .from('dossiers')
+      .select('id, rappel_date, todoist_task_id')
+      .eq('client_id', client.id)
+    const dossiersReels = dossiersBase ?? []
+    const idsDossiers = dossiersReels.map((d) => d.id)
+    // Les captures ne sont pas comptées : la contrainte les délie au lieu de
+    // les supprimer, la dictée brute survit à la fiche.
+    const [nbMateriel, nbFichiersClient] = await Promise.all([
       compter('materiel', 'client_id', client.id),
       compter('fichiers', 'client_id', client.id),
-      compter('captures', 'client_id', client.id),
     ])
     const { count: nbNotes } = idsDossiers.length
       ? await supabase
@@ -385,7 +428,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
     const pluriel = (n, mot, motPluriel) => `${n} ${n > 1 ? motPluriel : mot}`
     const emporte = [
-      dossiers.length && pluriel(dossiers.length, 'dossier', 'dossiers'),
+      dossiersReels.length && pluriel(dossiersReels.length, 'dossier', 'dossiers'),
       nbNotes && pluriel(nbNotes, 'note de dossier', 'notes de dossier'),
       nbMateriel && pluriel(nbMateriel, 'équipement', 'équipements'),
       (nbFichiersClient + (fichiersDossiers?.length ?? 0)) &&
@@ -403,15 +446,15 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
     // Les rappels poussés dans Todoist ne disparaissent pas d'eux-mêmes : sans
     // ça, ils sonneraient pour un client qui n'existe plus.
-    for (const d of dossiers) {
+    for (const d of dossiersReels) {
       if (d.rappel_date || d.todoist_task_id) {
         await supabase.from('dossiers').update({ rappel_date: null }).eq('id', d.id)
         await synchroniserRappel(d.id)
       }
     }
 
-    // Le dépôt de fichiers ignore les clés étrangères : sans ce retrait, les
-    // PDF resteraient stockés sans plus aucune référence pour les retrouver.
+    // On relève les chemins avant la suppression — après, plus rien ne permet
+    // de les retrouver.
     const { data: fichiersClient } = await supabase
       .from('fichiers')
       .select('chemin')
@@ -419,7 +462,6 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     const chemins = [...(fichiersClient ?? []), ...(fichiersDossiers ?? [])]
       .map((f) => f.chemin)
       .filter(Boolean)
-    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
 
     const { error: err } = await supabase.from('clients').delete().eq('id', client.id)
     if (err) {
@@ -427,6 +469,12 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       setError(err.message)
       return
     }
+
+    // Le dépôt ignore les clés étrangères : sans ce retrait, les PDF
+    // resteraient stockés sans plus aucune référence. Après la base et non
+    // avant : un échec de suppression ne doit pas emporter les fichiers d'un
+    // client qui existe toujours.
+    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
 
     onDirtyChange?.(false)
     onBack()
@@ -450,11 +498,22 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       (await supabase.from(table).select('id', { count: 'exact', head: true }).eq(colonne, valeur))
         .count ?? 0
 
-    const idsDossiers = dossiers.map((d) => d.id)
-    const [nbMateriel, nbFichiersClient, nbCaptures] = await Promise.all([
+    // On relit les dossiers plutôt que de croire l'état local : la liste peut
+    // ne pas être encore chargée, ou un dossier avoir été créé sur l'iPhone
+    // sans que le temps réel soit arrivé. Se tromper ici, c'est annoncer une
+    // suppression incomplète et laisser des rappels sonner pour un client
+    // disparu.
+    const { data: dossiersBase } = await supabase
+      .from('dossiers')
+      .select('id, rappel_date, todoist_task_id')
+      .eq('client_id', client.id)
+    const dossiersReels = dossiersBase ?? []
+    const idsDossiers = dossiersReels.map((d) => d.id)
+    // Les captures ne sont pas comptées : la contrainte les délie au lieu de
+    // les supprimer, la dictée brute survit à la fiche.
+    const [nbMateriel, nbFichiersClient] = await Promise.all([
       compter('materiel', 'client_id', client.id),
       compter('fichiers', 'client_id', client.id),
-      compter('captures', 'client_id', client.id),
     ])
     const { count: nbNotes } = idsDossiers.length
       ? await supabase
@@ -468,7 +527,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
     const pluriel = (n, mot, motPluriel) => `${n} ${n > 1 ? motPluriel : mot}`
     const emporte = [
-      dossiers.length && pluriel(dossiers.length, 'dossier', 'dossiers'),
+      dossiersReels.length && pluriel(dossiersReels.length, 'dossier', 'dossiers'),
       nbNotes && pluriel(nbNotes, 'note de dossier', 'notes de dossier'),
       nbMateriel && pluriel(nbMateriel, 'équipement', 'équipements'),
       (nbFichiersClient + (fichiersDossiers?.length ?? 0)) &&
@@ -486,15 +545,15 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
     // Les rappels poussés dans Todoist ne disparaissent pas d'eux-mêmes : sans
     // ça, ils sonneraient pour un client qui n'existe plus.
-    for (const d of dossiers) {
+    for (const d of dossiersReels) {
       if (d.rappel_date || d.todoist_task_id) {
         await supabase.from('dossiers').update({ rappel_date: null }).eq('id', d.id)
         await synchroniserRappel(d.id)
       }
     }
 
-    // Le dépôt de fichiers ignore les clés étrangères : sans ce retrait, les
-    // PDF resteraient stockés sans plus aucune référence pour les retrouver.
+    // On relève les chemins avant la suppression — après, plus rien ne permet
+    // de les retrouver.
     const { data: fichiersClient } = await supabase
       .from('fichiers')
       .select('chemin')
@@ -502,7 +561,6 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     const chemins = [...(fichiersClient ?? []), ...(fichiersDossiers ?? [])]
       .map((f) => f.chemin)
       .filter(Boolean)
-    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
 
     const { error: err } = await supabase.from('clients').delete().eq('id', client.id)
     if (err) {
@@ -510,6 +568,12 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       setError(err.message)
       return
     }
+
+    // Le dépôt ignore les clés étrangères : sans ce retrait, les PDF
+    // resteraient stockés sans plus aucune référence. Après la base et non
+    // avant : un échec de suppression ne doit pas emporter les fichiers d'un
+    // client qui existe toujours.
+    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
 
     onDirtyChange?.(false)
     onBack()
@@ -579,11 +643,22 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       (await supabase.from(table).select('id', { count: 'exact', head: true }).eq(colonne, valeur))
         .count ?? 0
 
-    const idsDossiers = dossiers.map((d) => d.id)
-    const [nbMateriel, nbFichiersClient, nbCaptures] = await Promise.all([
+    // On relit les dossiers plutôt que de croire l'état local : la liste peut
+    // ne pas être encore chargée, ou un dossier avoir été créé sur l'iPhone
+    // sans que le temps réel soit arrivé. Se tromper ici, c'est annoncer une
+    // suppression incomplète et laisser des rappels sonner pour un client
+    // disparu.
+    const { data: dossiersBase } = await supabase
+      .from('dossiers')
+      .select('id, rappel_date, todoist_task_id')
+      .eq('client_id', client.id)
+    const dossiersReels = dossiersBase ?? []
+    const idsDossiers = dossiersReels.map((d) => d.id)
+    // Les captures ne sont pas comptées : la contrainte les délie au lieu de
+    // les supprimer, la dictée brute survit à la fiche.
+    const [nbMateriel, nbFichiersClient] = await Promise.all([
       compter('materiel', 'client_id', client.id),
       compter('fichiers', 'client_id', client.id),
-      compter('captures', 'client_id', client.id),
     ])
     const { count: nbNotes } = idsDossiers.length
       ? await supabase
@@ -597,7 +672,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
     const pluriel = (n, mot, motPluriel) => `${n} ${n > 1 ? motPluriel : mot}`
     const emporte = [
-      dossiers.length && pluriel(dossiers.length, 'dossier', 'dossiers'),
+      dossiersReels.length && pluriel(dossiersReels.length, 'dossier', 'dossiers'),
       nbNotes && pluriel(nbNotes, 'note de dossier', 'notes de dossier'),
       nbMateriel && pluriel(nbMateriel, 'équipement', 'équipements'),
       (nbFichiersClient + (fichiersDossiers?.length ?? 0)) &&
@@ -615,15 +690,15 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
     // Les rappels poussés dans Todoist ne disparaissent pas d'eux-mêmes : sans
     // ça, ils sonneraient pour un client qui n'existe plus.
-    for (const d of dossiers) {
+    for (const d of dossiersReels) {
       if (d.rappel_date || d.todoist_task_id) {
         await supabase.from('dossiers').update({ rappel_date: null }).eq('id', d.id)
         await synchroniserRappel(d.id)
       }
     }
 
-    // Le dépôt de fichiers ignore les clés étrangères : sans ce retrait, les
-    // PDF resteraient stockés sans plus aucune référence pour les retrouver.
+    // On relève les chemins avant la suppression — après, plus rien ne permet
+    // de les retrouver.
     const { data: fichiersClient } = await supabase
       .from('fichiers')
       .select('chemin')
@@ -631,7 +706,6 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     const chemins = [...(fichiersClient ?? []), ...(fichiersDossiers ?? [])]
       .map((f) => f.chemin)
       .filter(Boolean)
-    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
 
     const { error: err } = await supabase.from('clients').delete().eq('id', client.id)
     if (err) {
@@ -639,6 +713,12 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       setError(err.message)
       return
     }
+
+    // Le dépôt ignore les clés étrangères : sans ce retrait, les PDF
+    // resteraient stockés sans plus aucune référence. Après la base et non
+    // avant : un échec de suppression ne doit pas emporter les fichiers d'un
+    // client qui existe toujours.
+    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
 
     onDirtyChange?.(false)
     onBack()
