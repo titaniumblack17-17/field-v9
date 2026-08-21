@@ -182,7 +182,7 @@ export default function Pipeline({ onBack, onOpenDossier }) {
   return (
     <div className="flex flex-col h-screen bg-fond">
       <header className="px-4 pt-6 pb-4 flex items-center gap-3 flex-shrink-0">
-        <button onClick={onBack} className="text-accent text-sm font-medium">
+        <button onClick={onBack} className="text-accent text-sm font-medium h-11 -ml-2 pl-2 pr-1 flex items-center">
           ← Clients
         </button>
         <h1 className="text-lg font-semibold text-texte">Pipeline</h1>

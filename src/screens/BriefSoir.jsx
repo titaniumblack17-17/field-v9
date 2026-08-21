@@ -184,7 +184,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   return (
     <div className="min-h-screen bg-fond">
       <header className="sticky top-0 z-10 bg-fond/90 backdrop-blur px-4 pt-6 pb-4 flex items-center gap-3">
-        <button onClick={onBack} className="text-accent text-sm font-medium">
+        <button onClick={onBack} className="text-accent text-sm font-medium h-11 -ml-2 pl-2 pr-1 flex items-center">
           ← Clients
         </button>
         <h1 className="text-lg font-semibold text-texte">Brief soir</h1>
