@@ -42,7 +42,14 @@ function Pastille({ couleur, opacite, libelle, montant }) {
  * mesurent le même chemin à trois degrés de certitude, et les empiler montre
  * ce qui sépare l'espéré du réalisé.
  */
-export default function JaugeObjectif({ projection, signe, facture, objectif = 5 * MILLION }) {
+export default function JaugeObjectif({
+  annee,
+  projection,
+  signe,
+  facture,
+  reportables = 0,
+  objectif = 5 * MILLION,
+}) {
   const franchis = Math.min(TRANCHES, Math.floor(signe / MILLION))
   const teinte = PALETTE[franchis]
   const pourcentage = Math.round((signe / objectif) * 100)
@@ -51,7 +58,9 @@ export default function JaugeObjectif({ projection, signe, facture, objectif = 5
     <div className="bg-carte rounded-xl shadow-sm px-4 py-4">
       <div className="flex items-baseline justify-between mb-1">
         <span className="text-2xl font-semibold text-texte tabular-nums">{euros(signe)}</span>
-        <span className="text-sm text-texte-doux">sur {euros(objectif)}</span>
+        <span className="text-sm text-texte-doux">
+          sur {euros(objectif)}{annee ? ` en ${annee}` : ''}
+        </span>
       </div>
       <p className="text-xs mb-3" style={{ color: teinte.fond }}>
         {teinte.nom} · {pourcentage} %
@@ -94,6 +103,14 @@ export default function JaugeObjectif({ projection, signe, facture, objectif = 5
         <Pastille couleur={teinte.fond} opacite={0.55} libelle="Signé" montant={signe} />
         <Pastille couleur={teinte.fond} opacite={0.2} libelle="Projection" montant={projection} />
       </div>
+
+      {reportables > 0 && annee && (
+        <p className="text-xs text-texte-faible mt-3 pt-3 border-t border-separateur">
+          {reportables} affaire{reportables > 1 ? 's' : ''} signée{reportables > 1 ? 's' : ''} mais
+          non réglée{reportables > 1 ? 's' : ''}. Ce qui ne le sera pas au 31 décembre bascule sur
+          l'objectif {annee + 1}.
+        </p>
+      )}
     </div>
   )
 }

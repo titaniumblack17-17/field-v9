@@ -14,6 +14,16 @@ import {
 // Objectif annuel de la spec (§1) : 5 M€ TTC.
 const OBJECTIF_ANNUEL = 5_000_000
 
+// Un dossier réglé appartient à l'exercice de son règlement ; un dossier
+// encore ouvert appartient à l'exercice en cours. Le 1er janvier, ce qui n'a
+// pas été réglé bascule donc de lui-même sur la nouvelle année — sans clôture
+// à faire, sans report à saisir.
+const exerciceDe = (dossier, anneeCourante) => {
+  if (!ETAPES_FACTUREES.includes(dossier.statut)) return anneeCourante
+  const regle = dossier.closed_at ?? dossier.date_installation
+  return regle ? Number(String(regle).slice(0, 4)) : anneeCourante
+}
+
 // Signé : la commande est passée, la vente est faite. Ce qui suit relève de la
 // logistique, pas de la prospection.
 const ETAPES_SIGNEES = ['commande', 'reunion_chantier', 'installation', 'finition', 'financement']
@@ -102,8 +112,14 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
 
   const bilan = useMemo(() => {
     const aujourdhui = new Date().toISOString().slice(0, 10)
+    const annee = new Date().getFullYear()
     const projets = dossiers.filter((d) => d.type === 'projet')
-    const actifs = projets.filter((d) => d.statut !== 'perdu')
+
+    // Les affaires réglées lors d'un exercice passé sont soldées : elles ne
+    // pèsent plus sur l'objectif de cette année.
+    const actifs = projets.filter(
+      (d) => d.statut !== 'perdu' && exerciceDe(d, annee) === annee
+    )
 
     const aRappeler = dossiers
       .filter((d) => d.rappel_date && d.rappel_date <= aujourdhui)
@@ -150,6 +166,9 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       // commande signée sans montant, qui manque à l'objectif sans se voir.
       signesSansMontant: signes.filter((d) => d.montant_estime == null).length,
       nbSignes: signes.length,
+      annee,
+      // Ce qui basculera sur l'exercice suivant s'il n'est pas réglé d'ici là.
+      reportables: signes.filter((d) => !ETAPES_FACTUREES.includes(d.statut)).length,
       chiffres: actifs.filter((d) => d.montant_estime != null).length,
       totalActifs: actifs.length,
       sansMontant: actifs.filter((d) => d.montant_estime == null),
@@ -235,12 +254,14 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
 
             <section className="mt-6">
               <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mb-2">
-                Objectif annuel
+                Objectif {bilan.annee}
               </h2>
               <JaugeObjectif
+                annee={bilan.annee}
                 projection={bilan.projection}
                 signe={bilan.signe}
                 facture={bilan.facture}
+                reportables={bilan.reportables}
               />
               {bilan.planFacture > 0 && (
                 <p className="text-xs text-texte-doux mt-2 px-1">
