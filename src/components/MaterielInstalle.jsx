@@ -66,6 +66,7 @@ export default function MaterielInstalle({ clientId }) {
   const supprimer = async (id) => {
     if (!window.confirm('Retirer cet équipement de la liste ?')) return
     await supabase.from('materiel').delete().eq('id', id)
+    setListe((cur) => cur.filter((m) => m.id !== id))
   }
 
   const anneeCourante = new Date().getFullYear()

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import ChampChoix from '../components/ChampChoix'
+import PiecesJointes from '../components/PiecesJointes'
 import {
   TYPE_LABELS,
   TYPE_OPTIONS,
@@ -344,6 +345,8 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
         </div>
 
         {error && <p className="text-erreur text-sm mt-3">{error}</p>}
+
+        <PiecesJointes dossierId={dossier.id} />
 
         <div className="mt-4">
           <p className="text-xs text-texte-faible mb-2 px-1">Notes</p>
