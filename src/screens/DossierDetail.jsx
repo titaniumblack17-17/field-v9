@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import ChampChoix from '../components/ChampChoix'
 import PiecesJointes from '../components/PiecesJointes'
+import { synchroniserRappel } from '../lib/todoist'
 import {
   TYPE_LABELS,
   TYPE_OPTIONS,
@@ -33,6 +34,8 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
   const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
   const [suppression, setSuppression] = useState(false)
+  // Compte rendu du dernier envoi vers Todoist : { etat } ou { erreur }.
+  const [todoist, setTodoist] = useState(null)
 
   const s = styleDossier(values)
 
@@ -46,6 +49,16 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
     if (!window.confirm(`Supprimer définitivement ${quoi} ? Cette action est irréversible.`)) return
 
     setSuppression(true)
+
+    // Une fois le dossier parti, plus rien ne relie la tâche Todoist à quoi que
+    // ce soit : elle sonnerait pour un dossier introuvable. On efface donc le
+    // rappel d'abord, ce qui fait supprimer la tâche par la fonction, avant de
+    // supprimer le dossier lui-même.
+    if (dossier.rappel_date || dossier.todoist_task_id) {
+      await supabase.from('dossiers').update({ rappel_date: null }).eq('id', dossier.id)
+      await synchroniserRappel(dossier.id)
+    }
+
     const { error: err } = await supabase.from('dossiers').delete().eq('id', dossier.id)
     if (err) {
       setSuppression(false)
@@ -133,6 +146,13 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
     }
 
     Object.assign(dossier, data)
+
+    // Le rappel a pu naître, changer de date ou disparaître : on réaligne la
+    // tâche Todoist. Après l'enregistrement, jamais avant — Todoist ne doit
+    // pas annoncer un rappel que la base n'a pas accepté.
+    const rappel = await synchroniserRappel(dossier.id)
+    setTodoist(rappel)
+    if (!rappel?.erreur) dossier.todoist_task_id = rappel?.taskId ?? null
     setValues({ ...data })
   }
 
@@ -340,6 +360,15 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
               placeholder="—"
               className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome"
             />
+            {todoist && (
+              <p className={`text-xs mt-1 ${todoist.erreur ? 'text-erreur' : 'text-texte-faible'}`}>
+                {todoist.erreur
+                  ? `Todoist : ${todoist.erreur}`
+                  : todoist.etat === 'supprime'
+                    ? 'Rappel retiré de Todoist.'
+                    : 'Rappel dans Todoist · 👥 Suivi clients'}
+              </p>
+            )}
             </div>
           </div>
         </div>
