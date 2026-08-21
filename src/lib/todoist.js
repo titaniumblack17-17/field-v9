@@ -9,9 +9,20 @@ import { supabase } from './supabaseClient'
  * l'enregistrement du dossier, seulement se signaler.
  */
 export async function synchroniserRappel(dossierId) {
-  const { data, error } = await supabase.functions.invoke('todoist-rappel', {
-    body: { dossierId },
-  })
+  return appeler({ dossierId })
+}
+
+/**
+ * Rapatrie ce qui a été traité côté Todoist : une tâche cochée sur la montre
+ * doit fermer le rappel dans Field, sinon le Brief continue de réclamer un
+ * appel déjà passé.
+ */
+export async function reconcilierRappels() {
+  return appeler({ action: 'reconcilier' })
+}
+
+async function appeler(body) {
+  const { data, error } = await supabase.functions.invoke('todoist-rappel', { body })
 
   if (!error) return data
 

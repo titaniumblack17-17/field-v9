@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { reconcilierRappels } from '../lib/todoist'
 import { ETAPES_PROJET, PLAN_STATUT_LABELS, TYPE_LABELS, styleDossier } from '../constants/dossiers'
 
 // Objectif annuel de la spec (§1) : 5 M€ TTC.
@@ -59,15 +60,23 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
 
   useEffect(() => {
     let actif = true
-    supabase
-      .from('dossiers')
-      .select('*, clients(id, prenom_praticien, nom_praticien, ville)')
+
+    // Réconcilier avant de lire, jamais après : le Brief est le moment où l'on
+    // décide quoi faire ce soir. Réclamer un appel déjà passé sur la montre
+    // ferait perdre la confiance dans la liste entière.
+    reconcilierRappels()
+      .then(() =>
+        supabase
+          .from('dossiers')
+          .select('*, clients(id, prenom_praticien, nom_praticien, ville)')
+      )
       .then(({ data }) => {
         if (actif) {
           setDossiers(data ?? [])
           setChargement(false)
         }
       })
+
     return () => {
       actif = false
     }
@@ -123,7 +132,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       </header>
 
       <main className="px-4 pb-8">
-        {chargement && <p className="text-texte-faible text-sm">Chargement…</p>}
+        {chargement && <p className="text-texte-faible text-sm">Point avec Todoist…</p>}
 
         {!chargement && (
           <>
