@@ -84,25 +84,36 @@ Deno.serve(async (req) => {
 
   const pdf = encodeBase64(new Uint8Array(await blob.arrayBuffer()))
 
-  const consigne = `Tu lis un devis d'équipement dentaire, rédigé en français.
+  const consigne = `Tu lis un devis d'équipement dentaire, rédigé en français, adressé par un fournisseur à un cabinet.
 
-Trouve le TOTAL GÉNÉRAL du devis — la somme finale que le client doit payer.
+Trouve le MONTANT GLOBAL de l'offre : la somme totale annoncée au client pour l'ensemble du devis.
 
-Pièges à éviter :
-- Ne prends pas un sous-total, un total de page, ni le prix d'une ligne.
-- Ne prends pas un acompte, une mensualité, une valeur de reprise ni une remise.
-- S'il y a plusieurs variantes ou options chiffrées séparément, prends le total de l'offre retenue ; si aucune n'est désignée, renvoie null.
-- Si le document n'est pas un devis (facture, bon de commande, plan, courrier), renvoie devis: false.
+Où il se trouve :
+- Souvent sur l'une des dernières pages, sous un titre comme « Étude financière », « Récapitulatif » ou « Conditions ».
+- Pas toujours dans un tableau. Il est fréquemment écrit au fil du texte, sans mise en forme particulière : « le montant est de : … € ttc », « votre étude financière se base sur un montant de … », « montant global », « soit un total de … ».
+- Le libellé « TOTAL » peut être absent du document. Ne t'y fies pas comme seul repère.
+
+Règle décisive :
+- Si le document énonce quelque part un montant d'ensemble, RETIENS-LE, même s'il ne correspond pas à la somme des postes détaillés. Un devis peut lister des postes puis annoncer un montant global différent — remise, poste retiré, arrondi commercial. Le montant annoncé est celui qui engage le fournisseur ; ne le recalcule pas.
+- Seulement si AUCUN montant d'ensemble n'est énoncé et que le document chiffre les postes d'un même projet, additionne ces postes et mets somme_calculee à true.
+- N'additionne JAMAIS des variantes, des options ou des offres alternatives entre lesquelles le client doit choisir.
+
+À écarter : un sous-total, le prix d'une ligne, un acompte, une mensualité de financement, une valeur de reprise, une remise, et le capital social du fournisseur qui figure souvent en pied de page.
+
+Si le document n'est pas un devis (facture, plan, courrier seul, documentation technique sans prix), renvoie devis: false.
 
 Réponds UNIQUEMENT par un objet JSON, sans texte autour et sans balises markdown :
 - devis: true ou false
-- montant_ttc: le total TTC en nombre (points décimaux, sans symbole ni espace), ou null si tu ne le trouves pas avec certitude
-- montant_ht: le total HT en nombre, ou null
+- montant_ttc: le montant global TTC en nombre (point décimal, sans symbole ni espace), ou null
+- montant_ht: le montant global HT en nombre, ou null
+- somme_calculee: true si tu as dû additionner faute de montant annoncé, sinon false
+- extrait: la phrase exacte du document d'où vient le montant, recopiée mot pour mot, ou null
+- page: le numéro de page où tu l'as lu, ou null
 - reference: la référence ou le numéro du devis, ou null
 - date_devis: la date du devis au format YYYY-MM-DD, ou null
-- doute: une phrase courte expliquant ce qui t'a fait hésiter, ou null si le total est sans ambiguïté
+- doute: OBLIGATOIRE si montant_ttc est null — explique alors en une phrase ce que tu as cherché et pourquoi tu n'as rien retenu. Sinon, mentionne toute ambiguïté, ou null si le montant est sans équivoque.
 
-Dans le doute, renvoie null plutôt qu'un nombre approché : ce montant alimente un suivi de chiffre d'affaires, un chiffre faux y est pire qu'un chiffre absent.`
+Un montant faux alimenterait un suivi de chiffre d'affaires : dans le doute, renvoie null et explique-toi dans doute.`
 
   const reponse = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -113,7 +124,7 @@ Dans le doute, renvoie null plutôt qu'un nombre approché : ce montant alimente
     },
     body: JSON.stringify({
       model: 'claude-sonnet-5',
-      max_tokens: 400,
+      max_tokens: 700,
       messages: [
         {
           role: 'user',
@@ -179,9 +190,20 @@ Dans le doute, renvoie null plutôt qu'un nombre approché : ce montant alimente
         `${new Intl.NumberFormat('fr-FR').format(ttc)} € TTC` +
         (lu.reference ? ` (devis ${lu.reference})` : '') +
         `. Montant du dossier porté à ${new Intl.NumberFormat('fr-FR').format(dossier?.montant_estime ?? ttc)} € TTC.` +
+        (lu.extrait ? `\nLu : « ${lu.extrait} »${lu.page ? ` (page ${lu.page})` : ''}` : '') +
+        (lu.somme_calculee ? `\n⚠ Aucun montant global annoncé : somme des postes.` : '') +
         (lu.doute ? `\n⚠ ${lu.doute}` : ''),
     })
   }
 
-  return json({ devis: true, montant_ttc: ttc, montant_ht: ht, reference: lu.reference ?? null, doute: lu.doute ?? null })
+  return json({
+    devis: true,
+    montant_ttc: ttc,
+    montant_ht: ht,
+    reference: lu.reference ?? null,
+    somme_calculee: lu.somme_calculee === true,
+    extrait: lu.extrait ?? null,
+    page: lu.page ?? null,
+    doute: lu.doute ?? null,
+  })
 })
