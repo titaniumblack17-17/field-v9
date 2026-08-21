@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { synchroniserRappel } from '../lib/todoist'
 import PersonListField from '../components/PersonListField'
 import MaterielInstalle from '../components/MaterielInstalle'
 import PiecesJointes from '../components/PiecesJointes'
@@ -46,6 +47,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   const [error, setError] = useState(null)
   const [journal, setJournal] = useState([])
   const [dossiers, setDossiers] = useState([])
+  const [suppression, setSuppression] = useState(false)
 
   const setField = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }))
 
@@ -61,7 +63,84 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
   useEffect(() => {
     onDirtyChange?.(dirty)
-    return () => onDirtyChange?.(false)
+    const nomComplet = [values.prenom_praticien, values.nom_praticien].filter(Boolean).join(' ')
+
+  const supprimer = async () => {
+    setSuppression(true)
+    setError(null)
+
+    // On énumère avant de demander : « supprimer ce client » ne dit pas qu'un
+    // dossier, ses notes et ses pièces jointes partent avec lui.
+    const compter = async (table, colonne, valeur) =>
+      (await supabase.from(table).select('id', { count: 'exact', head: true }).eq(colonne, valeur))
+        .count ?? 0
+
+    const idsDossiers = dossiers.map((d) => d.id)
+    const [nbMateriel, nbFichiersClient, nbCaptures] = await Promise.all([
+      compter('materiel', 'client_id', client.id),
+      compter('fichiers', 'client_id', client.id),
+      compter('captures', 'client_id', client.id),
+    ])
+    const { count: nbNotes } = idsDossiers.length
+      ? await supabase
+          .from('dossier_notes')
+          .select('id', { count: 'exact', head: true })
+          .in('dossier_id', idsDossiers)
+      : { count: 0 }
+    const { data: fichiersDossiers } = idsDossiers.length
+      ? await supabase.from('fichiers').select('id, chemin').in('dossier_id', idsDossiers)
+      : { data: [] }
+
+    const pluriel = (n, mot, motPluriel) => `${n} ${n > 1 ? motPluriel : mot}`
+    const emporte = [
+      dossiers.length && pluriel(dossiers.length, 'dossier', 'dossiers'),
+      nbNotes && pluriel(nbNotes, 'note de dossier', 'notes de dossier'),
+      nbMateriel && pluriel(nbMateriel, 'équipement', 'équipements'),
+      (nbFichiersClient + (fichiersDossiers?.length ?? 0)) &&
+        pluriel(nbFichiersClient + (fichiersDossiers?.length ?? 0), 'pièce jointe', 'pièces jointes'),
+    ].filter(Boolean)
+
+    const message = emporte.length
+      ? `Supprimer définitivement « ${nomComplet} » ? Cette fiche emporte ${emporte.join(', ')}. Cette action est irréversible.`
+      : `Supprimer définitivement « ${nomComplet} » ? Cette action est irréversible.`
+
+    if (!window.confirm(message)) {
+      setSuppression(false)
+      return
+    }
+
+    // Les rappels poussés dans Todoist ne disparaissent pas d'eux-mêmes : sans
+    // ça, ils sonneraient pour un client qui n'existe plus.
+    for (const d of dossiers) {
+      if (d.rappel_date || d.todoist_task_id) {
+        await supabase.from('dossiers').update({ rappel_date: null }).eq('id', d.id)
+        await synchroniserRappel(d.id)
+      }
+    }
+
+    // Le dépôt de fichiers ignore les clés étrangères : sans ce retrait, les
+    // PDF resteraient stockés sans plus aucune référence pour les retrouver.
+    const { data: fichiersClient } = await supabase
+      .from('fichiers')
+      .select('chemin')
+      .eq('client_id', client.id)
+    const chemins = [...(fichiersClient ?? []), ...(fichiersDossiers ?? [])]
+      .map((f) => f.chemin)
+      .filter(Boolean)
+    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
+
+    const { error: err } = await supabase.from('clients').delete().eq('id', client.id)
+    if (err) {
+      setSuppression(false)
+      setError(err.message)
+      return
+    }
+
+    onDirtyChange?.(false)
+    onBack()
+  }
+
+  return () => onDirtyChange?.(false)
   }, [dirty, onDirtyChange])
 
   const save = async () => {
@@ -141,7 +220,84 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       )
       .subscribe()
 
-    return () => {
+    const nomComplet = [values.prenom_praticien, values.nom_praticien].filter(Boolean).join(' ')
+
+  const supprimer = async () => {
+    setSuppression(true)
+    setError(null)
+
+    // On énumère avant de demander : « supprimer ce client » ne dit pas qu'un
+    // dossier, ses notes et ses pièces jointes partent avec lui.
+    const compter = async (table, colonne, valeur) =>
+      (await supabase.from(table).select('id', { count: 'exact', head: true }).eq(colonne, valeur))
+        .count ?? 0
+
+    const idsDossiers = dossiers.map((d) => d.id)
+    const [nbMateriel, nbFichiersClient, nbCaptures] = await Promise.all([
+      compter('materiel', 'client_id', client.id),
+      compter('fichiers', 'client_id', client.id),
+      compter('captures', 'client_id', client.id),
+    ])
+    const { count: nbNotes } = idsDossiers.length
+      ? await supabase
+          .from('dossier_notes')
+          .select('id', { count: 'exact', head: true })
+          .in('dossier_id', idsDossiers)
+      : { count: 0 }
+    const { data: fichiersDossiers } = idsDossiers.length
+      ? await supabase.from('fichiers').select('id, chemin').in('dossier_id', idsDossiers)
+      : { data: [] }
+
+    const pluriel = (n, mot, motPluriel) => `${n} ${n > 1 ? motPluriel : mot}`
+    const emporte = [
+      dossiers.length && pluriel(dossiers.length, 'dossier', 'dossiers'),
+      nbNotes && pluriel(nbNotes, 'note de dossier', 'notes de dossier'),
+      nbMateriel && pluriel(nbMateriel, 'équipement', 'équipements'),
+      (nbFichiersClient + (fichiersDossiers?.length ?? 0)) &&
+        pluriel(nbFichiersClient + (fichiersDossiers?.length ?? 0), 'pièce jointe', 'pièces jointes'),
+    ].filter(Boolean)
+
+    const message = emporte.length
+      ? `Supprimer définitivement « ${nomComplet} » ? Cette fiche emporte ${emporte.join(', ')}. Cette action est irréversible.`
+      : `Supprimer définitivement « ${nomComplet} » ? Cette action est irréversible.`
+
+    if (!window.confirm(message)) {
+      setSuppression(false)
+      return
+    }
+
+    // Les rappels poussés dans Todoist ne disparaissent pas d'eux-mêmes : sans
+    // ça, ils sonneraient pour un client qui n'existe plus.
+    for (const d of dossiers) {
+      if (d.rappel_date || d.todoist_task_id) {
+        await supabase.from('dossiers').update({ rappel_date: null }).eq('id', d.id)
+        await synchroniserRappel(d.id)
+      }
+    }
+
+    // Le dépôt de fichiers ignore les clés étrangères : sans ce retrait, les
+    // PDF resteraient stockés sans plus aucune référence pour les retrouver.
+    const { data: fichiersClient } = await supabase
+      .from('fichiers')
+      .select('chemin')
+      .eq('client_id', client.id)
+    const chemins = [...(fichiersClient ?? []), ...(fichiersDossiers ?? [])]
+      .map((f) => f.chemin)
+      .filter(Boolean)
+    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
+
+    const { error: err } = await supabase.from('clients').delete().eq('id', client.id)
+    if (err) {
+      setSuppression(false)
+      setError(err.message)
+      return
+    }
+
+    onDirtyChange?.(false)
+    onBack()
+  }
+
+  return () => {
       active = false
       supabase.removeChannel(channel)
     }
@@ -182,11 +338,165 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       )
       .subscribe()
 
-    return () => {
+    const nomComplet = [values.prenom_praticien, values.nom_praticien].filter(Boolean).join(' ')
+
+  const supprimer = async () => {
+    setSuppression(true)
+    setError(null)
+
+    // On énumère avant de demander : « supprimer ce client » ne dit pas qu'un
+    // dossier, ses notes et ses pièces jointes partent avec lui.
+    const compter = async (table, colonne, valeur) =>
+      (await supabase.from(table).select('id', { count: 'exact', head: true }).eq(colonne, valeur))
+        .count ?? 0
+
+    const idsDossiers = dossiers.map((d) => d.id)
+    const [nbMateriel, nbFichiersClient, nbCaptures] = await Promise.all([
+      compter('materiel', 'client_id', client.id),
+      compter('fichiers', 'client_id', client.id),
+      compter('captures', 'client_id', client.id),
+    ])
+    const { count: nbNotes } = idsDossiers.length
+      ? await supabase
+          .from('dossier_notes')
+          .select('id', { count: 'exact', head: true })
+          .in('dossier_id', idsDossiers)
+      : { count: 0 }
+    const { data: fichiersDossiers } = idsDossiers.length
+      ? await supabase.from('fichiers').select('id, chemin').in('dossier_id', idsDossiers)
+      : { data: [] }
+
+    const pluriel = (n, mot, motPluriel) => `${n} ${n > 1 ? motPluriel : mot}`
+    const emporte = [
+      dossiers.length && pluriel(dossiers.length, 'dossier', 'dossiers'),
+      nbNotes && pluriel(nbNotes, 'note de dossier', 'notes de dossier'),
+      nbMateriel && pluriel(nbMateriel, 'équipement', 'équipements'),
+      (nbFichiersClient + (fichiersDossiers?.length ?? 0)) &&
+        pluriel(nbFichiersClient + (fichiersDossiers?.length ?? 0), 'pièce jointe', 'pièces jointes'),
+    ].filter(Boolean)
+
+    const message = emporte.length
+      ? `Supprimer définitivement « ${nomComplet} » ? Cette fiche emporte ${emporte.join(', ')}. Cette action est irréversible.`
+      : `Supprimer définitivement « ${nomComplet} » ? Cette action est irréversible.`
+
+    if (!window.confirm(message)) {
+      setSuppression(false)
+      return
+    }
+
+    // Les rappels poussés dans Todoist ne disparaissent pas d'eux-mêmes : sans
+    // ça, ils sonneraient pour un client qui n'existe plus.
+    for (const d of dossiers) {
+      if (d.rappel_date || d.todoist_task_id) {
+        await supabase.from('dossiers').update({ rappel_date: null }).eq('id', d.id)
+        await synchroniserRappel(d.id)
+      }
+    }
+
+    // Le dépôt de fichiers ignore les clés étrangères : sans ce retrait, les
+    // PDF resteraient stockés sans plus aucune référence pour les retrouver.
+    const { data: fichiersClient } = await supabase
+      .from('fichiers')
+      .select('chemin')
+      .eq('client_id', client.id)
+    const chemins = [...(fichiersClient ?? []), ...(fichiersDossiers ?? [])]
+      .map((f) => f.chemin)
+      .filter(Boolean)
+    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
+
+    const { error: err } = await supabase.from('clients').delete().eq('id', client.id)
+    if (err) {
+      setSuppression(false)
+      setError(err.message)
+      return
+    }
+
+    onDirtyChange?.(false)
+    onBack()
+  }
+
+  return () => {
       active = false
       supabase.removeChannel(channel)
     }
   }, [client.id])
+
+  const nomComplet = [values.prenom_praticien, values.nom_praticien].filter(Boolean).join(' ')
+
+  const supprimer = async () => {
+    setSuppression(true)
+    setError(null)
+
+    // On énumère avant de demander : « supprimer ce client » ne dit pas qu'un
+    // dossier, ses notes et ses pièces jointes partent avec lui.
+    const compter = async (table, colonne, valeur) =>
+      (await supabase.from(table).select('id', { count: 'exact', head: true }).eq(colonne, valeur))
+        .count ?? 0
+
+    const idsDossiers = dossiers.map((d) => d.id)
+    const [nbMateriel, nbFichiersClient, nbCaptures] = await Promise.all([
+      compter('materiel', 'client_id', client.id),
+      compter('fichiers', 'client_id', client.id),
+      compter('captures', 'client_id', client.id),
+    ])
+    const { count: nbNotes } = idsDossiers.length
+      ? await supabase
+          .from('dossier_notes')
+          .select('id', { count: 'exact', head: true })
+          .in('dossier_id', idsDossiers)
+      : { count: 0 }
+    const { data: fichiersDossiers } = idsDossiers.length
+      ? await supabase.from('fichiers').select('id, chemin').in('dossier_id', idsDossiers)
+      : { data: [] }
+
+    const pluriel = (n, mot, motPluriel) => `${n} ${n > 1 ? motPluriel : mot}`
+    const emporte = [
+      dossiers.length && pluriel(dossiers.length, 'dossier', 'dossiers'),
+      nbNotes && pluriel(nbNotes, 'note de dossier', 'notes de dossier'),
+      nbMateriel && pluriel(nbMateriel, 'équipement', 'équipements'),
+      (nbFichiersClient + (fichiersDossiers?.length ?? 0)) &&
+        pluriel(nbFichiersClient + (fichiersDossiers?.length ?? 0), 'pièce jointe', 'pièces jointes'),
+    ].filter(Boolean)
+
+    const message = emporte.length
+      ? `Supprimer définitivement « ${nomComplet} » ? Cette fiche emporte ${emporte.join(', ')}. Cette action est irréversible.`
+      : `Supprimer définitivement « ${nomComplet} » ? Cette action est irréversible.`
+
+    if (!window.confirm(message)) {
+      setSuppression(false)
+      return
+    }
+
+    // Les rappels poussés dans Todoist ne disparaissent pas d'eux-mêmes : sans
+    // ça, ils sonneraient pour un client qui n'existe plus.
+    for (const d of dossiers) {
+      if (d.rappel_date || d.todoist_task_id) {
+        await supabase.from('dossiers').update({ rappel_date: null }).eq('id', d.id)
+        await synchroniserRappel(d.id)
+      }
+    }
+
+    // Le dépôt de fichiers ignore les clés étrangères : sans ce retrait, les
+    // PDF resteraient stockés sans plus aucune référence pour les retrouver.
+    const { data: fichiersClient } = await supabase
+      .from('fichiers')
+      .select('chemin')
+      .eq('client_id', client.id)
+    const chemins = [...(fichiersClient ?? []), ...(fichiersDossiers ?? [])]
+      .map((f) => f.chemin)
+      .filter(Boolean)
+    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
+
+    const { error: err } = await supabase.from('clients').delete().eq('id', client.id)
+    if (err) {
+      setSuppression(false)
+      setError(err.message)
+      return
+    }
+
+    onDirtyChange?.(false)
+    onBack()
+  }
 
   return (
     <div className="min-h-screen bg-fond">
@@ -240,7 +550,84 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
             <ul className="space-y-2">
               {dossiers.map((d) => {
                 const s = styleDossier(d)
-                return (
+                const nomComplet = [values.prenom_praticien, values.nom_praticien].filter(Boolean).join(' ')
+
+  const supprimer = async () => {
+    setSuppression(true)
+    setError(null)
+
+    // On énumère avant de demander : « supprimer ce client » ne dit pas qu'un
+    // dossier, ses notes et ses pièces jointes partent avec lui.
+    const compter = async (table, colonne, valeur) =>
+      (await supabase.from(table).select('id', { count: 'exact', head: true }).eq(colonne, valeur))
+        .count ?? 0
+
+    const idsDossiers = dossiers.map((d) => d.id)
+    const [nbMateriel, nbFichiersClient, nbCaptures] = await Promise.all([
+      compter('materiel', 'client_id', client.id),
+      compter('fichiers', 'client_id', client.id),
+      compter('captures', 'client_id', client.id),
+    ])
+    const { count: nbNotes } = idsDossiers.length
+      ? await supabase
+          .from('dossier_notes')
+          .select('id', { count: 'exact', head: true })
+          .in('dossier_id', idsDossiers)
+      : { count: 0 }
+    const { data: fichiersDossiers } = idsDossiers.length
+      ? await supabase.from('fichiers').select('id, chemin').in('dossier_id', idsDossiers)
+      : { data: [] }
+
+    const pluriel = (n, mot, motPluriel) => `${n} ${n > 1 ? motPluriel : mot}`
+    const emporte = [
+      dossiers.length && pluriel(dossiers.length, 'dossier', 'dossiers'),
+      nbNotes && pluriel(nbNotes, 'note de dossier', 'notes de dossier'),
+      nbMateriel && pluriel(nbMateriel, 'équipement', 'équipements'),
+      (nbFichiersClient + (fichiersDossiers?.length ?? 0)) &&
+        pluriel(nbFichiersClient + (fichiersDossiers?.length ?? 0), 'pièce jointe', 'pièces jointes'),
+    ].filter(Boolean)
+
+    const message = emporte.length
+      ? `Supprimer définitivement « ${nomComplet} » ? Cette fiche emporte ${emporte.join(', ')}. Cette action est irréversible.`
+      : `Supprimer définitivement « ${nomComplet} » ? Cette action est irréversible.`
+
+    if (!window.confirm(message)) {
+      setSuppression(false)
+      return
+    }
+
+    // Les rappels poussés dans Todoist ne disparaissent pas d'eux-mêmes : sans
+    // ça, ils sonneraient pour un client qui n'existe plus.
+    for (const d of dossiers) {
+      if (d.rappel_date || d.todoist_task_id) {
+        await supabase.from('dossiers').update({ rappel_date: null }).eq('id', d.id)
+        await synchroniserRappel(d.id)
+      }
+    }
+
+    // Le dépôt de fichiers ignore les clés étrangères : sans ce retrait, les
+    // PDF resteraient stockés sans plus aucune référence pour les retrouver.
+    const { data: fichiersClient } = await supabase
+      .from('fichiers')
+      .select('chemin')
+      .eq('client_id', client.id)
+    const chemins = [...(fichiersClient ?? []), ...(fichiersDossiers ?? [])]
+      .map((f) => f.chemin)
+      .filter(Boolean)
+    if (chemins.length) await supabase.storage.from('documents').remove(chemins)
+
+    const { error: err } = await supabase.from('clients').delete().eq('id', client.id)
+    if (err) {
+      setSuppression(false)
+      setError(err.message)
+      return
+    }
+
+    onDirtyChange?.(false)
+    onBack()
+  }
+
+  return (
                   <li key={d.id}>
                     <button
                       onClick={() => onOpenDossier(d)}
@@ -299,6 +686,15 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
             </ul>
           </div>
         )}
+        <div className="mt-8 mb-4">
+          <button
+            onClick={supprimer}
+            disabled={suppression}
+            className="w-full text-erreur text-sm font-medium py-3 disabled:opacity-50"
+          >
+            {suppression ? 'Suppression…' : 'Supprimer ce client'}
+          </button>
+        </div>
       </main>
 
       {dirty && (
