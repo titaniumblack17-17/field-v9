@@ -2,3 +2,6 @@ node_modules
 dist
 .env
 .env.local
+
+# Dépôt cloné à part, posé ici par accident : suivi par lui-même.
+agency-agents/
