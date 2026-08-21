@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import JaugeObjectif from '../components/JaugeObjectif'
 import { reconcilierRappels } from '../lib/todoist'
 import {
   ETAPES_PROJET,
@@ -13,8 +14,14 @@ import {
 // Objectif annuel de la spec (§1) : 5 M€ TTC.
 const OBJECTIF_ANNUEL = 5_000_000
 
-// Un dossier est considéré engagé à partir de la commande signée.
-const ETAPES_ENGAGEES = ['commande', 'reunion_chantier', 'installation', 'finition', 'financement']
+// Signé : la commande est passée, la vente est faite. Ce qui suit relève de la
+// logistique, pas de la prospection.
+const ETAPES_SIGNEES = ['commande', 'reunion_chantier', 'installation', 'finition', 'financement']
+
+// Facturé : l'installation est terminée. Aucune étape ne s'appelle « facturé »
+// dans le pipeline — c'est la finition qui en tient lieu. À changer ici si la
+// facturation intervient plus tôt.
+const ETAPES_FACTUREES = ['finition']
 
 const euros = (n) =>
   n == null ? '—' : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n) + ' €'
@@ -127,7 +134,8 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
     )
 
     const somme = (liste) => liste.reduce((t, d) => t + (Number(d.montant_estime) || 0), 0)
-    const engages = actifs.filter((d) => ETAPES_ENGAGEES.includes(d.statut))
+    const signes = actifs.filter((d) => ETAPES_SIGNEES.includes(d.statut))
+    const factures = actifs.filter((d) => ETAPES_FACTUREES.includes(d.statut))
 
     return {
       aRappeler,
@@ -135,8 +143,13 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       plansAProduire,
       reglements,
       duParPlans: reglements.length * 500,
-      pipeline: somme(actifs),
-      engage: somme(engages),
+      projection: somme(actifs),
+      signe: somme(signes),
+      facture: somme(factures),
+      // Le trou le plus coûteux n'est pas dans le pipeline lointain : c'est une
+      // commande signée sans montant, qui manque à l'objectif sans se voir.
+      signesSansMontant: signes.filter((d) => d.montant_estime == null).length,
+      nbSignes: signes.length,
       chiffres: actifs.filter((d) => d.montant_estime != null).length,
       totalActifs: actifs.length,
       sansMontant: actifs.filter((d) => d.montant_estime == null),
@@ -146,8 +159,8 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
     }
   }, [dossiers])
 
-  const couvertureFaible = bilan.totalActifs > 0 && bilan.chiffres < bilan.totalActifs / 2
-  const partObjectif = Math.min(100, Math.round((bilan.engage / OBJECTIF_ANNUEL) * 100))
+  const couvertureFaible =
+    bilan.signesSansMontant > 0 || (bilan.totalActifs > 0 && bilan.chiffres < bilan.totalActifs / 2)
 
   return (
     <div className="min-h-screen bg-fond">
@@ -224,39 +237,30 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mb-2">
                 Objectif annuel
               </h2>
-              <div className="bg-carte rounded-xl shadow-sm px-4 py-4">
-                <div className="flex items-baseline justify-between mb-1">
-                  <span className="text-texte font-medium">{euros(bilan.engage)} engagés</span>
-                  <span className="text-sm text-texte-doux">sur {euros(OBJECTIF_ANNUEL)}</span>
-                </div>
-                <div className="h-2 rounded-full bg-carte-douce overflow-hidden">
-                  <div
-                    className="h-full bg-accent rounded-full"
-                    style={{ width: `${partObjectif}%` }}
-                  />
-                </div>
-                <p className="text-xs text-texte-faible mt-2">
-                  Engagé = commande signée et au-delà. Pipeline actif : {euros(bilan.pipeline)}.
+              <JaugeObjectif
+                projection={bilan.projection}
+                signe={bilan.signe}
+                facture={bilan.facture}
+              />
+              {bilan.planFacture > 0 && (
+                <p className="text-xs text-texte-doux mt-2 px-1">
+                  Casquette technique, hors objectif : {bilan.planFacture} plan
+                  {bilan.planFacture > 1 ? 's' : ''} soldé{bilan.planFacture > 1 ? 's' : ''} ·{' '}
+                  {euros(bilan.planFacture * 500)}
                 </p>
-                {bilan.planFacture > 0 && (
-                  <p className="text-xs text-texte-doux mt-1">
-                    Casquette technique : {bilan.planFacture} plan
-                    {bilan.planFacture > 1 ? 's' : ''} facturé{bilan.planFacture > 1 ? 's' : ''} ·{' '}
-                    {euros(bilan.planFacture * 500)}
-                  </p>
-                )}
-              </div>
+              )}
             </section>
 
             {couvertureFaible && (
               <section className="mt-4">
                 <div className="bg-alerte/10 border border-alerte/30 rounded-xl px-4 py-3">
                   <p className="text-sm text-texte">
-                    Ces montants ne valent pas grand-chose : seuls {bilan.chiffres} dossiers sur{' '}
-                    {bilan.totalActifs} portent un montant estimé.
+                    {bilan.signesSansMontant > 0
+                      ? `${bilan.signesSansMontant} dossier${bilan.signesSansMontant > 1 ? 's' : ''} sur ${bilan.nbSignes} déjà signé${bilan.nbSignes > 1 ? 's' : ''} n'${bilan.signesSansMontant > 1 ? 'ont' : 'a'} pas de montant : ${bilan.signesSansMontant > 1 ? 'ils manquent' : 'il manque'} à l'objectif sans se voir.`
+                      : `Seuls ${bilan.chiffres} dossiers sur ${bilan.totalActifs} portent un montant estimé.`}
                   </p>
                   <p className="text-xs text-texte-doux mt-1">
-                    Tant que les autres ne sont pas chiffrés, le suivi de l'objectif reste indicatif.
+                    Tant que les autres ne sont pas chiffrés, la jauge dit moins que la réalité.
                   </p>
                 </div>
               </section>

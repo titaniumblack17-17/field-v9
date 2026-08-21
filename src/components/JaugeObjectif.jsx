@@ -1,0 +1,99 @@
+import React from 'react'
+
+const MILLION = 1_000_000
+const TRANCHES = 5
+
+// La couleur dit à quelle tranche de million on est arrivé : on lit sa position
+// dans l'année d'un coup d'œil, sans déchiffrer un nombre à sept chiffres.
+const PALETTE = [
+  { fond: '#64748B', nom: 'Sous le premier million' },
+  { fond: '#3B82F6', nom: 'Premier million franchi' },
+  { fond: '#0EA5E9', nom: 'Deuxième million franchi' },
+  { fond: '#10B981', nom: 'Troisième million franchi' },
+  { fond: '#F59E0B', nom: 'Quatrième million franchi' },
+  { fond: '#EAB308', nom: 'Objectif atteint' },
+]
+
+const euros = (n) =>
+  new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n ?? 0) + ' €'
+
+// Part d'une tranche donnée couverte par un montant. Chaque segment vaut un
+// million : le remplissage se calcule tranche par tranche, pas globalement.
+const part = (valeur, i) =>
+  Math.max(0, Math.min(1, (valeur - i * MILLION) / MILLION)) * 100
+
+function Pastille({ couleur, opacite, libelle, montant }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+        style={{ background: couleur, opacity: opacite }}
+      />
+      <span className="text-xs text-texte-doux flex-1">{libelle}</span>
+      <span className="text-sm text-texte font-medium tabular-nums">{euros(montant)}</span>
+    </div>
+  )
+}
+
+/**
+ * Avancement vers l'objectif annuel, en tranches d'un million.
+ *
+ * Trois montants superposés dans la même jauge plutôt que trois barres : ils
+ * mesurent le même chemin à trois degrés de certitude, et les empiler montre
+ * ce qui sépare l'espéré du réalisé.
+ */
+export default function JaugeObjectif({ projection, signe, facture, objectif = 5 * MILLION }) {
+  const franchis = Math.min(TRANCHES, Math.floor(signe / MILLION))
+  const teinte = PALETTE[franchis]
+  const pourcentage = Math.round((signe / objectif) * 100)
+
+  return (
+    <div className="bg-carte rounded-xl shadow-sm px-4 py-4">
+      <div className="flex items-baseline justify-between mb-1">
+        <span className="text-2xl font-semibold text-texte tabular-nums">{euros(signe)}</span>
+        <span className="text-sm text-texte-doux">sur {euros(objectif)}</span>
+      </div>
+      <p className="text-xs mb-3" style={{ color: teinte.fond }}>
+        {teinte.nom} · {pourcentage} %
+      </p>
+
+      <div className="flex gap-1" role="img" aria-label={`${euros(signe)} signés sur ${euros(objectif)}`}>
+        {Array.from({ length: TRANCHES }, (_, i) => (
+          <div
+            key={i}
+            className="relative flex-1 h-3 rounded-full overflow-hidden bg-carte-douce"
+          >
+            {/* Du plus incertain au plus sûr : la projection derrière, le
+                facturé devant, pour que le réalisé reste toujours lisible. */}
+            <div
+              className="absolute inset-y-0 left-0"
+              style={{ width: `${part(projection, i)}%`, background: teinte.fond, opacity: 0.2 }}
+            />
+            <div
+              className="absolute inset-y-0 left-0"
+              style={{ width: `${part(signe, i)}%`, background: teinte.fond, opacity: 0.55 }}
+            />
+            <div
+              className="absolute inset-y-0 left-0"
+              style={{ width: `${part(facture, i)}%`, background: teinte.fond }}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-1 mt-1">
+        {Array.from({ length: TRANCHES }, (_, i) => (
+          <span key={i} className="flex-1 text-[10px] text-texte-faible text-right">
+            {i + 1} M
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <Pastille couleur={teinte.fond} opacite={1} libelle="Facturé" montant={facture} />
+        <Pastille couleur={teinte.fond} opacite={0.55} libelle="Signé" montant={signe} />
+        <Pastille couleur={teinte.fond} opacite={0.2} libelle="Projection" montant={projection} />
+      </div>
+    </div>
+  )
+}
