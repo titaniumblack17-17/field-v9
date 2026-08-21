@@ -83,6 +83,20 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
     onBack()
   }
 
+  // Le montant est recalculé en base à chaque devis lu ou requalifié. On le
+  // relit dans la fiche ET dans la référence d'origine : sinon l'écart entre
+  // les deux ferait croire à une modification non enregistrée.
+  const relireMontant = async () => {
+    const { data } = await supabase
+      .from('dossiers')
+      .select('montant_estime')
+      .eq('id', dossier.id)
+      .single()
+    if (!data) return
+    dossier.montant_estime = data.montant_estime
+    setValues((v) => ({ ...v, montant_estime: data.montant_estime }))
+  }
+
   const setField = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }))
 
   // Changer de type invalide le statut courant, exprimé dans le vocabulaire de
@@ -418,7 +432,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
 
         {error && <p className="text-erreur text-sm mt-3">{error}</p>}
 
-        <PiecesJointes dossierId={dossier.id} />
+        <PiecesJointes dossierId={dossier.id} onMontantChange={relireMontant} />
 
         <div className="mt-4">
           <div className="flex items-baseline justify-between px-1 mb-2">
