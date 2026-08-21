@@ -107,11 +107,11 @@ Réponds UNIQUEMENT par un objet JSON, sans texte autour et sans balises markdow
 - montant_ttc: le montant global TTC en nombre (point décimal, sans symbole ni espace), ou null
 - montant_ht: le montant global HT en nombre, ou null
 - somme_calculee: true si tu as dû additionner faute de montant annoncé, sinon false
-- extrait: la phrase exacte du document d'où vient le montant, recopiée mot pour mot, ou null
+- extrait: la phrase exacte du document d'où vient le montant, recopiée mot pour mot, 200 caractères au plus, ou null
 - page: le numéro de page où tu l'as lu, ou null
 - reference: la référence ou le numéro du devis, ou null
 - date_devis: la date du devis au format YYYY-MM-DD, ou null
-- doute: OBLIGATOIRE si montant_ttc est null — explique alors en une phrase ce que tu as cherché et pourquoi tu n'as rien retenu. Sinon, mentionne toute ambiguïté, ou null si le montant est sans équivoque.
+- doute: OBLIGATOIRE si montant_ttc est null — explique alors en une phrase, 300 caractères au plus, ce que tu as cherché et pourquoi tu n'as rien retenu. Sinon, mentionne toute ambiguïté, ou null si le montant est sans équivoque.
 
 Un montant faux alimenterait un suivi de chiffre d'affaires : dans le doute, renvoie null et explique-toi dans doute.`
 
@@ -124,7 +124,7 @@ Un montant faux alimenterait un suivi de chiffre d'affaires : dans le doute, ren
     },
     body: JSON.stringify({
       model: 'claude-sonnet-5',
-      max_tokens: 700,
+      max_tokens: 2000,
       messages: [
         {
           role: 'user',
@@ -146,13 +146,33 @@ Un montant faux alimenterait un suivi de chiffre d'affaires : dans le doute, ren
     return json({ erreur: 'Lecture du PDF impossible.', detail }, 502)
   }
 
-  const brut = (await reponse.json()).content?.[0]?.text ?? '{}'
-  let lu: any
+  const charge = await reponse.json()
+  // Le premier bloc n'est pas toujours du texte (raisonnement, outil) : on
+  // concatène tous les blocs textuels plutôt que de parier sur content[0].
+  const brut = (charge.content ?? [])
+    .filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
+    .map((b: any) => b.text)
+    .join('\n')
+
+  let lu: any = null
   try {
     const m = brut.match(/\{[\s\S]*\}/)
-    lu = JSON.parse(m ? m[0] : brut)
+    if (m) lu = JSON.parse(m[0])
   } catch {
-    lu = {}
+    lu = null
+  }
+
+  // Une réponse illisible ne doit pas se déguiser en devis sans montant : sans
+  // ce garde-fou, l'échec ressemble à une abstention motivée.
+  if (lu === null) {
+    const motif = charge.stop_reason === 'max_tokens'
+      ? 'Réponse tronquée par la limite de jetons.'
+      : `Réponse illisible du modèle (${charge.stop_reason ?? 'sans motif'}).`
+    await db.from('fichiers').update({
+      analyse_at: new Date().toISOString(),
+      analyse_erreur: motif,
+    }).eq('id', fichierId)
+    return json({ erreur: motif, stop_reason: charge.stop_reason ?? null, brut: brut.slice(0, 600) }, 502)
   }
 
   if (lu.devis === false) {
