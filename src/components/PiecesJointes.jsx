@@ -29,6 +29,16 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   const [erreur, setErreur] = useState(null)
   const champFichier = useRef(null)
 
+  // Devis chiffrés en mode remplacement, du plus récent au plus ancien : le
+  // premier est celui qui donne son montant au dossier.
+  const remplacants = liste
+    .filter((f) => f.montant_ttc != null && !f.cumule)
+    .sort((a, b) =>
+      (b.date_devis ?? b.created_at.slice(0, 10)).localeCompare(
+        a.date_devis ?? a.created_at.slice(0, 10)
+      )
+    )
+
   useEffect(() => {
     let actif = true
 
@@ -184,6 +194,21 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
       />
 
       {erreur && <p className="text-erreur text-sm mb-2 px-1">{erreur}</p>}
+
+      {/* Deux devis chiffrés qui se remplacent, c'est presque toujours deux
+          affaires différentes plutôt qu'une révision : sans ce rappel, le
+          dernier déposé — souvent le plus petit — écrase le principal. */}
+      {dossierId && remplacants.length > 1 && (
+        <div className="bg-alerte/10 border border-alerte/30 rounded-xl px-4 py-3 mb-2">
+          <p className="text-sm text-texte">
+            {remplacants.length} devis chiffrés se remplacent. Le plus récent fait foi :{' '}
+            {new Intl.NumberFormat('fr-FR').format(remplacants[0].montant_ttc)} € TTC.
+          </p>
+          <p className="text-xs text-texte-doux mt-1">
+            Cochez « devis complémentaire » sur ceux qui s'ajoutent au lieu de remplacer.
+          </p>
+        </div>
+      )}
 
       {liste.length === 0 ? (
         <p className="text-texte-faible text-sm px-1">Aucun document.</p>
