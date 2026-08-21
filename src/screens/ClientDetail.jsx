@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import NoteTexte from '../components/NoteTexte'
 import { synchroniserRappel } from '../lib/todoist'
 import PersonListField from '../components/PersonListField'
 import MaterielInstalle from '../components/MaterielInstalle'
@@ -63,6 +64,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   const [journal, setJournal] = useState([])
   const [dossiers, setDossiers] = useState([])
   const [suppression, setSuppression] = useState(false)
+  const [toutLeJournal, setToutLeJournal] = useState(false)
 
   const setField = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }))
 
@@ -694,11 +696,21 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
         {journal.length > 0 && (
           <div className="mt-4">
-            <p className="text-xs text-texte-faible mb-2 px-1">Journal</p>
+            <div className="flex items-baseline justify-between px-1 mb-2">
+              <p className="text-xs text-texte-faible">Journal · {journal.length}</p>
+              {journal.length > 2 && (
+                <button
+                  onClick={() => setToutLeJournal((v) => !v)}
+                  className="text-accent text-xs font-medium"
+                >
+                  {toutLeJournal ? 'Réduire' : `Afficher les ${journal.length} entrées`}
+                </button>
+              )}
+            </div>
             <ul className="space-y-2">
-              {journal.map((c) => (
+              {(toutLeJournal ? journal : journal.slice(0, 2)).map((c) => (
                 <li key={c.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
-                  <p className="text-texte text-sm">{c.resume || c.texte}</p>
+                  <NoteTexte texte={c.resume || c.texte} />
                   <p className="text-xs text-texte-faible mt-1">
                     {new Date(c.created_at).toLocaleDateString('fr-FR')}
                     {c.date_evenement ? ` · échéance ${c.date_evenement}` : ''}

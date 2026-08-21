@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import ChampChoix from '../components/ChampChoix'
 import PiecesJointes from '../components/PiecesJointes'
+import NoteTexte from '../components/NoteTexte'
 import { synchroniserRappel } from '../lib/todoist'
 import {
   TYPE_LABELS,
@@ -17,6 +18,9 @@ import {
   PLAN_STATUT_OPTIONS,
   styleDossier,
 } from '../constants/dossiers'
+
+// Deux notes suffisent à montrer que le journal vit ; le reste se déplie.
+const APERCU_NOTES = 2
 
 const CHAMPS = [
   'type',
@@ -41,6 +45,9 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
   const [suppression, setSuppression] = useState(false)
   // Compte rendu du dernier envoi vers Todoist : { etat } ou { erreur }.
   const [todoist, setTodoist] = useState(null)
+  // Le journal complet est replié : on veut voir qu'il existe, pas le lire
+  // en entier chaque fois qu'on ouvre le dossier.
+  const [toutesNotes, setToutesNotes] = useState(false)
 
   const s = styleDossier(values)
 
@@ -414,7 +421,19 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
         <PiecesJointes dossierId={dossier.id} />
 
         <div className="mt-4">
-          <p className="text-xs text-texte-faible mb-2 px-1">Notes</p>
+          <div className="flex items-baseline justify-between px-1 mb-2">
+            <p className="text-xs text-texte-faible">
+              Notes{notes.length > 0 ? ` · ${notes.length}` : ''}
+            </p>
+            {notes.length > APERCU_NOTES && (
+              <button
+                onClick={() => setToutesNotes((v) => !v)}
+                className="text-accent text-xs font-medium"
+              >
+                {toutesNotes ? 'Réduire' : `Afficher les ${notes.length} notes`}
+              </button>
+            )}
+          </div>
           <div className="bg-carte rounded-xl shadow-sm p-3 flex gap-2 mb-2">
             <input
               value={newNote}
@@ -433,9 +452,9 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
           </div>
           {notes.length > 0 && (
             <ul className="space-y-2">
-              {notes.map((n) => (
+              {(toutesNotes ? notes : notes.slice(0, APERCU_NOTES)).map((n) => (
                 <li key={n.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
-                  <p className="text-texte text-sm">{n.texte}</p>
+                  <NoteTexte texte={n.texte} />
                   <p className="text-xs text-texte-faible mt-1">
                     {new Date(n.created_at).toLocaleString('fr-FR', {
                       day: '2-digit',
