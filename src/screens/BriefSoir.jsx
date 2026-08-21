@@ -1,7 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { reconcilierRappels } from '../lib/todoist'
-import { ETAPES_PROJET, PLAN_STATUT_LABELS, TYPE_LABELS, styleDossier } from '../constants/dossiers'
+import {
+  ETAPES_PROJET,
+  PLAN_STATUT_LABELS,
+  STATUTS_PLAN_LABELS,
+  TYPE_LABELS,
+  styleDossier,
+} from '../constants/dossiers'
 
 // Objectif annuel de la spec (§1) : 5 M€ TTC.
 const OBJECTIF_ANNUEL = 5_000_000
@@ -96,12 +102,24 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       .sort((a, b) => a.rappel_date.localeCompare(b.rappel_date))
       .slice(0, 5)
 
-    // Travail technique dû : plans intégrés à une vente, et dossiers de type
-    // plan encore ouverts.
+    // Travail technique dû : plans intégrés à une vente, et plans encore à
+    // fabriquer.
     const plansAProduire = [
       ...projets.filter((d) => d.plan_statut && d.plan_statut !== 'fait'),
-      ...dossiers.filter((d) => d.type === 'plan' && d.statut !== 'termine'),
+      ...dossiers.filter(
+        (d) => d.type === 'plan' && ['a_planifier', 'en_cours'].includes(d.statut)
+      ),
     ]
+
+    // Un plan livré n'est pas un plan soldé. Ceux-là ne demandent plus de
+    // travail : ils demandent d'être payés, et c'est en les oubliant qu'on
+    // travaille gratuitement.
+    const reglements = dossiers.filter(
+      (d) =>
+        d.type === 'plan' &&
+        d.remuneration_type === 'facture' &&
+        ['installe', 'reglement_demande'].includes(d.statut)
+    )
 
     const somme = (liste) => liste.reduce((t, d) => t + (Number(d.montant_estime) || 0), 0)
     const engages = actifs.filter((d) => ETAPES_ENGAGEES.includes(d.statut))
@@ -110,12 +128,16 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       aRappeler,
       aVenir,
       plansAProduire,
+      reglements,
+      duParPlans: reglements.length * 500,
       pipeline: somme(actifs),
       engage: somme(engages),
       chiffres: actifs.filter((d) => d.montant_estime != null).length,
       totalActifs: actifs.length,
       sansMontant: actifs.filter((d) => d.montant_estime == null),
-      planFacture: dossiers.filter((d) => d.type === 'plan' && d.remuneration_type === 'facture').length,
+      planFacture: dossiers.filter(
+        (d) => d.type === 'plan' && d.remuneration_type === 'facture' && d.statut === 'solde'
+      ).length,
     }
   }, [dossiers])
 
@@ -162,10 +184,36 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
                   key={d.id}
                   dossier={d}
                   onOuvrir={onOpenDossier}
-                  droite={d.plan_statut ? PLAN_STATUT_LABELS[d.plan_statut] : libelleEtape(d.statut)}
+                  droite={
+                    d.plan_statut
+                      ? PLAN_STATUT_LABELS[d.plan_statut]
+                      : STATUTS_PLAN_LABELS[d.statut] ?? libelleEtape(d.statut)
+                  }
                 />
               ))}
             </Section>
+
+            <Section
+              titre="Règlements de plans à encaisser"
+              compte={bilan.reglements.length}
+              vide="Aucun plan en attente de règlement."
+            >
+              {bilan.reglements.map((d) => (
+                <Ligne
+                  key={d.id}
+                  dossier={d}
+                  onOuvrir={onOpenDossier}
+                  droite={STATUTS_PLAN_LABELS[d.statut]}
+                  alerte={d.statut === 'reglement_demande'}
+                />
+              ))}
+            </Section>
+
+            {bilan.reglements.length > 0 && (
+              <p className="text-xs text-texte-doux px-1 mt-2">
+                {euros(bilan.duParPlans)} facturables, plans livrés et non réglés.
+              </p>
+            )}
 
             <section className="mt-6">
               <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mb-2">

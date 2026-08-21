@@ -9,6 +9,7 @@ import {
   STATUT_PAR_DEFAUT,
   ETAPES_PROJET,
   STATUTS_SAV,
+  STATUTS_PLAN,
   REMUNERATION_OPTIONS,
   PLAN_STATUT_OPTIONS,
   styleDossier,
@@ -293,6 +294,13 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
 
           {values.type === 'plan' && (
             <div>
+              <ChampChoix
+                id="statut"
+                label="Étape"
+                value={values.statut ?? ''}
+                options={STATUTS_PLAN}
+                onChange={(v) => setValues((x) => ({ ...x, statut: v }))}
+              />
               <ChampChoix
                 id="remuneration"
                 label="Rémunération"
