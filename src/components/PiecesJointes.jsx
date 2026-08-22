@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import TexteModifiable from './TexteModifiable'
 
 const TAILLE_MAX = 25 * 1024 * 1024
 
@@ -11,6 +12,17 @@ const lisible = (o) => {
 }
 
 const estPdf = (t) => t === 'application/pdf'
+
+/**
+ * Reconnaît la nomenclature des devis : NOM_PRODUIT_RÉFÉRENCE, où la référence
+ * fait neuf chiffres suivis d'une lettre de révision facultative.
+ *
+ * Ces noms-là sont ceux que Bruce a établis sur son Mac, et c'est eux qui ont
+ * permis de repérer les révisions B et C à l'import. On ne propose donc pas de
+ * les changer : le renommage ne sert que pour un scan d'imprimante ou une photo
+ * de téléphone, dont le nom ne dit rien.
+ */
+const suitLaNomenclature = (nom) => /_\d{9}[A-Za-z]?\.[a-z0-9]+$/i.test(nom ?? '')
 
 /**
  * Pièces jointes d'un client ou d'un dossier. Le dépôt est privé : on ne stocke
@@ -26,6 +38,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   // Identifiants des PDF en cours de lecture, pour n'afficher l'attente que
   // sur la ligne concernée.
   const [analyse, setAnalyse] = useState(() => new Set())
+  const [renommage, setRenommage] = useState(null)
   const [erreur, setErreur] = useState(null)
   const champFichier = useRef(null)
 
@@ -220,11 +233,19 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
               <span className="text-lg flex-shrink-0" aria-hidden="true">
                 {estPdf(f.type_mime) ? '📄' : '🖼️'}
               </span>
-              {/* Le nom vient du fichier déposé et n'est pas modifiable ici :
-                  la nomenclature de Bruce sur son Mac fait autorité, et un nom
-                  changé dans Field créerait un écart avec ses dossiers iCloud
-                  — exactement la divergence qu'on cherche à supprimer. */}
-              <button onClick={() => ouvrir(f)} className="flex-1 min-w-0 text-left">
+              <div className="flex-1 min-w-0">
+              {renommage === f.id ? (
+                <TexteModifiable
+                  valeur={f.nom}
+                  ouvertParDefaut
+                  className="text-texte"
+                  onFermer={() => setRenommage(null)}
+                  onEnregistrer={async (v) => {
+                    if (v) await supabase.from('fichiers').update({ nom: v }).eq('id', f.id)
+                  }}
+                />
+              ) : (
+                <button onClick={() => ouvrir(f)} className="w-full min-w-0 text-left">
                 <p className="text-texte truncate">{f.nom}</p>
                 <p className="text-xs text-texte-faible">
                   {[lisible(f.taille), new Date(f.created_at).toLocaleDateString('fr-FR')]
@@ -247,7 +268,9 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                 {!analyse.has(f.id) && f.analyse_erreur && (
                   <p className="text-xs text-alerte mt-0.5">{f.analyse_erreur}</p>
                 )}
-              </button>
+                </button>
+              )}
+              </div>
               <div className="flex flex-col items-end gap-1 flex-shrink-0">
                 <button
                   onClick={() => supprimer(f)}
@@ -256,6 +279,17 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                 >
                   ×
                 </button>
+                {/* Seulement sur un nom qui ne dit rien : scan d'imprimante,
+                    photo de téléphone. Un devis nommé selon la nomenclature
+                    n'a pas à être renommé, et le bouton ne s'affiche pas. */}
+                {renommage !== f.id && !suitLaNomenclature(f.nom) && (
+                  <button
+                    onClick={() => setRenommage(f.id)}
+                    className="text-texte-fantome text-[11px] h-9 px-2 -mr-2 flex items-center"
+                  >
+                    Renommer
+                  </button>
+                )}
                 {dossierId && estPdf(f.type_mime) && !analyse.has(f.id) && (
                   <button
                     onClick={() => lireDevis(f)}
