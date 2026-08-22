@@ -31,7 +31,11 @@ const json = (corps: unknown, status = 200) =>
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'authorization, apikey, content-type',
+      'Access-Control-Allow-Headers':
+        // supabase-js ajoute x-client-info et x-supabase-api-version. Absents
+        // de cette liste, le contrôle préalable CORS échoue et l'appel depuis
+        // l'application meurt en « Failed to fetch » — alors qu'un curl passe.
+        'authorization, apikey, content-type, x-client-info, x-supabase-api-version',
     },
   })
 
