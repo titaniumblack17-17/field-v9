@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import JaugeObjectif from '../components/JaugeObjectif'
+import { etatRappel } from '../lib/rappel'
 import { reconcilierRappels } from '../lib/todoist'
 import {
   ETAPES_PROJET,
@@ -121,6 +122,13 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       (d) => d.statut !== 'perdu' && exerciceDe(d, annee) === annee
     )
 
+    // Un SAV ouvert, c'est un praticien qui ne peut pas travailler. Ça passe
+    // avant un rappel commercial, et ça n'a pas besoin d'un écran à soi : un
+    // onglet séparé qu'on n'ouvre pas serait pire que rien.
+    const savOuverts = dossiers
+      .filter((d) => d.type === 'sav' && d.statut !== 'clos')
+      .sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''))
+
     const aRappeler = dossiers
       .filter((d) => d.rappel_date && d.rappel_date <= aujourdhui)
       .sort((a, b) => a.rappel_date.localeCompare(b.rappel_date))
@@ -154,6 +162,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
     const factures = actifs.filter((d) => ETAPES_FACTUREES.includes(d.statut))
 
     return {
+      savOuverts,
       aRappeler,
       aVenir,
       plansAProduire,
@@ -196,18 +205,52 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
         {!chargement && (
           <>
             <Section
+              titre="SAV ouverts"
+              compte={bilan.savOuverts.length}
+              vide="Aucun SAV en cours."
+            >
+              {bilan.savOuverts.map((d) => (
+                <Ligne
+                  key={d.id}
+                  dossier={d}
+                  onOuvrir={onOpenDossier}
+                  droite={
+                    d.created_at
+                      ? `ouvert le ${new Date(d.created_at).toLocaleDateString('fr-FR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                        })}`
+                      : null
+                  }
+                  alerte
+                />
+              ))}
+            </Section>
+
+            <Section
               titre="À rappeler"
               compte={bilan.aRappeler.length}
               vide="Aucun rappel en retard. "
             >
               {bilan.aRappeler.map((d) => (
-                <Ligne key={d.id} dossier={d} onOuvrir={onOpenDossier} droite={d.rappel_date} alerte />
+                <Ligne
+                  key={d.id}
+                  dossier={d}
+                  onOuvrir={onOpenDossier}
+                  droite={etatRappel(d.rappel_date)?.texte}
+                  alerte
+                />
               ))}
             </Section>
 
             <Section titre="Rappels à venir" compte={bilan.aVenir.length} vide="Rien de programmé.">
               {bilan.aVenir.map((d) => (
-                <Ligne key={d.id} dossier={d} onOuvrir={onOpenDossier} droite={d.rappel_date} />
+                <Ligne
+                  key={d.id}
+                  dossier={d}
+                  onOuvrir={onOpenDossier}
+                  droite={etatRappel(d.rappel_date)?.texte}
+                />
               ))}
             </Section>
 

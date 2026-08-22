@@ -11,6 +11,7 @@ import {
   useDraggable,
 } from '@dnd-kit/core'
 import { supabase } from '../lib/supabaseClient'
+import { etatRappel } from '../lib/rappel'
 import { ETAPES_PROJET, PLAN_STATUT_LABELS } from '../constants/dossiers'
 
 function Card({ dossier, onOpen, onMove, isDragging }) {
@@ -38,9 +39,10 @@ function Card({ dossier, onOpen, onMove, isDragging }) {
           Estimé : <span className="font-medium text-texte">{dossier.montant_estime} €</span>
         </p>
       )}
-      {dossier.rappel_date && (
-        <p className="text-[10px] text-alerte mt-1">⏰ {dossier.rappel_date}</p>
-      )}
+      {(() => {
+        const r = etatRappel(dossier.rappel_date)
+        return r ? <p className={`text-[10px] mt-1 ${r.classe}`}>⏰ {r.texte}</p> : null
+      })()}
       {/* Un plan encore dû se voit sans ouvrir le dossier : c'est du travail
           technique à produire, pas un simple attribut. */}
       {dossier.plan_statut && dossier.plan_statut !== 'fait' && (
@@ -105,6 +107,9 @@ export default function Pipeline({ onBack, onOpenDossier }) {
   // étapes vides s'effacent, et la barre ci-dessous permet d'atteindre
   // n'importe laquelle d'un geste au lieu de les traverser toutes.
   const [montrerVides, setMontrerVides] = useState(false)
+  // Un dossier perdu mérite d'être relu de temps en temps, pas de tenir une
+  // colonne dans le champ de vision tous les jours.
+  const [montrerPerdus, setMontrerPerdus] = useState(false)
 
   // Étape actuellement à gauche de l'écran. Suivre le défilement plutôt que le
   // dernier appui : sans ça, un balayage à la main laisserait la barre
@@ -205,10 +210,11 @@ export default function Pipeline({ onBack, onOpenDossier }) {
 
   // Une étape vide reste affichée si elle est la destination d'un glissé en
   // cours : la faire disparaître sous le doigt rendrait le dépôt impossible.
-  const etapesVisibles = ETAPES_PROJET.filter(
-    ([cle]) => montrerVides || byEtape[cle].length > 0 || activeDrag
-  )
-  const nbVides = ETAPES_PROJET.length - ETAPES_PROJET.filter(([c]) => byEtape[c].length > 0).length
+  const etapesVisibles = ETAPES_PROJET.filter(([cle]) => {
+    if (cle === 'perdu') return montrerPerdus || activeDrag
+    return montrerVides || byEtape[cle].length > 0 || activeDrag
+  })
+  const nbVides = ETAPES_PROJET.filter(([c]) => c !== 'perdu' && byEtape[c].length === 0).length
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -238,7 +244,7 @@ export default function Pipeline({ onBack, onOpenDossier }) {
       </header>
 
       <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto flex-shrink-0">
-        {ETAPES_PROJET.filter(([cle]) => byEtape[cle].length > 0).map(([cle, libelle]) => (
+        {ETAPES_PROJET.filter(([cle]) => cle !== 'perdu' && byEtape[cle].length > 0).map(([cle, libelle]) => (
           <button
             key={cle}
             ref={(el) => { pillRefs.current[cle] = el }}
@@ -253,6 +259,22 @@ export default function Pipeline({ onBack, onOpenDossier }) {
             </span>
           </button>
         ))}
+        {byEtape.perdu.length > 0 && (
+          <button
+            onClick={() => {
+              setMontrerPerdus((v) => !v)
+              if (!montrerPerdus) setTimeout(() => allerA('perdu'), 100)
+            }}
+            className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 ${
+              montrerPerdus ? 'bg-accent text-white' : 'bg-carte text-texte-faible'
+            }`}
+          >
+            Perdus
+            <span className={montrerPerdus ? 'text-white/70' : 'text-texte-fantome'}>
+              {byEtape.perdu.length}
+            </span>
+          </button>
+        )}
         {nbVides > 0 && (
           <button
             onClick={() => setMontrerVides((v) => !v)}
