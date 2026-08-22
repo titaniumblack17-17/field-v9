@@ -1,10 +1,10 @@
+import { supabase } from './supabaseClient'
+
 /**
  * Un rappel du 2 mars et un rappel du 2 décembre ne demandent pas la même
  * chose. Affichés tous deux dans la même couleur et en date ISO, ils se
  * confondent : « 2026-03-02 » ne dit pas qu'on a cent soixante-treize jours
  * de retard.
- *
- * Renvoie null si aucun rappel n'est posé.
  */
 export function etatRappel(date) {
   if (!date) return null
@@ -37,30 +37,89 @@ export function etatRappel(date) {
   return { texte: `Rappel le ${affiche}`, classe: 'text-accent', echu: false }
 }
 
-/**
- * Clôt un rappel depuis Field : la date part, le journal en garde trace, et la
- * tâche Todoist est retirée.
- *
- * Sans trace au journal, un rappel qui disparaît ne dit pas s'il a été honoré
- * ou effacé par mégarde — et c'est justement ce qu'on veut pouvoir relire six
- * mois plus tard.
- */
-export async function marquerRappelFait(dossier) {
-  const { supabase } = await import('./supabaseClient')
-  const { synchroniserRappel } = await import('./todoist')
-
-  const quoi = dossier.rappel_note || dossier.titre
-  await supabase.from('dossier_notes').insert({
-    dossier_id: dossier.id,
-    texte: `Rappel fait${quoi ? ` — ${quoi}` : ''}`,
+/** Aligne la tâche Todoist d'un rappel. Ne lève jamais : un rappel qui ne part
+ *  pas ne doit pas faire échouer la saisie, seulement se signaler. */
+export async function synchroniserRappel(rappelId) {
+  const { data, error } = await supabase.functions.invoke('todoist-rappel', {
+    body: { rappelId },
   })
+  if (!error) return data
+  try {
+    const corps = await error.context?.json()
+    if (corps?.erreur) return { erreur: corps.erreur }
+  } catch {
+    /* corps illisible */
+  }
+  return { erreur: error.message }
+}
 
-  const { error } = await supabase
-    .from('dossiers')
-    .update({ rappel_date: null, rappel_note: null })
-    .eq('id', dossier.id)
+/** Rapatrie ce qui a été coché côté Todoist. */
+export async function reconcilierRappels() {
+  const { data, error } = await supabase.functions.invoke('todoist-rappel', {
+    body: { action: 'reconcilier' },
+  })
+  return error ? { erreur: error.message } : data
+}
+
+export async function ajouterRappel(dossierId, date, note) {
+  const { data, error } = await supabase
+    .from('rappels')
+    .insert({ dossier_id: dossierId, date, note: note?.trim() || null })
+    .select()
+    .single()
   if (error) return { erreur: error.message }
+  await synchroniserRappel(data.id)
+  return data
+}
 
-  // La date est déjà nulle : la fonction supprime la tâche au lieu d'en créer.
-  return synchroniserRappel(dossier.id)
+/**
+ * Clôt un rappel. Le commentaire reste attaché au rappel plutôt que de partir
+ * au journal général : c'est la suite des rappels qui se relit, et un
+ * commentaire noyé parmi les notes du dossier ne raconterait plus rien.
+ */
+export async function cloreRappel(rappelId, commentaire) {
+  const { error } = await supabase
+    .from('rappels')
+    .update({ fait_at: new Date().toISOString(), commentaire: commentaire?.trim() || null })
+    .eq('id', rappelId)
+  if (error) return { erreur: error.message }
+  // fait_at est posé : la fonction supprime la tâche au lieu d'en créer une.
+  return synchroniserRappel(rappelId)
+}
+
+/** Clôt le prochain rappel ouvert d'un dossier — utilisé depuis le Brief, qui
+ *  ne connaît que le dossier. */
+export async function cloreProchainRappel(dossierId, commentaire) {
+  const { data } = await supabase
+    .from('rappels')
+    .select('id')
+    .eq('dossier_id', dossierId)
+    .is('fait_at', null)
+    .order('date', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (!data) return { erreur: 'Aucun rappel ouvert.' }
+  return cloreRappel(data.id, commentaire)
+}
+
+/**
+ * Retire de Todoist les tâches des rappels encore ouverts sur ces dossiers.
+ *
+ * À appeler avant de supprimer un dossier ou un client : la cascade efface les
+ * rappels en base, mais Todoist continuerait de sonner pour une affaire qui
+ * n'existe plus.
+ */
+export async function retirerRappelsTodoist(dossierIds) {
+  if (!dossierIds?.length) return
+  const { data } = await supabase
+    .from('rappels')
+    .select('id')
+    .in('dossier_id', dossierIds)
+    .is('fait_at', null)
+    .not('todoist_task_id', 'is', null)
+
+  for (const r of data ?? []) {
+    await supabase.from('rappels').update({ fait_at: new Date().toISOString() }).eq('id', r.id)
+    await synchroniserRappel(r.id)
+  }
 }

@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import JaugeObjectif from '../components/JaugeObjectif'
-import { etatRappel, marquerRappelFait } from '../lib/rappel'
-import { reconcilierRappels } from '../lib/todoist'
+import { etatRappel, cloreProchainRappel, reconcilierRappels } from '../lib/rappel'
 import {
   ETAPES_PROJET,
   PLAN_STATUT_LABELS,
@@ -120,7 +119,14 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   // Retrait immédiat plutôt qu'attendre une relecture : on vient de le faire,
   // le voir rester dans « À rappeler » ferait douter que ça ait pris.
   const rappelFait = async (dossier) => {
-    const r = await marquerRappelFait(dossier)
+    // Le commentaire se demande au moment du geste : c'est là qu'on sait ce
+    // qui s'est dit, pas au prochain passage sur la fiche.
+    const commentaire = window.prompt(
+      `${dossier.rappel_note || dossier.titre || 'Rappel'}\n\nQue retenez-vous de cet appel ?`,
+      ''
+    )
+    if (commentaire === null) return
+    const r = await cloreProchainRappel(dossier.id, commentaire)
     if (r?.erreur) return
     setDossiers((cur) =>
       cur.map((d) => (d.id === dossier.id ? { ...d, rappel_date: null, rappel_note: null } : d))

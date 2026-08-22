@@ -4,7 +4,7 @@ import PersonListField from '../components/PersonListField'
 import MaterielInstalle from '../components/MaterielInstalle'
 import PiecesJointes from '../components/PiecesJointes'
 import NoteTexte from '../components/NoteTexte'
-import { synchroniserRappel } from '../lib/todoist'
+import { retirerRappelsTodoist } from '../lib/rappel'
 import {
   TYPE_LABELS,
   ETAPES_PROJET,
@@ -220,7 +220,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     // disparu.
     const { data: dossiersBase } = await supabase
       .from('dossiers')
-      .select('id, rappel_date, todoist_task_id')
+      .select('id')
       .eq('client_id', client.id)
     const dossiersReels = dossiersBase ?? []
     const ids = dossiersReels.map((d) => d.id)
@@ -267,12 +267,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
     // Les rappels poussés dans Todoist ne disparaissent pas d'eux-mêmes : sans
     // ça, ils sonneraient pour un client qui n'existe plus.
-    for (const d of dossiersReels) {
-      if (d.rappel_date || d.todoist_task_id) {
-        await supabase.from('dossiers').update({ rappel_date: null }).eq('id', d.id)
-        await synchroniserRappel(d.id)
-      }
-    }
+    await retirerRappelsTodoist(ids)
 
     // On relève les chemins avant la suppression — après, plus rien ne permet
     // de les retrouver.

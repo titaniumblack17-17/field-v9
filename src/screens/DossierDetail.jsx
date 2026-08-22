@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import ChampChoix from '../components/ChampChoix'
 import PiecesJointes from '../components/PiecesJointes'
+import Rappels from '../components/Rappels'
 import NoteTexte from '../components/NoteTexte'
-import { synchroniserRappel } from '../lib/todoist'
+import { retirerRappelsTodoist } from '../lib/rappel'
 import {
   TYPE_LABELS,
   TYPE_OPTIONS,
@@ -29,8 +30,6 @@ const CHAMPS = [
   'statut',
   'montant_estime',
   'date_installation',
-  'rappel_date',
-  'rappel_note',
   'remuneration_type',
   'commercial',
   'bloque_par',
@@ -63,14 +62,10 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
 
     setSuppression(true)
 
-    // Une fois le dossier parti, plus rien ne relie la tâche Todoist à quoi que
-    // ce soit : elle sonnerait pour un dossier introuvable. On efface donc le
-    // rappel d'abord, ce qui fait supprimer la tâche par la fonction, avant de
-    // supprimer le dossier lui-même.
-    if (dossier.rappel_date || dossier.todoist_task_id) {
-      await supabase.from('dossiers').update({ rappel_date: null }).eq('id', dossier.id)
-      await synchroniserRappel(dossier.id)
-    }
+    // Une fois le dossier parti, plus rien ne relie ses tâches Todoist à quoi
+    // que ce soit : elles sonneraient pour un dossier introuvable. La cascade
+    // efface les rappels en base, pas les tâches.
+    await retirerRappelsTodoist([dossier.id])
 
     // La cascade efface les lignes « fichiers », pas les objets du dépôt : sans
     // ce relevé, chaque dossier supprimé abandonne ses PDF, invisibles et
@@ -160,8 +155,6 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
         ? Number(values.montant_estime)
         : null,
       date_installation: values.date_installation || null,
-      rappel_date: values.rappel_date || null,
-      rappel_note: (values.rappel_note ?? '').trim() || null,
       type: values.type,
       // Le plan intégré n'a de sens que sur une vente.
       plan_statut: values.type === 'projet' ? values.plan_statut || null : null,
@@ -415,7 +408,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
 
           <div className="px-4 py-3">
             <label className="text-xs text-texte-faible" htmlFor="date_installation">
-              Date d'installation (approximative)
+              Date d'installation prévue
             </label>
             <input
               id="date_installation"
@@ -426,44 +419,12 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
             />
           </div>
 
-          <div className="px-4 py-3">
-            <label className="text-xs text-texte-faible" htmlFor="rappel_date">
-              Date de rappel
-            </label>
-            <input
-              id="rappel_date"
-              type="date"
-              value={values.rappel_date ?? ''}
-              onChange={setField('rappel_date')}
-              className="w-full text-texte outline-none bg-transparent"
-            />
-          </div>
-
-          <div className="px-4 py-3">
-            <label className="text-xs text-texte-faible" htmlFor="rappel_note">
-              Note de rappel
-            </label>
-            <input
-              id="rappel_note"
-              value={values.rappel_note ?? ''}
-              onChange={setField('rappel_note')}
-              placeholder="—"
-              className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome"
-            />
-            {todoist && (
-              <p className={`text-xs mt-1 ${todoist.erreur ? 'text-erreur' : 'text-texte-faible'}`}>
-                {todoist.erreur
-                  ? `Todoist : ${todoist.erreur}`
-                  : todoist.etat === 'supprime'
-                    ? 'Rappel retiré de Todoist.'
-                    : 'Rappel dans Todoist · 👥 Suivi clients'}
-              </p>
-            )}
-            </div>
           </div>
         </div>
 
         {error && <p className="text-erreur text-sm mt-3">{error}</p>}
+
+        <Rappels dossierId={dossier.id} />
 
         <PiecesJointes dossierId={dossier.id} onMontantChange={relireMontant} />
 
