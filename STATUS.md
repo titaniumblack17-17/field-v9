@@ -16,6 +16,19 @@ Vérifié le 22/08 depuis l'application, pas seulement en ligne de commande :
 - toutes les cibles tactiles atteignent 44 px
 - 77 clients, 75 dossiers en base
 
+## Pipeline et Brief — 22/08 après-midi
+
+- Barre d'étapes au-dessus du Kanban : libellé, nombre, appui pour s'y rendre.
+  Treize étapes peuplées faisaient sept écrans de balayage sur iPhone. La barre
+  suit le défilement, pas le dernier appui.
+- Étapes vides masquées, `Dossier perdu` replié derrière une pastille.
+- Rappels lisibles et colorés : rouge échu, orange sous huit jours, bleu au-delà.
+  Pas de vert, qui se lirait « réglé ».
+- Coche « rappel fait » dans le Brief : efface la date, retire la tâche Todoist,
+  écrit au journal.
+- SAV : quatre statuts (ouvert, en cours, en attente, clos) et un champ
+  « en attente de quoi », visible dans le Brief.
+
 ## Ce qui reste ouvert
 
 **Décisions qui vous appartiennent**
@@ -26,6 +39,14 @@ Vérifié le 22/08 depuis l'application, pas seulement en ligne de commande :
   Alakian MHC, Alakian SNC, Perez-Grassano Viso G1
 - Vider les projets Todoist `🎯 Pipeline actif` et `📐 Plans & remboursements`,
   désormais recopiés dans Field
+
+**Question de fond — alimentation du SAV**
+
+Un seul dossier SAV pour 77 clients équipés : Bruce confirme qu'il en gère
+davantage, mais qu'ils n'entrent pas dans Field. Le suivi est prêt, la section
+restera vide tant que le canal d'entrée n'est pas trouvé. Piste évoquée le
+22/08, non décidée : passer par la capture vocale, déjà utilisée debout, plutôt
+que par un écran à ouvrir.
 
 **Dette assumée**
 - `trouverExistant` (capture-intake) rapproche deux praticiens homonymes dès
