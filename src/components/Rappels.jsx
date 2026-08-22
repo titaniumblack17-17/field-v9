@@ -25,6 +25,7 @@ export default function Rappels({ dossierId }) {
   const [ouvertureForm, setOuvertureForm] = useState(false)
   const [date, setDate] = useState(aujourdhui())
   const [note, setNote] = useState('')
+  const [heure, setHeure] = useState('')
   const [enCours, setEnCours] = useState(null)
   const [historique, setHistorique] = useState(false)
   const [erreur, setErreur] = useState(null)
@@ -74,10 +75,11 @@ export default function Rappels({ dossierId }) {
     if (!date) return
     setEnCours('ajout')
     setErreur(null)
-    const r = await ajouterRappel(dossierId, date, note)
+    const r = await ajouterRappel(dossierId, date, note, heure)
     if (r?.erreur) setErreur(r.erreur)
     else {
       setNote('')
+      setHeure('')
       setDate(aujourdhui())
       setOuvertureForm(false)
     }
@@ -136,15 +138,31 @@ export default function Rappels({ dossierId }) {
 
       {ouvertureForm && (
         <div className="bg-carte rounded-xl shadow-sm divide-y divide-separateur mb-2">
-          <div className="px-4 py-3">
-            <label className="text-xs text-texte-faible" htmlFor="rappel-date">Date</label>
-            <input
-              id="rappel-date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full text-texte outline-none bg-transparent"
-            />
+          <div className="flex divide-x divide-separateur">
+            <div className="px-4 py-3 flex-1">
+              <label className="text-xs text-texte-faible" htmlFor="rappel-date">Date</label>
+              <input
+                id="rappel-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full text-texte outline-none bg-transparent"
+              />
+            </div>
+            {/* Facultative : beaucoup de relances n'ont pas d'heure convenue,
+                et en imposer une ferait sonner le téléphone pour rien. */}
+            <div className="px-4 py-3 flex-1">
+              <label className="text-xs text-texte-faible" htmlFor="rappel-heure">
+                Heure (facultative)
+              </label>
+              <input
+                id="rappel-heure"
+                type="time"
+                value={heure}
+                onChange={(e) => setHeure(e.target.value)}
+                className="w-full text-texte outline-none bg-transparent"
+              />
+            </div>
           </div>
           <div className="px-4 py-3">
             <label className="text-xs text-texte-faible" htmlFor="rappel-note">Objet</label>
@@ -175,18 +193,28 @@ export default function Rappels({ dossierId }) {
 
       <ul className="space-y-2">
         {ouverts.map((r) => {
-          const e = etatRappel(r.date)
+          const e = etatRappel(r.date, r.heure)
           return (
             <li key={r.id} className="bg-carte rounded-xl shadow-sm flex items-stretch">
               <div className="flex-1 min-w-0 px-4 py-3">
-                <TexteModifiable
-                  valeur={r.date}
-                  type="date"
-                  vide="Sans date"
-                  className={`text-sm ${e?.classe ?? 'text-texte-doux'} underline decoration-dotted underline-offset-2`}
-                  rendu={() => e?.texte}
-                  onEnregistrer={(v) => v && modifier(r, { date: v })}
-                />
+                <div className="flex items-center gap-2">
+                  <TexteModifiable
+                    valeur={r.date}
+                    type="date"
+                    vide="Sans date"
+                    className={`text-sm ${e?.classe ?? 'text-texte-doux'} underline decoration-dotted underline-offset-2`}
+                    rendu={() => e?.texte}
+                    onEnregistrer={(v) => v && modifier(r, { date: v })}
+                  />
+                  <TexteModifiable
+                    valeur={r.heure}
+                    type="time"
+                    vide="+ heure"
+                    className="text-xs text-texte-faible underline decoration-dotted underline-offset-2 flex-shrink-0"
+                    rendu={() => ''}
+                    onEnregistrer={(v) => modifier(r, { heure: v })}
+                  />
+                </div>
                 <TexteModifiable
                   valeur={r.note}
                   placeholder="Objet du rappel"

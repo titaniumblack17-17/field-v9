@@ -6,7 +6,7 @@ import { supabase } from './supabaseClient'
  * confondent : « 2026-03-02 » ne dit pas qu'on a cent soixante-treize jours
  * de retard.
  */
-export function etatRappel(date) {
+export function etatRappel(date, heure) {
   if (!date) return null
 
   const jour = new Date(date + 'T00:00:00')
@@ -17,6 +17,9 @@ export function etatRappel(date) {
 
   const jours = Math.round((jour - aujourdhui) / 86400000)
   const affiche = jour.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+  // « 10:30:00 » en base, « 10 h 30 » à l'écran.
+  const hhmm = heure ? heure.slice(0, 5) : null
+  const a = hhmm ? ` à ${hhmm.replace(':', ' h ')}` : ''
 
   if (jours < 0) {
     const retard = -jours
@@ -27,14 +30,22 @@ export function etatRappel(date) {
     }
   }
   if (jours === 0) {
+    // Une heure passée dans la journée rend le rappel échu : c'est tout
+    // l'intérêt d'en poser une.
+    if (hhmm) {
+      const passe = new Date(`${date}T${heure}`) < new Date()
+      return passe
+        ? { texte: `En retard depuis ${hhmm.replace(':', ' h ')}`, classe: 'text-erreur font-medium', echu: true }
+        : { texte: `Aujourd'hui${a}`, classe: 'text-alerte font-medium', echu: true }
+    }
     return { texte: "À rappeler aujourd'hui", classe: 'text-alerte font-medium', echu: true }
   }
   if (jours <= 7) {
-    return { texte: `À rappeler le ${affiche}`, classe: 'text-alerte', echu: false }
+    return { texte: `À rappeler le ${affiche}${a}`, classe: 'text-alerte', echu: false }
   }
   // Bleu et non vert : le vert annonce une chose réglée. Un rappel encore à
   // honorer qui s'affiche en vert se lit « c'est fait » d'un coup d'œil.
-  return { texte: `Rappel le ${affiche}`, classe: 'text-accent', echu: false }
+  return { texte: `Rappel le ${affiche}${a}`, classe: 'text-accent', echu: false }
 }
 
 /** Aligne la tâche Todoist d'un rappel. Ne lève jamais : un rappel qui ne part
@@ -61,10 +72,10 @@ export async function reconcilierRappels() {
   return error ? { erreur: error.message } : data
 }
 
-export async function ajouterRappel(dossierId, date, note) {
+export async function ajouterRappel(dossierId, date, note, heure) {
   const { data, error } = await supabase
     .from('rappels')
-    .insert({ dossier_id: dossierId, date, note: note?.trim() || null })
+    .insert({ dossier_id: dossierId, date, heure: heure || null, note: note?.trim() || null })
     .select()
     .single()
   if (error) return { erreur: error.message }

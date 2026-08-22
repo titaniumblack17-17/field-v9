@@ -40,7 +40,7 @@ function Card({ dossier, onOpen, onMove, isDragging }) {
         </p>
       )}
       {(() => {
-        const r = etatRappel(dossier.rappel_date)
+        const r = etatRappel(dossier.rappel_date, dossier.rappel_heure)
         return r ? <p className={`text-[10px] mt-1 ${r.classe}`}>⏰ {r.texte}</p> : null
       })()}
       {/* Un plan encore dû se voit sans ouvrir le dossier : c'est du travail

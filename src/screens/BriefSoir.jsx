@@ -281,8 +281,8 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
                   key={d.id}
                   dossier={d}
                   onOuvrir={onOpenDossier}
-                  droite={etatRappel(d.rappel_date)?.texte}
-                  droiteClasse={etatRappel(d.rappel_date)?.classe}
+                  droite={etatRappel(d.rappel_date, d.rappel_heure)?.texte}
+                  droiteClasse={etatRappel(d.rappel_date, d.rappel_heure)?.classe}
                   alerte
                   onFait={rappelFait}
                 />
@@ -295,8 +295,8 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
                   key={d.id}
                   dossier={d}
                   onOuvrir={onOpenDossier}
-                  droite={etatRappel(d.rappel_date)?.texte}
-                  droiteClasse={etatRappel(d.rappel_date)?.classe}
+                  droite={etatRappel(d.rappel_date, d.rappel_heure)?.texte}
+                  droiteClasse={etatRappel(d.rappel_date, d.rappel_heure)?.classe}
                   onFait={rappelFait}
                 />
               ))}
