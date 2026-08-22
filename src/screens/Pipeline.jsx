@@ -101,6 +101,48 @@ export default function Pipeline({ onBack, onOpenDossier }) {
   const [activeDrag, setActiveDrag] = useState(null)
   const [aDeplacer, setADeplacer] = useState(null)
   const colRefs = useRef({})
+  // Treize étapes peuplées font sept écrans de balayage sur un iPhone. Les
+  // étapes vides s'effacent, et la barre ci-dessous permet d'atteindre
+  // n'importe laquelle d'un geste au lieu de les traverser toutes.
+  const [montrerVides, setMontrerVides] = useState(false)
+
+  // Étape actuellement à gauche de l'écran. Suivre le défilement plutôt que le
+  // dernier appui : sans ça, un balayage à la main laisserait la barre
+  // désigner une étape qu'on a quittée.
+  const [etapeVue, setEtapeVue] = useState(null)
+  const zoneRef = useRef(null)
+  const pillRefs = useRef({})
+
+  const suivreDefilement = () => {
+    const zone = zoneRef.current
+    if (!zone) return
+    const bord = zone.getBoundingClientRect().left
+    let proche = null
+    let ecart = Infinity
+    for (const [cle, el] of Object.entries(colRefs.current)) {
+      if (!el?.isConnected) continue
+      const d = Math.abs(el.getBoundingClientRect().left - bord)
+      if (d < ecart) { ecart = d; proche = cle }
+    }
+    if (proche && proche !== etapeVue) {
+      setEtapeVue(proche)
+      pillRefs.current[proche]?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' })
+    }
+  }
+
+  // Au premier rendu, aucune étape n'est marquée tant qu'on n'a pas défilé.
+  // On désigne donc la première dès que les colonnes sont posées.
+  useEffect(() => {
+    if (dossiers.length) suivreDefilement()
+  }, [dossiers.length])
+
+  const allerA = (cle) => {
+    colRefs.current[cle]?.scrollIntoView({
+      behavior: 'smooth',
+      inline: 'start',
+      block: 'nearest',
+    })
+  }
 
   const changerEtape = async (dossier, etape) => {
     setADeplacer(null)
@@ -161,6 +203,13 @@ export default function Pipeline({ onBack, onOpenDossier }) {
     byEtape[colonne].push(d)
   })
 
+  // Une étape vide reste affichée si elle est la destination d'un glissé en
+  // cours : la faire disparaître sous le doigt rendrait le dépôt impossible.
+  const etapesVisibles = ETAPES_PROJET.filter(
+    ([cle]) => montrerVides || byEtape[cle].length > 0 || activeDrag
+  )
+  const nbVides = ETAPES_PROJET.length - ETAPES_PROJET.filter(([c]) => byEtape[c].length > 0).length
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
@@ -188,9 +237,39 @@ export default function Pipeline({ onBack, onOpenDossier }) {
         <h1 className="text-lg font-semibold text-texte">Pipeline</h1>
       </header>
 
+      <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto flex-shrink-0">
+        {ETAPES_PROJET.filter(([cle]) => byEtape[cle].length > 0).map(([cle, libelle]) => (
+          <button
+            key={cle}
+            ref={(el) => { pillRefs.current[cle] = el }}
+            onClick={() => allerA(cle)}
+            className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 transition-colors ${
+              etapeVue === cle ? 'bg-accent text-white' : 'bg-carte text-texte-doux'
+            }`}
+          >
+            {libelle}
+            <span className={etapeVue === cle ? 'text-white/70' : 'text-texte-faible'}>
+              {byEtape[cle].length}
+            </span>
+          </button>
+        ))}
+        {nbVides > 0 && (
+          <button
+            onClick={() => setMontrerVides((v) => !v)}
+            className="flex-shrink-0 h-11 px-3 rounded-full bg-carte text-accent text-xs font-medium shadow-sm flex items-center"
+          >
+            {montrerVides ? 'Masquer les vides' : `+ ${nbVides} vide${nbVides > 1 ? 's' : ''}`}
+          </button>
+        )}
+      </div>
+
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-3 px-4 pb-4 overflow-x-auto flex-1 items-start">
-          {ETAPES_PROJET.map((etape) => (
+        <div
+          ref={zoneRef}
+          onScroll={suivreDefilement}
+          className="flex gap-3 px-4 pb-4 overflow-x-auto flex-1 items-start"
+        >
+          {etapesVisibles.map((etape) => (
             <Column
               key={etape[0]}
               etape={etape}
