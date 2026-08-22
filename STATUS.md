@@ -1,60 +1,53 @@
-# Field V9 — état
+# Field V9 — état au 22/08/2026
 
-Dernière relecture : 21/08/2026.
+## Phase 1 — Fiche client : terminée
 
-## Ce qui tourne
+Test de sortie de la spec — « je crée un client sur le Mac, il apparaît sur
+l'iPhone sans action manuelle » — satisfait depuis le 20/08 par les
+abonnements temps réel Supabase.
 
-- **Clients / dossiers** — liste, recherche, fiche toujours éditable, suppression.
-- **Pipeline** — Kanban 16 étapes, glisser-déposer et bouton « Déplacer ».
-- **Capture** — dictée iOS ou clavier → Edge Function `capture-intake`.
-  Rapproche un praticien déjà enregistré au lieu d'en créer un second.
-- **Dossiers** — Projet / SAV / Plan, avec le cycle de vie des plans
-  (à planifier → en cours → envoyé → installé → règlement demandé → soldé)
-  et le commercial pour qui le plan est fait.
-- **Pièces jointes** — PDF et images, dépôt privé, liens signés.
-- **Devis** — Edge Function `devis-montant` lit le total TTC d'un PDF joint à
-  un dossier ; un déclencheur recalcule le montant du dossier.
-- **Todoist** — les rappels partent et reviennent (`todoist-rappel`),
-  réconciliation à l'ouverture du Brief soir.
-- **Brief soir** — rappels, plans, règlements, jauge d'objectif annuel.
+La fiche porte : identité du praticien et du cabinet, adresse, quatre moyens
+de contact, associés et assistantes, matériel installé, pièces jointes,
+dossiers liés, informations annexes, journal des captures, et suppression.
 
-## Bugs connus non résolus
+Vérifié le 22/08 depuis l'application, pas seulement en ligne de commande :
+- suppression d'un client → dossiers, notes, matériel et fichiers effacés,
+  objets retirés du dépôt, tâche Todoist du rappel supprimée
+- toutes les cibles tactiles atteignent 44 px
+- 77 clients, 75 dossiers en base
 
-### 🟡 Homonymes fusionnés à la capture
-`capture-intake` rapproche sur le nom quand l'un des deux prénoms est absent.
-Beaucoup de fiches n'ont pas de prénom : deux praticiens de même nom peuvent
-être fusionnés à tort. Resserrer coûterait l'inverse — recréer des doublons
-sur une dictée refaite. À trancher quand le cas se présentera.
+## Ce qui reste ouvert
 
-### 🟡 Cibles tactiles de l'en-tête
-Les pastilles Brief / Pipeline / Capture / + font 36 px de haut, sous les 44 px
-recommandés. Larges, donc utilisables, mais à revoir si des ratés surviennent.
+**Décisions qui vous appartiennent**
+- Doublons à trancher : `Matheu` / `Matheu-Cohen`, `Alakian` / `Patrice Alakian`
+- Cumul des devis à cocher : Pricop (995 € affiché au lieu de 193 635 €),
+  Alakian (1 150 + 8 290)
+- Cinq devis à variantes, montant à saisir à la main : Grunberg, Mimoune,
+  Alakian MHC, Alakian SNC, Perez-Grassano Viso G1
+- Vider les projets Todoist `🎯 Pipeline actif` et `📐 Plans & remboursements`,
+  désormais recopiés dans Field
 
-### 🟢 Montant figé quand le dernier devis part
-`recalculer_montant_dossier` ne remet pas le montant à null si tous les devis
-chiffrés sont retirés : la saisie manuelle est préservée, mais un montant venu
-d'un devis supprimé subsiste.
+**Dette assumée**
+- `trouverExistant` (capture-intake) rapproche deux praticiens homonymes dès
+  que l'un des deux n'a pas de prénom enregistré. Avec beaucoup de fiches sans
+  prénom, le risque de fusion abusive est réel — non corrigé pour ne pas
+  recréer l'inverse, la duplication silencieuse.
+- `recalculer_montant_dossier` ne remet pas le montant à null quand le dernier
+  devis chiffré est supprimé : la saisie manuelle antérieure est préservée.
+- Sept dossiers en finition portent une date de clôture approximative
+  (rattrapage du 21/08, faute de date d'installation connue).
 
-### 🟢 Lecture d'un devis : une à deux minutes
-Sur un PDF de plusieurs mégaoctets. L'écran n'affiche qu'un « Lecture du
-devis… » sans progression.
+## Bugs corrigés le 22/08
 
-## Données à compléter
-
-- **5 devis en abstention motivée** (Grunberg, Mimoune, Alakian ×2,
-  Perez-Grassano Viso) : plusieurs scénarios chiffrés, aucun désigné.
-  Le montant retenu est à saisir à la main.
-- **Cumul à cocher** — Pricop (Anthos 192 640 € écrasé par Dental Art 995 €)
-  et Alakian (1 150 + 8 290).
-- **5 clients signés sans dossier sur le disque** : CHSF, Magalhaes,
-  MonOrtho Argenteuil, MonOrtho Champigny, Oliveira.
-- **Doublons de fiches** : Najm (celle de 13:53:57 est vide), Matheu vs
-  Matheu-Cohen, Alakian vs Patrice Alakian.
-
-## Non fait, volontairement
-
-- **Pas de tableau de bord.** Cinq graphiques sur cinq dossiers chiffrés
-  auraient l'air sérieux sans rien apprendre.
-- **Projets Todoist « 🎯 Pipeline actif » et « 📐 Plans & remboursements »
-  laissés intacts.** Leur contenu est importé dans Field ; les vider attend
-  un accord explicite.
+- **CORS des fonctions Edge** — `todoist-rappel` et `devis-montant`
+  n'autorisaient pas `x-client-info`, ajouté par supabase-js. Le contrôle
+  préalable échouait et l'appel mourait en « Failed to fetch ». Rappels,
+  réconciliation du Brief et lecture des devis étaient morts depuis l'app,
+  tout en fonctionnant en curl — ce qui les rendait invisibles.
+- **ClientDetail dupliqué cinq fois** — un remplacement de texte non borné
+  avait recopié la fonction de suppression à chaque `return (` du fichier,
+  dont quatre fois à l'intérieur de useEffect. 836 lignes pour 470 utiles.
+- **Suppression fondée sur l'état local** — les dossiers sont relus en base
+  avant d'énumérer et de nettoyer.
+- **PDF orphelins** — la cascade efface les lignes `fichiers`, pas les objets
+  du dépôt. Relevés et retirés, après la base et non avant.
