@@ -137,7 +137,12 @@ export default function App() {
   }
 
   if (view.name === 'capture') {
-    return <Capture onBack={back} />
+    return (
+      <Capture
+        onBack={back}
+        onOpenClient={(client) => replace({ name: 'detail', client })}
+      />
+    )
   }
 
   if (view.name === 'brief') {

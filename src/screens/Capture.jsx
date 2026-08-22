@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import ChoixClient from '../components/ChoixClient'
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/capture-intake`
 
@@ -9,6 +10,15 @@ export default function Capture({ onBack, onOpenClient }) {
   const [error, setError] = useState(null)
   const [lastResult, setLastResult] = useState(null)
   const [unclassified, setUnclassified] = useState([])
+  // Capture en attente d'un client : la feuille de sélection s'ouvre dessus.
+  const [aRelier, setARelier] = useState(null)
+  const [clientTouche, setClientTouche] = useState(null)
+
+  const relier = async (capture, client) => {
+    setARelier(null)
+    await supabase.from('captures').update({ client_id: client.id }).eq('id', capture.id)
+    setUnclassified((cur) => cur.filter((c) => c.id !== capture.id))
+  }
 
   useEffect(() => {
     let active = true
@@ -69,6 +79,18 @@ export default function Capture({ onBack, onOpenClient }) {
       if (!res.ok) throw new Error(data.error || 'Erreur inconnue')
       setLastResult(data)
       setTexte('')
+      // La fonction renvoie l'identifiant du client concerné ; sans son nom,
+      // « fiche complétée » ne dit pas laquelle.
+      if (data.client_id) {
+        const { data: c } = await supabase
+          .from('clients')
+          .select('id, prenom_praticien, nom_praticien, ville')
+          .eq('id', data.client_id)
+          .maybeSingle()
+        setClientTouche(c ?? null)
+      } else {
+        setClientTouche(null)
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -115,11 +137,27 @@ export default function Capture({ onBack, onOpenClient }) {
             {lastResult.info_manquante && (
               <p className="text-sm text-alerte mt-1">⚠ {lastResult.info_manquante}</p>
             )}
-            {lastResult.client_created && (
-              <p className="text-sm text-accent mt-1">✓ Nouvelle fiche créée</p>
+            {clientTouche && (
+              <button
+                onClick={() => onOpenClient?.(clientTouche)}
+                className="text-sm text-accent mt-2 font-medium text-left"
+              >
+                {lastResult.client_created
+                  ? '✓ Fiche créée'
+                  : lastResult.client_enrichi
+                    ? '✓ Fiche complétée'
+                    : '✓ Rattaché'}
+                {' · '}
+                {[clientTouche.prenom_praticien, clientTouche.nom_praticien]
+                  .filter(Boolean)
+                  .join(' ')}
+                {' →'}
+              </button>
             )}
-            {!lastResult.client_id && !lastResult.client_created && (
-              <p className="text-sm text-alerte mt-1">⚠ Client non identifié</p>
+            {!lastResult.client_id && (
+              <p className="text-sm text-alerte mt-1">
+                ⚠ Client non identifié — à relier ci-dessous
+              </p>
             )}
           </div>
         )}
@@ -134,12 +172,30 @@ export default function Capture({ onBack, onOpenClient }) {
                   {c.info_manquante && (
                     <p className="text-xs text-alerte mt-1">⚠ {c.info_manquante}</p>
                   )}
+                  <div className="flex items-center gap-3 mt-2">
+                    <p className="text-xs text-texte-faible flex-1">
+                      {new Date(c.created_at).toLocaleDateString('fr-FR')}
+                    </p>
+                    <button
+                      onClick={() => setARelier(c)}
+                      className="text-accent text-xs font-medium h-9 px-1"
+                    >
+                      Relier à un client
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
           </div>
         )}
       </main>
+
+      {aRelier && (
+        <ChoixClient
+          onChoisir={(client) => relier(aRelier, client)}
+          onFermer={() => setARelier(null)}
+        />
+      )}
     </div>
   )
 }
