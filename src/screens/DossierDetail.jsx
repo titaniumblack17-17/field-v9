@@ -44,7 +44,6 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
   const [addingNote, setAddingNote] = useState(false)
   const [suppression, setSuppression] = useState(false)
   // Compte rendu du dernier envoi vers Todoist : { etat } ou { erreur }.
-  const [todoist, setTodoist] = useState(null)
   // Le journal complet est replié : on veut voir qu'il existe, pas le lire
   // en entier chaque fois qu'on ouvre le dossier.
   const [toutesNotes, setToutesNotes] = useState(false)
@@ -185,13 +184,6 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
     }
 
     Object.assign(dossier, data)
-
-    // Le rappel a pu naître, changer de date ou disparaître : on réaligne la
-    // tâche Todoist. Après l'enregistrement, jamais avant — Todoist ne doit
-    // pas annoncer un rappel que la base n'a pas accepté.
-    const rappel = await synchroniserRappel(dossier.id)
-    setTodoist(rappel)
-    if (!rappel?.erreur) dossier.todoist_task_id = rappel?.taskId ?? null
     setValues({ ...data })
   }
 
