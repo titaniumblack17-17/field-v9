@@ -75,7 +75,7 @@ export default function MaterielInstalle({ clientId }) {
     <div className="mt-4">
       <div className="flex items-center justify-between px-1 mb-2">
         <p className="text-xs text-texte-faible">Matériel installé</p>
-        <button onClick={() => setOuvert((o) => !o)} className="text-accent text-sm font-medium">
+        <button onClick={() => setOuvert((o) => !o)} className="text-accent text-sm font-medium h-11 px-2 -mr-2 inline-flex items-center">
           {ouvert ? 'Fermer' : '+ Ajouter'}
         </button>
       </div>

@@ -179,7 +179,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
         <button
           onClick={() => champFichier.current?.click()}
           disabled={envoi}
-          className="text-accent text-sm font-medium disabled:opacity-50"
+          className="text-accent text-sm font-medium h-11 px-2 -mr-2 inline-flex items-center disabled:opacity-50"
         >
           {envoi ? 'Envoi…' : '+ Ajouter'}
         </button>

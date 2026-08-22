@@ -92,26 +92,26 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
             <button
               onClick={onBrief}
               aria-label="Brief soir"
-              className="px-3 h-9 rounded-full bg-carte text-accent text-sm font-medium shadow"
+              className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-medium shadow"
             >
               Brief
             </button>
             <button
               onClick={onPipeline}
-              className="px-3 h-9 rounded-full bg-carte text-accent text-sm font-medium shadow"
+              className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-medium shadow"
             >
               Pipeline
             </button>
             <button
               onClick={onCapture}
-              className="px-3 h-9 rounded-full bg-carte text-accent text-sm font-medium shadow"
+              className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-medium shadow"
             >
               Capture
             </button>
             <button
               onClick={onCreate}
               aria-label="Nouveau client"
-              className="w-9 h-9 flex-shrink-0 rounded-full bg-accent text-white text-xl leading-none flex items-center justify-center shadow"
+              className="w-11 h-11 flex-shrink-0 rounded-full bg-accent text-white text-xl leading-none flex items-center justify-center shadow"
             >
               +
             </button>

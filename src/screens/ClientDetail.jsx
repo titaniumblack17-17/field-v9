@@ -346,7 +346,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
         <div className="mt-4">
           <div className="flex items-center justify-between px-1 mb-2">
             <p className="text-xs text-texte-faible">Dossiers</p>
-            <button onClick={() => onNewDossier(client)} className="text-accent text-sm font-medium">
+            <button onClick={() => onNewDossier(client)} className="text-accent text-sm font-medium h-11 px-2 -mr-2 inline-flex items-center">
               + Nouveau dossier
             </button>
           </div>
