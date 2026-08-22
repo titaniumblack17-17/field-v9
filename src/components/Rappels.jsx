@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { etatRappel, ajouterRappel, cloreRappel } from '../lib/rappel'
+import {
+  etatRappel,
+  ajouterRappel,
+  cloreRappel,
+  synchroniserRappel,
+} from '../lib/rappel'
+import TexteModifiable from './TexteModifiable'
 
 const aujourdhui = () => new Date().toISOString().slice(0, 10)
 
@@ -92,6 +98,20 @@ export default function Rappels({ dossierId }) {
     setEnCours(null)
   }
 
+  // Corriger une faute de frappe, préciser l'objet, décaler la date : tout ce
+  // qui a été saisi doit pouvoir se reprendre. Un changement de date ou d'objet
+  // se répercute sur la tâche Todoist.
+  const modifier = async (rappel, champs) => {
+    const { error } = await supabase.from('rappels').update(champs).eq('id', rappel.id)
+    if (error) {
+      setErreur(error.message)
+      return
+    }
+    if (!rappel.fait_at && ('date' in champs || 'note' in champs)) {
+      await synchroniserRappel(rappel.id)
+    }
+  }
+
   const supprimer = async (rappel) => {
     if (!window.confirm(`Supprimer le rappel du ${leJour(rappel.date)} sans le marquer fait ?`)) return
     await supabase.from('rappels').delete().eq('id', rappel.id)
@@ -159,8 +179,21 @@ export default function Rappels({ dossierId }) {
           return (
             <li key={r.id} className="bg-carte rounded-xl shadow-sm flex items-stretch">
               <div className="flex-1 min-w-0 px-4 py-3">
-                <p className={`text-sm ${e?.classe ?? 'text-texte-doux'}`}>{e?.texte}</p>
-                {r.note && <p className="text-texte mt-0.5">{r.note}</p>}
+                <TexteModifiable
+                  valeur={r.date}
+                  type="date"
+                  vide="Sans date"
+                  className={`text-sm ${e?.classe ?? 'text-texte-doux'} underline decoration-dotted underline-offset-2`}
+                  rendu={() => e?.texte}
+                  onEnregistrer={(v) => v && modifier(r, { date: v })}
+                />
+                <TexteModifiable
+                  valeur={r.note}
+                  placeholder="Objet du rappel"
+                  vide="Ajouter un objet"
+                  className="text-texte"
+                  onEnregistrer={(v) => modifier(r, { note: v })}
+                />
               </div>
               <button
                 onClick={() => supprimer(r)}
@@ -198,7 +231,16 @@ export default function Rappels({ dossierId }) {
                     {leJour(r.date)} · fait le {leJour(r.fait_at)}
                   </p>
                   {r.note && <p className="text-sm text-texte-doux">{r.note}</p>}
-                  {r.commentaire && <p className="text-sm text-texte mt-1">{r.commentaire}</p>}
+                  <div className="mt-1">
+                    <TexteModifiable
+                      valeur={r.commentaire}
+                      placeholder="Ce que vous en retenez"
+                      vide="Ajouter un commentaire"
+                      multiligne
+                      className="text-sm text-texte"
+                      onEnregistrer={(v) => modifier(r, { commentaire: v })}
+                    />
+                  </div>
                 </li>
               ))}
             </ul>

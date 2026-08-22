@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import TexteModifiable from './TexteModifiable'
 
 const vide = { marque: '', modele: '', annee: '', quantite: '', note: '' }
 
@@ -61,6 +62,12 @@ export default function MaterielInstalle({ clientId }) {
     setSaisie(vide)
     setOuvert(false)
     setEnregistre(false)
+  }
+
+  // Une marque mal orthographiée ou une année corrigée ne doivent pas obliger
+  // à supprimer la ligne et à la ressaisir.
+  const modifier = async (id, champs) => {
+    await supabase.from('materiel').update(champs).eq('id', id)
   }
 
   const supprimer = async (id) => {
@@ -159,17 +166,34 @@ export default function MaterielInstalle({ clientId }) {
             return (
               <li key={m.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm flex items-start gap-3">
                 <div className="flex-1 min-w-0">
-                  <p className="text-texte font-medium">
-                    {m.quantite && m.quantite > 1 ? `${m.quantite} × ` : ''}
-                    {[m.marque, m.modele].filter(Boolean).join(' ')}
+                  <div className="flex items-baseline gap-1.5">
+                    {m.quantite && m.quantite > 1 && (
+                      <span className="text-texte font-medium">{m.quantite} ×</span>
+                    )}
+                    <TexteModifiable
+                      valeur={[m.marque, m.modele].filter(Boolean).join(' ') || null}
+                      placeholder="Marque et modèle"
+                      vide="Sans désignation"
+                      className="text-texte font-medium"
+                      onEnregistrer={(v) => {
+                        const [marque, ...reste] = (v ?? '').split(' ')
+                        return modifier(m.id, {
+                          marque: marque || null,
+                          modele: reste.join(' ') || null,
+                        })
+                      }}
+                    />
+                  </div>
+                  <p className="text-sm text-texte-doux">
+                    {m.annee ? `${m.annee}${age != null ? ` · ${age} an${age > 1 ? 's' : ''}` : ''} · ` : ''}
                   </p>
-                  {(m.annee || m.note) && (
-                    <p className="text-sm text-texte-doux">
-                      {m.annee ? `${m.annee}${age != null ? ` · ${age} an${age > 1 ? 's' : ''}` : ''}` : ''}
-                      {m.annee && m.note ? ' · ' : ''}
-                      {m.note ?? ''}
-                    </p>
-                  )}
+                  <TexteModifiable
+                    valeur={m.note}
+                    placeholder="État, salle, à remplacer…"
+                    vide="Ajouter une note"
+                    className="text-sm text-texte-doux"
+                    onEnregistrer={(v) => modifier(m.id, { note: v })}
+                  />
                 </div>
                 <button
                   onClick={() => supprimer(m.id)}

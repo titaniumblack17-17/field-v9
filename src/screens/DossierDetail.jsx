@@ -4,6 +4,7 @@ import ChampChoix from '../components/ChampChoix'
 import PiecesJointes from '../components/PiecesJointes'
 import Rappels from '../components/Rappels'
 import NoteTexte from '../components/NoteTexte'
+import TexteModifiable from '../components/TexteModifiable'
 import { retirerRappelsTodoist } from '../lib/rappel'
 import {
   TYPE_LABELS,
@@ -47,6 +48,14 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
   // Le journal complet est replié : on veut voir qu'il existe, pas le lire
   // en entier chaque fois qu'on ouvre le dossier.
   const [toutesNotes, setToutesNotes] = useState(false)
+  const [noteEnEdition, setNoteEnEdition] = useState(null)
+
+  const supprimerNote = async (note) => {
+    const extrait = note.texte.length > 60 ? note.texte.slice(0, 60) + '…' : note.texte
+    if (!window.confirm(`Supprimer cette note ?\n\n« ${extrait} »`)) return
+    await supabase.from('dossier_notes').delete().eq('id', note.id)
+    setNotes((cur) => cur.filter((n) => n.id !== note.id))
+  }
 
   const s = styleDossier(values)
 
@@ -214,6 +223,11 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
             if (payload.eventType === 'INSERT') {
               if (current.some((n) => n.id === payload.new.id)) return current
               return [payload.new, ...current]
+            }
+            // Une note corrigée arrive en UPDATE : sans ce cas, l'écran
+            // gardait l'ancien texte alors que la base avait le nouveau.
+            if (payload.eventType === 'UPDATE') {
+              return current.map((n) => (n.id === payload.new.id ? payload.new : n))
             }
             if (payload.eventType === 'DELETE') {
               return current.filter((n) => n.id !== payload.old.id)
@@ -454,8 +468,22 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
             <ul className="space-y-2">
               {(toutesNotes ? notes : notes.slice(0, APERCU_NOTES)).map((n) => (
                 <li key={n.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
-                  <NoteTexte texte={n.texte} />
-                  <p className="text-xs text-texte-faible mt-1">
+                  {noteEnEdition === n.id ? (
+                    <TexteModifiable
+                      valeur={n.texte}
+                      multiligne
+                      ouvertParDefaut
+                      className="text-texte text-sm"
+                      onFermer={() => setNoteEnEdition(null)}
+                      onEnregistrer={async (v) => {
+                        if (v) await supabase.from('dossier_notes').update({ texte: v }).eq('id', n.id)
+                      }}
+                    />
+                  ) : (
+                    <NoteTexte texte={n.texte} />
+                  )}
+                  <div className="flex items-center gap-3 mt-1">
+                  <p className="text-xs text-texte-faible flex-1">
                     {new Date(n.created_at).toLocaleString('fr-FR', {
                       day: '2-digit',
                       month: '2-digit',
@@ -464,6 +492,21 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
                       minute: '2-digit',
                     })}
                   </p>
+                  {noteEnEdition !== n.id && (
+                    <button
+                      onClick={() => setNoteEnEdition(n.id)}
+                      className="text-accent text-xs font-medium h-9 px-1"
+                    >
+                      Modifier
+                    </button>
+                  )}
+                  <button
+                    onClick={() => supprimerNote(n)}
+                    className="text-texte-fantome text-xs h-9 px-1"
+                  >
+                    Supprimer
+                  </button>
+                  </div>
                 </li>
               ))}
             </ul>
