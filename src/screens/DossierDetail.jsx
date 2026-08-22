@@ -33,6 +33,7 @@ const CHAMPS = [
   'rappel_note',
   'remuneration_type',
   'commercial',
+  'bloque_par',
 ]
 
 export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
@@ -167,6 +168,11 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
       remuneration_type: values.type === 'plan' ? values.remuneration_type || null : null,
       // Un projet ou un SAV n'est fait pour personne d'autre que Bruce.
       commercial: values.type === 'plan' ? values.commercial || null : null,
+      // Ce qui bloque n'a de sens que sur un SAV en attente.
+      bloque_par:
+        values.type === 'sav' && values.statut === 'en_attente'
+          ? (values.bloque_par ?? '').trim() || null
+          : null,
       // Un dossier qui n'est plus un SAV n'a plus de projet d'origine.
       projet_source_id: values.type === 'sav' ? dossier.projet_source_id ?? null : null,
     }
@@ -335,13 +341,29 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
           )}
 
           {values.type === 'sav' && (
-            <ChampChoix
-              id="statut"
-              label="Statut"
-              value={values.statut ?? ''}
-              options={STATUTS_SAV}
-              onChange={(v) => setValues((x) => ({ ...x, statut: v }))}
-            />
+            <>
+              <ChampChoix
+                id="statut"
+                label="Statut"
+                value={values.statut ?? ''}
+                options={STATUTS_SAV}
+                onChange={(v) => setValues((x) => ({ ...x, statut: v }))}
+              />
+              {values.statut === 'en_attente' && (
+                <div className="px-4 py-3">
+                  <label className="text-xs text-texte-faible" htmlFor="bloque_par">
+                    En attente de quoi
+                  </label>
+                  <input
+                    id="bloque_par"
+                    value={values.bloque_par ?? ''}
+                    onChange={setField('bloque_par')}
+                    placeholder="Pièce, devis fournisseur, décision du praticien…"
+                    className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome"
+                  />
+                </div>
+              )}
+            </>
           )}
 
           {values.type === 'plan' && (

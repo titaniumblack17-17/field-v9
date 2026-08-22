@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import JaugeObjectif from '../components/JaugeObjectif'
-import { etatRappel } from '../lib/rappel'
+import { etatRappel, marquerRappelFait } from '../lib/rappel'
 import { reconcilierRappels } from '../lib/todoist'
 import {
   ETAPES_PROJET,
   PLAN_STATUT_LABELS,
   STATUTS_PLAN_LABELS,
+  STATUTS_SAV_LABELS,
   PLAN_SANS_COMMERCIAL,
   TYPE_LABELS,
   styleDossier,
@@ -42,14 +43,25 @@ const nomClient = (c) =>
 
 const libelleEtape = (v) => ETAPES_PROJET.find(([k]) => k === v)?.[1] ?? v
 
-function Ligne({ dossier, onOuvrir, droite, alerte }) {
+function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTitre }) {
   const s = styleDossier(dossier)
+  const [enCours, setEnCours] = useState(false)
+
+  const fait = async (e) => {
+    e.stopPropagation()
+    setEnCours(true)
+    await onFait(dossier)
+    setEnCours(false)
+  }
+
   return (
-    <li>
+    <li
+      style={{ borderColor: s.bordure }}
+      className="bg-carte rounded-xl shadow-sm border-l-[7px] flex items-stretch"
+    >
       <button
         onClick={() => onOuvrir(dossier)}
-        style={{ borderColor: s.bordure }}
-        className="w-full text-left bg-carte rounded-xl px-4 py-3 shadow-sm border-l-[7px] active:scale-[0.98] transition flex items-center gap-3"
+        className="flex-1 min-w-0 text-left px-4 py-3 active:scale-[0.98] transition flex items-center gap-3"
       >
         <div className="flex-1 min-w-0">
           <p className="font-medium text-texte truncate">{nomClient(dossier.clients)}</p>
@@ -57,16 +69,34 @@ function Ligne({ dossier, onOuvrir, droite, alerte }) {
             {dossier.commercial ? `${dossier.commercial} · ` : ''}
             {dossier.titre || TYPE_LABELS[dossier.type]}
           </p>
+          {sousTitre && <p className="text-xs text-alerte mt-0.5">{sousTitre}</p>}
           {PLAN_SANS_COMMERCIAL(dossier) && (
             <p className="text-xs text-alerte mt-0.5">Commercial à préciser</p>
           )}
         </div>
         {droite && (
-          <span className={`text-sm flex-shrink-0 ${alerte ? 'text-alerte font-medium' : 'text-texte-doux'}`}>
+          // Une couleur fournie l'emporte : un retard doit rester rouge même
+          // dans une section dont le défaut est orange.
+          <span
+            className={`text-sm flex-shrink-0 text-right ${
+              droiteClasse ?? (alerte ? 'text-alerte font-medium' : 'text-texte-doux')
+            }`}
+          >
             {droite}
           </span>
         )}
       </button>
+      {onFait && (
+        <button
+          onClick={fait}
+          disabled={enCours}
+          aria-label="Marquer le rappel comme fait"
+          title="Rappel fait"
+          className="w-14 flex-shrink-0 flex items-center justify-center text-texte-fantome text-xl active:text-accent disabled:opacity-40 border-l border-separateur"
+        >
+          {enCours ? '…' : '✓'}
+        </button>
+      )}
     </li>
   )
 }
@@ -86,6 +116,16 @@ function Section({ titre, compte, vide, children }) {
 export default function BriefSoir({ onBack, onOpenDossier }) {
   const [dossiers, setDossiers] = useState([])
   const [chargement, setChargement] = useState(true)
+
+  // Retrait immédiat plutôt qu'attendre une relecture : on vient de le faire,
+  // le voir rester dans « À rappeler » ferait douter que ça ait pris.
+  const rappelFait = async (dossier) => {
+    const r = await marquerRappelFait(dossier)
+    if (r?.erreur) return
+    setDossiers((cur) =>
+      cur.map((d) => (d.id === dossier.id ? { ...d, rappel_date: null, rappel_note: null } : d))
+    )
+  }
 
   useEffect(() => {
     let actif = true
@@ -214,15 +254,13 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
                   key={d.id}
                   dossier={d}
                   onOuvrir={onOpenDossier}
-                  droite={
-                    d.created_at
-                      ? `ouvert le ${new Date(d.created_at).toLocaleDateString('fr-FR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                        })}`
+                  droite={STATUTS_SAV_LABELS[d.statut] ?? d.statut}
+                  alerte={d.statut !== 'en_attente'}
+                  sousTitre={
+                    d.statut === 'en_attente'
+                      ? `En attente${d.bloque_par ? ` — ${d.bloque_par}` : ' — motif à préciser'}`
                       : null
                   }
-                  alerte
                 />
               ))}
             </Section>
@@ -238,7 +276,9 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
                   dossier={d}
                   onOuvrir={onOpenDossier}
                   droite={etatRappel(d.rappel_date)?.texte}
+                  droiteClasse={etatRappel(d.rappel_date)?.classe}
                   alerte
+                  onFait={rappelFait}
                 />
               ))}
             </Section>
@@ -250,6 +290,8 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
                   dossier={d}
                   onOuvrir={onOpenDossier}
                   droite={etatRappel(d.rappel_date)?.texte}
+                  droiteClasse={etatRappel(d.rappel_date)?.classe}
+                  onFait={rappelFait}
                 />
               ))}
             </Section>

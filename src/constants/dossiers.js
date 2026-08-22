@@ -60,10 +60,17 @@ export const STATUTS_PLAN = [
 
 export const STATUTS_PLAN_LABELS = Object.fromEntries(STATUTS_PLAN)
 
+// Un SAV se règle parfois sur place, parfois en plusieurs semaines, parfois
+// jamais faute d'une pièce. « En attente » est le plus coûteux des trois : il
+// ne réclame rien, et le praticien attend pendant ce temps.
 export const STATUTS_SAV = [
   ['ouvert', 'Ouvert'],
+  ['en_cours', 'En cours'],
+  ['en_attente', 'En attente'],
   ['clos', 'Clos'],
 ]
+
+export const STATUTS_SAV_LABELS = Object.fromEntries(STATUTS_SAV)
 
 // Les commerciaux pour qui Bruce produit des plans. BDS, c'est lui : un plan
 // à son propre nom est intégré à sa vente, pas facturé.
