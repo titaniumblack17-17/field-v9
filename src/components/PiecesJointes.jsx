@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import TexteModifiable from './TexteModifiable'
 
 const TAILLE_MAX = 25 * 1024 * 1024
 
@@ -27,9 +26,6 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   // Identifiants des PDF en cours de lecture, pour n'afficher l'attente que
   // sur la ligne concernée.
   const [analyse, setAnalyse] = useState(() => new Set())
-  // Les noms produits par un téléphone — « IMG_2409 », « document(3) » — ne
-  // disent rien six mois plus tard.
-  const [renommage, setRenommage] = useState(null)
   const [erreur, setErreur] = useState(null)
   const champFichier = useRef(null)
 
@@ -224,19 +220,11 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
               <span className="text-lg flex-shrink-0" aria-hidden="true">
                 {estPdf(f.type_mime) ? '📄' : '🖼️'}
               </span>
-              <div className="flex-1 min-w-0">
-              {renommage === f.id ? (
-                <TexteModifiable
-                  valeur={f.nom}
-                  ouvertParDefaut
-                  className="text-texte"
-                  onFermer={() => setRenommage(null)}
-                  onEnregistrer={async (v) => {
-                    if (v) await supabase.from('fichiers').update({ nom: v }).eq('id', f.id)
-                  }}
-                />
-              ) : (
-                <button onClick={() => ouvrir(f)} className="w-full min-w-0 text-left">
+              {/* Le nom vient du fichier déposé et n'est pas modifiable ici :
+                  la nomenclature de Bruce sur son Mac fait autorité, et un nom
+                  changé dans Field créerait un écart avec ses dossiers iCloud
+                  — exactement la divergence qu'on cherche à supprimer. */}
+              <button onClick={() => ouvrir(f)} className="flex-1 min-w-0 text-left">
                 <p className="text-texte truncate">{f.nom}</p>
                 <p className="text-xs text-texte-faible">
                   {[lisible(f.taille), new Date(f.created_at).toLocaleDateString('fr-FR')]
@@ -259,9 +247,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                 {!analyse.has(f.id) && f.analyse_erreur && (
                   <p className="text-xs text-alerte mt-0.5">{f.analyse_erreur}</p>
                 )}
-                </button>
-              )}
-              </div>
+              </button>
               <div className="flex flex-col items-end gap-1 flex-shrink-0">
                 <button
                   onClick={() => supprimer(f)}
@@ -270,14 +256,6 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                 >
                   ×
                 </button>
-                {renommage !== f.id && (
-                  <button
-                    onClick={() => setRenommage(f.id)}
-                    className="text-texte-fantome text-[11px] h-9 px-2 -mr-2 flex items-center"
-                  >
-                    Renommer
-                  </button>
-                )}
                 {dossierId && estPdf(f.type_mime) && !analyse.has(f.id) && (
                   <button
                     onClick={() => lireDevis(f)}
