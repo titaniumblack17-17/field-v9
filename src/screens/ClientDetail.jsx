@@ -4,6 +4,7 @@ import PersonListField from '../components/PersonListField'
 import MaterielInstalle from '../components/MaterielInstalle'
 import PiecesJointes from '../components/PiecesJointes'
 import NoteTexte from '../components/NoteTexte'
+import TexteModifiable from '../components/TexteModifiable'
 import { retirerRappelsTodoist } from '../lib/rappel'
 import {
   TYPE_LABELS,
@@ -65,6 +66,15 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   const [dossiers, setDossiers] = useState([])
   const [suppression, setSuppression] = useState(false)
   const [toutLeJournal, setToutLeJournal] = useState(false)
+  const [captureEnEdition, setCaptureEnEdition] = useState(null)
+  const [dicteeVisible, setDicteeVisible] = useState(null)
+
+  const supprimerCapture = async (capture) => {
+    const extrait = (capture.resume || capture.texte || '').slice(0, 60)
+    if (!window.confirm(`Supprimer cette entrée du journal ?\n\n« ${extrait}… »`)) return
+    await supabase.from('captures').delete().eq('id', capture.id)
+    setJournal((cur) => cur.filter((c) => c.id !== capture.id))
+  }
 
   const setField = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }))
 
@@ -417,11 +427,59 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
             <ul className="space-y-2">
               {(toutLeJournal ? journal : journal.slice(0, 2)).map((c) => (
                 <li key={c.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
-                  <NoteTexte texte={c.resume || c.texte} />
-                  <p className="text-xs text-texte-faible mt-1">
-                    {new Date(c.created_at).toLocaleDateString('fr-FR')}
-                    {c.date_evenement ? ` · échéance ${c.date_evenement}` : ''}
-                  </p>
+                  {captureEnEdition === c.id ? (
+                    <TexteModifiable
+                      valeur={c.resume || c.texte}
+                      multiligne
+                      ouvertParDefaut
+                      className="text-texte text-sm"
+                      onFermer={() => setCaptureEnEdition(null)}
+                      onEnregistrer={async (v) => {
+                        if (v) await supabase.from('captures').update({ resume: v }).eq('id', c.id)
+                      }}
+                    />
+                  ) : (
+                    <NoteTexte texte={c.resume || c.texte} />
+                  )}
+
+                  {/* La dictée brute est la trace de ce qui a été dit sur le
+                      terrain : consultable, jamais corrigée. Quand le résumé
+                      se trompe, elle dit pourquoi. */}
+                  {dicteeVisible === c.id && c.texte && c.texte !== c.resume && (
+                    <p className="text-xs text-texte-faible mt-2 pl-2 border-l-2 border-separateur italic">
+                      {c.texte}
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-3 mt-1">
+                    <p className="text-xs text-texte-faible flex-1">
+                      {new Date(c.created_at).toLocaleDateString('fr-FR')}
+                      {c.date_evenement ? ` · échéance ${c.date_evenement}` : ''}
+                    </p>
+                    {c.texte && c.texte !== c.resume && (
+                      <button
+                        onClick={() => setDicteeVisible((v) => (v === c.id ? null : c.id))}
+                        className="text-texte-fantome text-xs h-9 px-1"
+                      >
+                        {dicteeVisible === c.id ? 'Masquer' : 'Dictée'}
+                      </button>
+                    )}
+                    {captureEnEdition !== c.id && (
+                      <button
+                        onClick={() => setCaptureEnEdition(c.id)}
+                        className="text-accent text-xs font-medium h-9 px-1"
+                      >
+                        Modifier
+                      </button>
+                    )}
+                    <button
+                      onClick={() => supprimerCapture(c)}
+                      className="text-texte-fantome text-xs h-9 px-1"
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+
                   {c.info_manquante && (
                     <p className="text-xs text-alerte mt-1">⚠ {c.info_manquante}</p>
                   )}
