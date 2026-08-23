@@ -5,6 +5,7 @@ import MaterielInstalle from '../components/MaterielInstalle'
 import PiecesJointes from '../components/PiecesJointes'
 import NoteTexte from '../components/NoteTexte'
 import TexteModifiable from '../components/TexteModifiable'
+import ChoixClient from '../components/ChoixClient'
 import { retirerRappelsTodoist } from '../lib/rappel'
 import {
   TYPE_LABELS,
@@ -68,6 +69,8 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   const [toutLeJournal, setToutLeJournal] = useState(false)
   const [captureEnEdition, setCaptureEnEdition] = useState(null)
   const [dicteeVisible, setDicteeVisible] = useState(null)
+  const [aFusionner, setAFusionner] = useState(false)
+  const [fusion, setFusion] = useState(false)
 
   const supprimerCapture = async (capture) => {
     const extrait = (capture.resume || capture.texte || '').slice(0, 60)
@@ -306,6 +309,86 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     onBack()
   }
 
+  // Fusionner deux fiches d'un même praticien : tout ce qui pointait vers
+  // celle-ci (dossiers, matériel, pièces jointes, journal) est rebasculé sur
+  // la fiche choisie, puis celle-ci disparaît. Le choix de la cible et la
+  // confirmation restent manuels, cas par cas — jamais de fusion automatique.
+  const fusionner = async (cible) => {
+    setAFusionner(false)
+    setFusion(true)
+    setError(null)
+
+    const { data: cibleComplete } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('id', cible.id)
+      .single()
+
+    const { data: dossiersReels } = await supabase
+      .from('dossiers')
+      .select('id')
+      .eq('client_id', client.id)
+    const compter = async (table) =>
+      (await supabase.from(table).select('id', { count: 'exact', head: true }).eq('client_id', client.id))
+        .count ?? 0
+    const [nbMateriel, nbFichiers, nbCaptures] = await Promise.all([
+      compter('materiel'),
+      compter('fichiers'),
+      compter('captures'),
+    ])
+
+    const nomCible = [cibleComplete?.prenom_praticien, cibleComplete?.nom_praticien]
+      .filter(Boolean)
+      .join(' ')
+    const pluriel = (n, mot, pluriels) => `${n} ${n > 1 ? pluriels : mot}`
+    const emporte = [
+      dossiersReels?.length && pluriel(dossiersReels.length, 'dossier', 'dossiers'),
+      nbMateriel && pluriel(nbMateriel, 'équipement', 'équipements'),
+      nbFichiers && pluriel(nbFichiers, 'pièce jointe', 'pièces jointes'),
+      nbCaptures && pluriel(nbCaptures, 'entrée de journal', 'entrées de journal'),
+    ].filter(Boolean)
+
+    const message = `Fusionner « ${nomComplet} » dans « ${nomCible} » ?${
+      emporte.length ? ` ${emporte.join(', ')} seront transférés vers « ${nomCible} ».` : ''
+    } « ${nomComplet} » sera ensuite supprimée. Cette action est irréversible.`
+
+    if (!window.confirm(message)) {
+      setFusion(false)
+      return
+    }
+
+    await Promise.all([
+      supabase.from('dossiers').update({ client_id: cible.id }).eq('client_id', client.id),
+      supabase.from('materiel').update({ client_id: cible.id }).eq('client_id', client.id),
+      supabase.from('fichiers').update({ client_id: cible.id }).eq('client_id', client.id),
+      supabase.from('captures').update({ client_id: cible.id }).eq('client_id', client.id),
+    ])
+
+    const notesFusionnees = [cibleComplete?.notes, values.notes]
+      .map((n) => (n ?? '').trim())
+      .filter(Boolean)
+      .join('\n\n---\n\n')
+
+    await supabase
+      .from('clients')
+      .update({
+        associes: cleanPeople([...(cibleComplete?.associes ?? []), ...associes]),
+        assistantes: cleanPeople([...(cibleComplete?.assistantes ?? []), ...assistantes]),
+        notes: notesFusionnees || null,
+      })
+      .eq('id', cible.id)
+
+    const { error: err } = await supabase.from('clients').delete().eq('id', client.id)
+    if (err) {
+      setFusion(false)
+      setError(err.message)
+      return
+    }
+
+    onDirtyChange?.(false)
+    onBack()
+  }
+
   return (
     <div className="min-h-screen bg-fond">
       <header className="sticky top-0 z-10 bg-fond/90 backdrop-blur px-4 pt-6 pb-4 flex items-center gap-3">
@@ -490,7 +573,14 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
         )}
         {/* Discret et en fin de fiche : une suppression ne doit pas se cliquer
             par réflexe en descendant la page. */}
-        <div className="mt-8 pt-4 border-t border-separateur">
+        <div className="mt-8 pt-4 border-t border-separateur space-y-1">
+          <button
+            onClick={() => setAFusionner(true)}
+            disabled={fusion}
+            className="w-full text-accent text-sm font-medium py-3 disabled:opacity-50"
+          >
+            {fusion ? 'Fusion…' : 'Fusionner avec une autre fiche'}
+          </button>
           <button
             onClick={supprimer}
             disabled={suppression}
@@ -500,6 +590,15 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           </button>
         </div>
       </main>
+
+      {aFusionner && (
+        <ChoixClient
+          titre="Fusionner avec…"
+          excludeId={client.id}
+          onChoisir={fusionner}
+          onFermer={() => setAFusionner(false)}
+        />
+      )}
 
       {dirty && (
         <div className="fixed bottom-0 inset-x-0 bg-fond/95 backdrop-blur border-t border-bordure px-4 py-3 flex gap-2">
