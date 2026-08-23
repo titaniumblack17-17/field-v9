@@ -25,7 +25,9 @@ Il a une double casquette : vendeur (ses propres affaires) et technicien
 
 **Clients** — liste avec recherche (nom, cabinet, ville), fiche directement
 éditable sans mode édition, associés et assistantes, matériel installé,
-pièces jointes, informations annexes, journal des captures, suppression.
+pièces jointes, informations annexes, journal des captures, suppression, et
+fusion de deux fiches en une (dossiers, matériel, pièces jointes et journal
+rebasculés, notes et associés concaténés, fiche source supprimée).
 
 **Capture** — dictée ou clavier, analysée par `capture-intake` (Claude Haiku).
 Crée une fiche, la complète, ou rattache une note à un client existant. Les
@@ -106,6 +108,10 @@ Secrets : `FIELD_EDGE_API_KEY` (Anthropic), `TODOIST_TOKEN`.
 - `npm run build` lance ESLint avant Vite. `no-undef` en erreur : un appel vers
   une fonction disparue ne peut plus être déployé.
 
+> Deux sessions Claude ont travaillé sur ce dépôt le 22/08. Vérifier
+> `git log` avant de reprendre : la fusion de fiches et la décision SAV
+> viennent d'une branche parallèle.
+
 ## Chiffres au 22/08/2026
 
 76 clients · 56 projets, 18 plans, 1 SAV · 8 rappels ouverts · 17 pièces
@@ -114,15 +120,17 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
 
 ## Ce qui reste ouvert
 
-1. **Trois décisions qui appartiennent à Bruce**
-   - Doublons `Matheu` / `Matheu-Cohen` et `Alakian` / `Patrice Alakian`
+1. **Décisions qui appartiennent à Bruce**
+   - Doublons `Matheu` / `Matheu-Cohen` et `Alakian` / `Patrice Alakian` — l'outil
+     de fusion existe désormais, l'appariement reste à valider cas par cas
    - Cumuls de devis à cocher : Pricop affiche 995 € au lieu de 193 635 €
      (Anthos 192 640 + Dental Art 995), Alakian 8 290 au lieu de 9 440
    - Vider ou non les deux projets Todoist recopiés dans Field
 2. **Alimentation du SAV** — un seul dossier pour 76 clients équipés. Bruce en
-   gère davantage mais ils n'entrent pas dans Field. Piste évoquée, non tranchée :
-   passer par la capture vocale. Le suivi est prêt, la section restera vide sans
-   canal d'entrée.
+   gère davantage mais ils n'entrent pas dans Field. Canal tranché le 22/08 :
+   la **Capture rapide au clavier**, dont la dictée native suffit — le Raccourci
+   iOS est abandonné (conflit NordVPN, absent du Mac). Reste à construire le
+   mode guidé de saisie d'un SAV.
 3. **5 devis non lus** par la fonction, tous à raison : ils proposent plusieurs
    variantes chiffrées (Grunberg 4 études, Mimoune 3, Alakian 2 fois) et le
    modèle refuse de choisir. Montants à saisir à la main.
