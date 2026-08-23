@@ -44,9 +44,12 @@ Vérifié le 22/08 depuis l'application, pas seulement en ligne de commande :
 
 Un seul dossier SAV pour 77 clients équipés : Bruce confirme qu'il en gère
 davantage, mais qu'ils n'entrent pas dans Field. Le suivi est prêt, la section
-restera vide tant que le canal d'entrée n'est pas trouvé. Piste évoquée le
-22/08, non décidée : passer par la capture vocale, déjà utilisée debout, plutôt
-que par un écran à ouvrir.
+restera vide tant que le canal d'entrée n'est pas trouvé.
+
+Décidé le 23/08 : le canal, c'est Capture rapide (`Capture.jsx`), déjà en
+clavier natif — donc dictée via le clavier système, sans Raccourci iOS.
+Raison : le Raccourci butait sur NordVPN, ne marchait pas sur Mac, et
+bloquait le mode guidé. Reste à construire : le mode guidé lui-même.
 
 **Dette assumée**
 - `trouverExistant` (capture-intake) rapproche deux praticiens homonymes dès
