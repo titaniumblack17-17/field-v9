@@ -14,7 +14,7 @@ const sansAccent = (v) =>
  * attend qu'on lui désigne sa fiche. Sans ce choix, la liste « à relier »
  * n'était qu'un constat.
  */
-export default function ChoixClient({ titre = 'Relier à un client', onChoisir, onFermer }) {
+export default function ChoixClient({ titre = 'Relier à un client', onChoisir, onFermer, excludeId }) {
   const [clients, setClients] = useState([])
   const [recherche, setRecherche] = useState('')
 
@@ -28,15 +28,16 @@ export default function ChoixClient({ titre = 'Relier à un client', onChoisir, 
 
   const resultats = useMemo(() => {
     const q = sansAccent(recherche).trim()
-    if (!q) return clients.slice(0, 40)
-    return clients
+    const base = excludeId ? clients.filter((c) => c.id !== excludeId) : clients
+    if (!q) return base.slice(0, 40)
+    return base
       .filter((c) =>
         sansAccent(
           [c.prenom_praticien, c.nom_praticien, c.nom_cabinet, c.ville].filter(Boolean).join(' ')
         ).includes(q)
       )
       .slice(0, 40)
-  }, [clients, recherche])
+  }, [clients, recherche, excludeId])
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40" onClick={onFermer}>
