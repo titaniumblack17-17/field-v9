@@ -36,7 +36,7 @@ const CHAMPS = [
   'bloque_par',
 ]
 
-export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
+export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenClient }) {
   const [values, setValues] = useState(() => ({ ...dossier }))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -201,6 +201,27 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
     setError(null)
   }
 
+  // Le dossier peut arriver de plusieurs écrans (Pipeline, Brief, fiche
+  // client), qui ne joignent pas tous le client. On le relit nous-mêmes :
+  // sans lui, rien à l'écran ne dit de qui est ce dossier.
+  const [client, setClient] = useState(dossier.clients ?? null)
+
+  useEffect(() => {
+    if (client || !dossier.client_id) return
+    let actif = true
+    supabase
+      .from('clients')
+      .select('id, prenom_praticien, nom_praticien, nom_cabinet, ville')
+      .eq('id', dossier.client_id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (actif) setClient(data)
+      })
+    return () => {
+      actif = false
+    }
+  }, [dossier.client_id])
+
   useEffect(() => {
     let active = true
 
@@ -259,6 +280,21 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange }) {
           ← Retour
         </button>
       </header>
+
+      {/* Repère permanent : sans lui, rien ne dit de qui est ce dossier une
+          fois qu'on a défilé au-delà du titre. Cliquable — c'est un lien vers
+          la fiche, pas juste une étiquette. */}
+      {client && (
+        <div className="px-4 -mt-2 mb-1">
+          <button
+            onClick={() => onOpenClient?.(client)}
+            className="text-accent text-sm font-medium truncate max-w-full"
+          >
+            {[client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ')}
+            {client.ville ? ` · ${client.ville}` : ''}
+          </button>
+        </div>
+      )}
 
       <main className={`px-4 ${dirty ? 'pb-28' : 'pb-8'}`}>
         <div className="flex items-center gap-2 mb-2">

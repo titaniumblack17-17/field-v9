@@ -175,7 +175,14 @@ export default function App() {
   }
 
   if (view.name === 'dossier-detail') {
-    return <DossierDetail dossier={view.dossier} onBack={back} onDirtyChange={signalerModif} />
+    return (
+      <DossierDetail
+        dossier={view.dossier}
+        onBack={back}
+        onDirtyChange={signalerModif}
+        onOpenClient={(client) => push({ name: 'detail', client })}
+      />
+    )
   }
 
   return (
