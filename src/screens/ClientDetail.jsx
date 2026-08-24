@@ -68,6 +68,27 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   const [suppression, setSuppression] = useState(false)
   const [toutLeJournal, setToutLeJournal] = useState(false)
   const [captureEnEdition, setCaptureEnEdition] = useState(null)
+  const [infosAnnexes, setInfosAnnexes] = useState([])
+  const [ajoutInfoOuvert, setAjoutInfoOuvert] = useState(false)
+  const [nouvelleInfo, setNouvelleInfo] = useState('')
+  const [envoiInfo, setEnvoiInfo] = useState(false)
+  const [infoEnEdition, setInfoEnEdition] = useState(null)
+
+  const ajouterInfo = async () => {
+    if (!nouvelleInfo.trim()) return
+    setEnvoiInfo(true)
+    await supabase.from('client_notes').insert({ client_id: client.id, texte: nouvelleInfo.trim() })
+    setNouvelleInfo('')
+    setAjoutInfoOuvert(false)
+    setEnvoiInfo(false)
+  }
+
+  const supprimerInfo = async (info) => {
+    const extrait = info.texte.length > 60 ? info.texte.slice(0, 60) + '…' : info.texte
+    if (!window.confirm(`Supprimer cette entrée ?\n\n« ${extrait} »`)) return
+    await supabase.from('client_notes').delete().eq('id', info.id)
+    setInfosAnnexes((cur) => cur.filter((i) => i.id !== info.id))
+  }
   const [dicteeVisible, setDicteeVisible] = useState(null)
   const [aFusionner, setAFusionner] = useState(false)
   const [fusion, setFusion] = useState(false)
@@ -82,7 +103,9 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   const setField = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }))
 
   const dirty = useMemo(() => {
-    const champs = [...FIELDS.map(([k]) => k), 'notes'].some(
+    // « notes » n'est plus édité ici : c'est désormais une liste d'entrées
+    // horodatées (client_notes), pas un champ du formulaire.
+    const champs = FIELDS.map(([k]) => k).some(
       (k) => (values[k] ?? '') !== (client[k] ?? '')
     )
     const gens =
@@ -107,7 +130,6 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     const update = Object.fromEntries(
       FIELDS.map(([k]) => [k, (values[k] ?? '').trim() || null])
     )
-    update.notes = (values.notes ?? '').trim() || null
     update.associes = cleanPeople(associes)
     update.assistantes = cleanPeople(assistantes)
 
@@ -176,6 +198,46 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     return () => {
       active = false
       supabase.removeChannel(channel)
+    }
+  }, [client.id])
+
+  useEffect(() => {
+    let actif = true
+
+    supabase
+      .from('client_notes')
+      .select('*')
+      .eq('client_id', client.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (actif) setInfosAnnexes(data ?? [])
+      })
+
+    const canal = supabase
+      .channel(`client-notes-${client.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'client_notes', filter: `client_id=eq.${client.id}` },
+        (payload) => {
+          setInfosAnnexes((cur) => {
+            if (payload.eventType === 'INSERT') {
+              return cur.some((i) => i.id === payload.new.id) ? cur : [payload.new, ...cur]
+            }
+            if (payload.eventType === 'UPDATE') {
+              return cur.map((i) => (i.id === payload.new.id ? payload.new : i))
+            }
+            if (payload.eventType === 'DELETE') {
+              return cur.filter((i) => i.id !== payload.old.id)
+            }
+            return cur
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      actif = false
+      supabase.removeChannel(canal)
     }
   }, [client.id])
 
@@ -331,10 +393,11 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     const compter = async (table) =>
       (await supabase.from(table).select('id', { count: 'exact', head: true }).eq('client_id', client.id))
         .count ?? 0
-    const [nbMateriel, nbFichiers, nbCaptures] = await Promise.all([
+    const [nbMateriel, nbFichiers, nbCaptures, nbInfos] = await Promise.all([
       compter('materiel'),
       compter('fichiers'),
       compter('captures'),
+      compter('client_notes'),
     ])
 
     const nomCible = [cibleComplete?.prenom_praticien, cibleComplete?.nom_praticien]
@@ -346,6 +409,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       nbMateriel && pluriel(nbMateriel, 'équipement', 'équipements'),
       nbFichiers && pluriel(nbFichiers, 'pièce jointe', 'pièces jointes'),
       nbCaptures && pluriel(nbCaptures, 'entrée de journal', 'entrées de journal'),
+      nbInfos && pluriel(nbInfos, 'information annexe', 'informations annexes'),
     ].filter(Boolean)
 
     const message = `Fusionner « ${nomComplet} » dans « ${nomCible} » ?${
@@ -362,19 +426,16 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       supabase.from('materiel').update({ client_id: cible.id }).eq('client_id', client.id),
       supabase.from('fichiers').update({ client_id: cible.id }).eq('client_id', client.id),
       supabase.from('captures').update({ client_id: cible.id }).eq('client_id', client.id),
+      // Les informations annexes suivent le même chemin que le reste :
+      // transférées, pas concaténées dans un blob.
+      supabase.from('client_notes').update({ client_id: cible.id }).eq('client_id', client.id),
     ])
-
-    const notesFusionnees = [cibleComplete?.notes, values.notes]
-      .map((n) => (n ?? '').trim())
-      .filter(Boolean)
-      .join('\n\n---\n\n')
 
     await supabase
       .from('clients')
       .update({
         associes: cleanPeople([...(cibleComplete?.associes ?? []), ...associes]),
         assistantes: cleanPeople([...(cibleComplete?.assistantes ?? []), ...assistantes]),
-        notes: notesFusionnees || null,
       })
       .eq('id', cible.id)
 
@@ -502,16 +563,87 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           )}
         </div>
 
-        <div className="bg-carte rounded-xl shadow-sm mt-4 px-4 py-3">
-          <p className="text-xs text-texte-faible mb-1">
-            Informations annexes (mail, SMS, ou toute autre info à coller)
-          </p>
-          <textarea
-            value={values.notes ?? ''}
-            onChange={setField('notes')}
-            rows={6}
-            className="w-full text-texte outline-none bg-transparent resize-none"
-          />
+        <div className="mt-4">
+          <div className="flex items-baseline justify-between px-1 mb-2">
+            <p className="text-xs text-texte-faible">
+              Informations annexes{infosAnnexes.length > 0 ? ` · ${infosAnnexes.length}` : ''}
+            </p>
+            <button
+              onClick={() => setAjoutInfoOuvert((v) => !v)}
+              className="text-accent text-sm font-medium h-11 px-2 -mr-2 inline-flex items-center"
+            >
+              {ajoutInfoOuvert ? 'Fermer' : '+ Ajouter'}
+            </button>
+          </div>
+
+          {ajoutInfoOuvert && (
+            <div className="bg-carte rounded-xl shadow-sm p-3 mb-2">
+              <textarea
+                value={nouvelleInfo}
+                onChange={(e) => setNouvelleInfo(e.target.value)}
+                rows={4}
+                placeholder="Mail, SMS, ou toute autre info à coller…"
+                className="w-full text-texte outline-none bg-transparent resize-none placeholder:text-texte-fantome"
+              />
+              <button
+                onClick={ajouterInfo}
+                disabled={envoiInfo || !nouvelleInfo.trim()}
+                className="w-full mt-2 bg-accent text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
+              >
+                {envoiInfo ? 'Enregistrement…' : 'Ajouter'}
+              </button>
+            </div>
+          )}
+
+          {infosAnnexes.length === 0 && !ajoutInfoOuvert && (
+            <p className="text-texte-faible text-sm px-1">Aucune information annexe.</p>
+          )}
+
+          <ul className="space-y-2">
+            {infosAnnexes.map((info) => (
+              <li key={info.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
+                {infoEnEdition === info.id ? (
+                  <TexteModifiable
+                    valeur={info.texte}
+                    multiligne
+                    ouvertParDefaut
+                    className="text-texte text-sm"
+                    onFermer={() => setInfoEnEdition(null)}
+                    onEnregistrer={async (v) => {
+                      if (v) await supabase.from('client_notes').update({ texte: v }).eq('id', info.id)
+                    }}
+                  />
+                ) : (
+                  <NoteTexte texte={info.texte} />
+                )}
+                <div className="flex items-center gap-3 mt-1">
+                  <p className="text-xs text-texte-faible flex-1">
+                    {new Date(info.created_at).toLocaleString('fr-FR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                  {infoEnEdition !== info.id && (
+                    <button
+                      onClick={() => setInfoEnEdition(info.id)}
+                      className="text-accent text-xs font-medium h-9 px-1"
+                    >
+                      Modifier
+                    </button>
+                  )}
+                  <button
+                    onClick={() => supprimerInfo(info)}
+                    className="text-texte-fantome text-xs h-9 px-1"
+                  >
+                    Supprimer
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
 
         {journal.length > 0 && (
