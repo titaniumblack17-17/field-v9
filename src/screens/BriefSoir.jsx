@@ -155,8 +155,40 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
         }
       })
 
+    // Seul écran de l'app sans abonnement temps réel jusqu'ici : un rappel
+    // clos sur l'iPhone restait visible sur un onglet Mac déjà ouvert, sans
+    // aucun moyen de le savoir sans recharger. Un dossier suffit à recevoir
+    // le reflet (rappel_date/heure/note) posé par le déclencheur en base ;
+    // pas besoin d'écouter la table rappels séparément.
+    const canal = supabase
+      .channel('brief-dossiers')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dossiers' },
+        (payload) => {
+          setDossiers((cur) => {
+            if (payload.eventType === 'INSERT') {
+              return cur.some((d) => d.id === payload.new.id) ? cur : [...cur, payload.new]
+            }
+            if (payload.eventType === 'UPDATE') {
+              // Le realtime ne renvoie pas la jointure clients : on la
+              // reprend de la ligne locale pour ne pas perdre le nom affiché.
+              return cur.map((d) =>
+                d.id === payload.new.id ? { ...payload.new, clients: d.clients } : d
+              )
+            }
+            if (payload.eventType === 'DELETE') {
+              return cur.filter((d) => d.id !== payload.old.id)
+            }
+            return cur
+          })
+        }
+      )
+      .subscribe()
+
     return () => {
       actif = false
+      supabase.removeChannel(canal)
     }
   }, [])
 
