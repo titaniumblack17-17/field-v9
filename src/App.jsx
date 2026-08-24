@@ -141,6 +141,7 @@ export default function App() {
       <Capture
         onBack={back}
         onOpenClient={(client) => replace({ name: 'detail', client })}
+        onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
       />
     )
   }

@@ -2,9 +2,46 @@ import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import ChoixClient from '../components/ChoixClient'
 
+function SuggestionSav({ capture, enCours, onCreer, onIgnorer, onOuvrir }) {
+  if (!capture.sav_suggere || capture.sav_dossier_id) return null
+  if (!capture.client_id) {
+    return (
+      <p className="text-xs text-alerte mt-2">
+        ⚠ Ressemble à un SAV, mais reliez d'abord un client pour créer le dossier.
+      </p>
+    )
+  }
+  return (
+    <div className="bg-alerte/10 border border-alerte/30 rounded-xl px-3 py-2 mt-2">
+      <p className="text-sm text-texte">
+        🔧 Ressemble à un SAV : {capture.sav_titre || 'à préciser'}
+      </p>
+      <div className="flex gap-3 mt-1">
+        <button
+          onClick={async () => {
+            const d = await onCreer(capture)
+            if (d) onOuvrir?.(d)
+          }}
+          disabled={enCours}
+          className="text-accent text-sm font-medium h-9 disabled:opacity-50"
+        >
+          {enCours ? 'Création…' : 'Créer le dossier SAV'}
+        </button>
+        <button
+          onClick={() => onIgnorer(capture)}
+          disabled={enCours}
+          className="text-texte-faible text-sm h-9"
+        >
+          Ce n'est pas un SAV
+        </button>
+      </div>
+    </div>
+  )
+}
+
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/capture-intake`
 
-export default function Capture({ onBack, onOpenClient }) {
+export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
   const [texte, setTexte] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(null)
@@ -13,6 +50,46 @@ export default function Capture({ onBack, onOpenClient }) {
   // Capture en attente d'un client : la feuille de sélection s'ouvre dessus.
   const [aRelier, setARelier] = useState(null)
   const [clientTouche, setClientTouche] = useState(null)
+  const [creationSav, setCreationSav] = useState(null)
+
+  // Le dossier SAV n'est jamais créé tout seul : la dictée ne fait que le
+  // proposer. C'est Bruce qui confirme, comme pour un rappel ou une fusion.
+  const creerSav = async (capture) => {
+    if (!capture.client_id) return
+    setCreationSav(capture.id)
+    const { data: dossier, error: errDossier } = await supabase
+      .from('dossiers')
+      .insert({
+        client_id: capture.client_id,
+        type: 'sav',
+        statut: 'ouvert',
+        titre: capture.sav_titre || capture.resume || 'SAV',
+      })
+      .select()
+      .single()
+
+    if (!errDossier) {
+      // La dictée brute part au journal du dossier : c'est elle qui garde le
+      // détail exact, le titre n'en est qu'un résumé.
+      await supabase.from('dossier_notes').insert({
+        dossier_id: dossier.id,
+        texte: capture.texte,
+      })
+      await supabase.from('captures').update({ sav_dossier_id: dossier.id }).eq('id', capture.id)
+    }
+    setCreationSav(null)
+    return errDossier ? null : dossier
+  }
+
+  // « Ce n'est pas un SAV » : on ne repropose plus, sans rien créer. Mise à
+  // jour locale d'abord (retrait immédiat du bandeau), écriture ensuite.
+  const ignorerSav = async (capture) => {
+    setLastResult((r) => (r?.id === capture.id ? { ...r, sav_suggere: false } : r))
+    setUnclassified((cur) =>
+      cur.map((c) => (c.id === capture.id ? { ...c, sav_suggere: false } : c))
+    )
+    await supabase.from('captures').update({ sav_suggere: false }).eq('id', capture.id)
+  }
 
   const relier = async (capture, client) => {
     setARelier(null)
@@ -159,6 +236,13 @@ export default function Capture({ onBack, onOpenClient }) {
                 ⚠ Client non identifié — à relier ci-dessous
               </p>
             )}
+            <SuggestionSav
+              capture={lastResult}
+              enCours={creationSav === lastResult.id}
+              onCreer={creerSav}
+              onIgnorer={ignorerSav}
+              onOuvrir={onOpenDossier}
+            />
           </div>
         )}
 
@@ -172,6 +256,12 @@ export default function Capture({ onBack, onOpenClient }) {
                   {c.info_manquante && (
                     <p className="text-xs text-alerte mt-1">⚠ {c.info_manquante}</p>
                   )}
+                  <SuggestionSav
+                    capture={c}
+                    enCours={creationSav === c.id}
+                    onCreer={creerSav}
+                    onIgnorer={ignorerSav}
+                  />
                   <div className="flex items-center gap-3 mt-2">
                     <p className="text-xs text-texte-faible flex-1">
                       {new Date(c.created_at).toLocaleDateString('fr-FR')}
