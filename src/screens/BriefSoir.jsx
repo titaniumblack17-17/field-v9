@@ -42,7 +42,7 @@ const nomClient = (c) =>
 
 const libelleEtape = (v) => ETAPES_PROJET.find(([k]) => k === v)?.[1] ?? v
 
-function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTitre }) {
+function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTitre, ligneSecondaire }) {
   const s = styleDossier(dossier)
   const [enCours, setEnCours] = useState(false)
 
@@ -66,7 +66,10 @@ function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTi
           <p className="font-medium text-texte truncate">{nomClient(dossier.clients)}</p>
           <p className="text-sm text-texte-doux truncate">
             {dossier.commercial ? `${dossier.commercial} · ` : ''}
-            {dossier.titre || TYPE_LABELS[dossier.type]}
+            {/* Le titre du dossier est souvent vide ou générique
+                (« Projet de vente ») : sur un rappel, ce qui compte, c'est
+                l'objet de l'appel, pas le type du dossier. */}
+            {ligneSecondaire || dossier.titre || TYPE_LABELS[dossier.type]}
           </p>
           {sousTitre && <p className="text-xs text-alerte mt-0.5">{sousTitre}</p>}
           {PLAN_SANS_COMMERCIAL(dossier) && (
@@ -283,6 +286,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
                   onOuvrir={onOpenDossier}
                   droite={etatRappel(d.rappel_date, d.rappel_heure)?.texte}
                   droiteClasse={etatRappel(d.rappel_date, d.rappel_heure)?.classe}
+                  ligneSecondaire={d.rappel_note}
                   alerte
                   onFait={rappelFait}
                 />
@@ -297,6 +301,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
                   onOuvrir={onOpenDossier}
                   droite={etatRappel(d.rappel_date, d.rappel_heure)?.texte}
                   droiteClasse={etatRappel(d.rappel_date, d.rappel_heure)?.classe}
+                  ligneSecondaire={d.rappel_note}
                   onFait={rappelFait}
                 />
               ))}

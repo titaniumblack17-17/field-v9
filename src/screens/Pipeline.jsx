@@ -41,7 +41,18 @@ function Card({ dossier, onOpen, onMove, isDragging }) {
       )}
       {(() => {
         const r = etatRappel(dossier.rappel_date, dossier.rappel_heure)
-        return r ? <p className={`text-[10px] mt-1 ${r.classe}`}>⏰ {r.texte}</p> : null
+        if (!r) return null
+        return (
+          <div className="mt-1">
+            <p className={`text-[10px] ${r.classe}`}>⏰ {r.texte}</p>
+            {/* Le compte à rebours seul ne dit pas de quoi il s'agit : sans
+                l'objet, un rappel en retard oblige à ouvrir la fiche pour
+                se souvenir de ce qu'il fallait faire. */}
+            {dossier.rappel_note && (
+              <p className="text-[10px] text-texte-doux truncate">{dossier.rappel_note}</p>
+            )}
+          </div>
+        )
       })()}
       {/* Un plan encore dû se voit sans ouvrir le dossier : c'est du travail
           technique à produire, pas un simple attribut. */}
