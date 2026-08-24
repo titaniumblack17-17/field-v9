@@ -391,16 +391,22 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
   return (
     <div className="min-h-screen bg-fond">
-      <header className="sticky top-0 z-10 bg-fond/90 backdrop-blur px-4 pt-6 pb-4 flex items-center gap-3">
+      {/* Le nom doit rester visible en permanence : c'est en descendant vers
+          Pièces jointes, sans lui sous les yeux, qu'un fichier a fini sur la
+          mauvaise fiche. « ← Clients » seul seule ne le dit pas. */}
+      <header className="sticky top-0 z-10 bg-fond/90 backdrop-blur px-4 pt-6 pb-2 flex items-center gap-3">
         <button
           onClick={onBack}
-          className="text-accent text-sm font-medium h-11 -ml-2 pl-2 pr-1 flex items-center"
+          className="text-accent text-sm font-medium h-11 -ml-2 pl-2 pr-1 flex items-center flex-shrink-0"
         >
           ← Clients
         </button>
+        <p className="text-texte font-semibold truncate">
+          {[values.prenom_praticien, values.nom_praticien].filter(Boolean).join(' ') || 'Client'}
+        </p>
       </header>
 
-      <main className={`px-4 ${dirty ? 'pb-28' : 'pb-8'}`}>
+      <main className={`px-4 pt-2 ${dirty ? 'pb-28' : 'pb-8'}`}>
         <h1 className="text-2xl font-semibold text-texte mb-4">
           {[client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ') || 'Client'}
         </h1>
