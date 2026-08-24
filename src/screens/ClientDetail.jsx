@@ -6,7 +6,7 @@ import PiecesJointes from '../components/PiecesJointes'
 import NoteTexte from '../components/NoteTexte'
 import TexteModifiable from '../components/TexteModifiable'
 import ChoixClient from '../components/ChoixClient'
-import { retirerRappelsTodoist } from '../lib/rappel'
+import { retirerRappelsTodoist, etatRappel } from '../lib/rappel'
 import {
   TYPE_LABELS,
   ETAPES_PROJET,
@@ -474,6 +474,20 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                         {libelleStatut(d)}
                         {d.montant_estime != null ? ` · ${d.montant_estime} €` : ''}
                       </p>
+                      {/* Les rappels vivent sur le dossier, jamais remontés
+                          jusqu'ici : rien sur la fiche client ne disait qu'un
+                          de ses dossiers en portait un. La donnée était déjà
+                          chargée (select('*')), il manquait juste l'affichage. */}
+                      {(() => {
+                        const r = etatRappel(d.rappel_date, d.rappel_heure)
+                        if (!r) return null
+                        return (
+                          <p className={`text-xs mt-1 ${r.classe}`}>
+                            ⏰ {r.texte}
+                            {d.rappel_note ? ` · ${d.rappel_note}` : ''}
+                          </p>
+                        )
+                      })()}
                     </button>
                   </li>
                 )
