@@ -255,12 +255,15 @@ Modifier `package.json` — dans `"scripts"`, ajouter une entrée `test` :
     "build": "eslint src && vite build",
     "preview": "vite preview",
     "lint": "eslint src",
-    "test": "node --test scripts/lib"
+    "test": "node --test 'scripts/lib/**/*.test.mjs'"
   },
 ```
 
 Run: `npm test`
-Expected: même résultat que Step 4 (7 tests réussis).
+Expected: même résultat que Step 4 (7 tests réussis). Le motif glob entre
+guillemets simples est nécessaire : `node --test scripts/lib` (chemin de
+dossier brut, sans glob) plante avec `MODULE_NOT_FOUND` sur Node 24, qui ne
+parcourt pas un simple chemin de répertoire.
 
 - [ ] **Step 6: Commit**
 
