@@ -160,6 +160,21 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
     else onMontantChange?.()
   }
 
+  // Pour un devis à variantes que le modèle refuse de trancher seul : le choix
+  // reste entre Bruce et le client, la saisie doit rester manuelle.
+  const saisirMontant = async (f, saisie) => {
+    const nombre = saisie == null ? null : Number(String(saisie).replace(',', '.').replace(/\s/g, ''))
+    if (saisie != null && (Number.isNaN(nombre) || nombre < 0)) {
+      setErreur('Montant invalide.')
+      return
+    }
+    await supabase
+      .from('fichiers')
+      .update({ montant_ttc: nombre, analyse_erreur: null })
+      .eq('id', f.id)
+    onMontantChange?.()
+  }
+
   const basculerCumul = async (f) => {
     await supabase.from('fichiers').update({ cumule: !f.cumule }).eq('id', f.id)
     onMontantChange?.()
@@ -276,6 +291,18 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                   <p className="text-xs text-alerte mt-0.5">{f.analyse_erreur}</p>
                 )}
                 </button>
+              )}
+              {f.montant_ttc == null && dossierId && estPdf(f.type_mime) && renommage !== f.id && (
+                <div onClick={(e) => e.stopPropagation()} className="mt-0.5">
+                  <TexteModifiable
+                    valeur={null}
+                    type="number"
+                    placeholder="Montant TTC en €"
+                    vide="Saisir un montant à la main"
+                    className="text-sm text-accent font-medium"
+                    onEnregistrer={(v) => saisirMontant(f, v)}
+                  />
+                </div>
               )}
               </div>
               <div className="flex flex-col items-end gap-1 flex-shrink-0">
