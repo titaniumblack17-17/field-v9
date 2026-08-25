@@ -6,6 +6,8 @@ import PiecesJointes from '../components/PiecesJointes'
 import NoteTexte from '../components/NoteTexte'
 import TexteModifiable from '../components/TexteModifiable'
 import ChoixClient from '../components/ChoixClient'
+import { SuggestionSav, SuggestionProjet } from '../components/SuggestionCapture'
+import { creerDossierDepuisSuggestion, ignorerSuggestion } from '../lib/suggestions'
 import { retirerRappelsTodoist, etatRappel } from '../lib/rappel'
 import {
   TYPE_LABELS,
@@ -92,6 +94,8 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   const [dicteeVisible, setDicteeVisible] = useState(null)
   const [aFusionner, setAFusionner] = useState(false)
   const [fusion, setFusion] = useState(false)
+  const [creationSav, setCreationSav] = useState(null)
+  const [creationProjet, setCreationProjet] = useState(null)
 
   const supprimerCapture = async (capture) => {
     const extrait = (capture.resume || capture.texte || '').slice(0, 60)
@@ -100,7 +104,53 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     setJournal((cur) => cur.filter((c) => c.id !== capture.id))
   }
 
+  // Une suggestion (SAV ou projet) ne s'affichait qu'une fois, juste après
+  // l'envoi de la dictée : en quittant l'écran, elle disparaissait sans que
+  // le dossier ne soit jamais créé. Le journal de la fiche client est
+  // permanent, donc les suggestions en attente y restent visibles.
+  const creerSav = async (capture) => {
+    setCreationSav(capture.id)
+    const dossier = await creerDossierDepuisSuggestion(capture, 'sav')
+    setCreationSav(null)
+    return dossier
+  }
+  const ignorerSav = async (capture) => {
+    setJournal((cur) => cur.map((c) => (c.id === capture.id ? { ...c, sav_suggere: false } : c)))
+    await ignorerSuggestion(capture, 'sav')
+  }
+  const creerProjet = async (capture) => {
+    setCreationProjet(capture.id)
+    const dossier = await creerDossierDepuisSuggestion(capture, 'projet')
+    setCreationProjet(null)
+    return dossier
+  }
+  const ignorerProjet = async (capture) => {
+    setJournal((cur) => cur.map((c) => (c.id === capture.id ? { ...c, projet_suggere: false } : c)))
+    await ignorerSuggestion(capture, 'projet')
+  }
+
   const setField = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }))
+
+  // Une suggestion en attente ne doit jamais rester cachée derrière le
+  // « Afficher toutes les entrées » : sinon on retombe dans le trou qu'on
+  // vient de combler.
+  const enAttenteSuggestion = (c) =>
+    (c.sav_suggere && !c.sav_dossier_id) || (c.projet_suggere && !c.projet_dossier_id)
+
+  const journalVisible = useMemo(() => {
+    if (toutLeJournal) return journal
+    const ids = new Set()
+    const visibles = []
+    for (const c of journal) {
+      if (visibles.length < 2 || enAttenteSuggestion(c)) {
+        if (!ids.has(c.id)) {
+          ids.add(c.id)
+          visibles.push(c)
+        }
+      }
+    }
+    return visibles
+  }, [journal, toutLeJournal])
 
   const dirty = useMemo(() => {
     // « notes » n'est plus édité ici : c'est désormais une liste d'entrées
@@ -660,7 +710,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
               )}
             </div>
             <ul className="space-y-2">
-              {(toutLeJournal ? journal : journal.slice(0, 2)).map((c) => (
+              {journalVisible.map((c) => (
                 <li key={c.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
                   {captureEnEdition === c.id ? (
                     <TexteModifiable
@@ -718,6 +768,20 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                   {c.info_manquante && (
                     <p className="text-xs text-alerte mt-1">⚠ {c.info_manquante}</p>
                   )}
+                  <SuggestionSav
+                    capture={c}
+                    enCours={creationSav === c.id}
+                    onCreer={creerSav}
+                    onIgnorer={ignorerSav}
+                    onOuvrir={onOpenDossier}
+                  />
+                  <SuggestionProjet
+                    capture={c}
+                    enCours={creationProjet === c.id}
+                    onCreer={creerProjet}
+                    onIgnorer={ignorerProjet}
+                    onOuvrir={onOpenDossier}
+                  />
                 </li>
               ))}
             </ul>
