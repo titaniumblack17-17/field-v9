@@ -6,6 +6,7 @@ import Rappels from '../components/Rappels'
 import NoteTexte from '../components/NoteTexte'
 import TexteModifiable from '../components/TexteModifiable'
 import { retirerRappelsTodoist } from '../lib/rappel'
+import useConfirm from '../hooks/useConfirm'
 import {
   TYPE_LABELS,
   TYPE_OPTIONS,
@@ -49,10 +50,12 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   // en entier chaque fois qu'on ouvre le dossier.
   const [toutesNotes, setToutesNotes] = useState(false)
   const [noteEnEdition, setNoteEnEdition] = useState(null)
+  const [confirmer, boîteConfirmation] = useConfirm()
 
   const supprimerNote = async (note) => {
     const extrait = note.texte.length > 60 ? note.texte.slice(0, 60) + '…' : note.texte
-    if (!window.confirm(`Supprimer cette note ?\n\n« ${extrait} »`)) return
+    if (!(await confirmer(`« ${extrait} »`, { titre: 'Supprimer cette note ?', confirmLabel: 'Supprimer' })))
+      return
     await supabase.from('dossier_notes').delete().eq('id', note.id)
     setNotes((cur) => cur.filter((n) => n.id !== note.id))
   }
@@ -66,7 +69,13 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
     ]
       .filter(Boolean)
       .join(' ')
-    if (!window.confirm(`Supprimer définitivement ${quoi} ? Cette action est irréversible.`)) return
+    if (
+      !(await confirmer(`${quoi} sera supprimé. Cette action est irréversible.`, {
+        titre: 'Supprimer ce dossier ?',
+        confirmLabel: 'Supprimer',
+      }))
+    )
+      return
 
     setSuppression(true)
 
@@ -117,16 +126,17 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   // Changer de type invalide le statut courant, exprimé dans le vocabulaire de
   // l'ancien type. On le réinitialise, et on abandonne les champs propres au
   // type quitté — en prévenant quand ils portaient une information.
-  const changerType = (nouveau) => {
+  const changerType = async (nouveau) => {
     if (nouveau === values.type) return
     if (
       values.type === 'plan' &&
       values.remuneration_type &&
-      !window.confirm(
-        `Ce dossier devient « ${TYPE_LABELS[nouveau]} ». Sa rémunération (${
+      !(await confirmer(
+        `Sa rémunération (${
           REMUNERATION_OPTIONS.find(([v]) => v === values.remuneration_type)?.[1]
-        }) sera effacée. Continuer ?`
-      )
+        }) sera effacée.`,
+        { titre: `Ce dossier devient « ${TYPE_LABELS[nouveau]} » ?`, confirmLabel: 'Continuer', danger: false }
+      ))
     ) {
       return
     }
@@ -584,6 +594,8 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
           </button>
         </div>
       )}
+
+      {boîteConfirmation}
     </div>
   )
 }

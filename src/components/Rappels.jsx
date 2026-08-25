@@ -7,6 +7,7 @@ import {
   synchroniserRappel,
 } from '../lib/rappel'
 import TexteModifiable from './TexteModifiable'
+import useConfirm from '../hooks/useConfirm'
 
 const aujourdhui = () => new Date().toISOString().slice(0, 10)
 
@@ -29,6 +30,7 @@ export default function Rappels({ dossierId }) {
   const [enCours, setEnCours] = useState(null)
   const [historique, setHistorique] = useState(false)
   const [erreur, setErreur] = useState(null)
+  const [confirmer, boîteConfirmation] = useConfirm()
 
   useEffect(() => {
     let actif = true
@@ -115,7 +117,12 @@ export default function Rappels({ dossierId }) {
   }
 
   const supprimer = async (rappel) => {
-    if (!window.confirm(`Supprimer le rappel du ${leJour(rappel.date)} sans le marquer fait ?`)) return
+    if (
+      !(await confirmer(`Supprimer le rappel du ${leJour(rappel.date)} sans le marquer fait ?`, {
+        confirmLabel: 'Supprimer',
+      }))
+    )
+      return
     await supabase.from('rappels').delete().eq('id', rappel.id)
     setListe((cur) => cur.filter((r) => r.id !== rappel.id))
   }
@@ -275,6 +282,8 @@ export default function Rappels({ dossierId }) {
           )}
         </div>
       )}
+
+      {boîteConfirmation}
     </div>
   )
 }

@@ -6,6 +6,7 @@ import PiecesJointes from '../components/PiecesJointes'
 import NoteTexte from '../components/NoteTexte'
 import TexteModifiable from '../components/TexteModifiable'
 import ChoixClient from '../components/ChoixClient'
+import useConfirm from '../hooks/useConfirm'
 import { SuggestionSav, SuggestionProjet } from '../components/SuggestionCapture'
 import { creerDossierDepuisSuggestion, ignorerSuggestion } from '../lib/suggestions'
 import { retirerRappelsTodoist, etatRappel } from '../lib/rappel'
@@ -75,6 +76,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   const [nouvelleInfo, setNouvelleInfo] = useState('')
   const [envoiInfo, setEnvoiInfo] = useState(false)
   const [infoEnEdition, setInfoEnEdition] = useState(null)
+  const [confirmer, boîteConfirmation] = useConfirm()
 
   const ajouterInfo = async () => {
     if (!nouvelleInfo.trim()) return
@@ -87,7 +89,8 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
   const supprimerInfo = async (info) => {
     const extrait = info.texte.length > 60 ? info.texte.slice(0, 60) + '…' : info.texte
-    if (!window.confirm(`Supprimer cette entrée ?\n\n« ${extrait} »`)) return
+    if (!(await confirmer(`« ${extrait} »`, { titre: 'Supprimer cette entrée ?', confirmLabel: 'Supprimer' })))
+      return
     await supabase.from('client_notes').delete().eq('id', info.id)
     setInfosAnnexes((cur) => cur.filter((i) => i.id !== info.id))
   }
@@ -99,7 +102,13 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
   const supprimerCapture = async (capture) => {
     const extrait = (capture.resume || capture.texte || '').slice(0, 60)
-    if (!window.confirm(`Supprimer cette entrée du journal ?\n\n« ${extrait}… »`)) return
+    if (
+      !(await confirmer(`« ${extrait}… »`, {
+        titre: 'Supprimer cette entrée du journal ?',
+        confirmLabel: 'Supprimer',
+      }))
+    )
+      return
     await supabase.from('captures').delete().eq('id', capture.id)
     setJournal((cur) => cur.filter((c) => c.id !== capture.id))
   }
@@ -382,10 +391,15 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     ].filter(Boolean)
 
     const message = emporte.length
-      ? `Supprimer définitivement « ${nomComplet} » ? Cette fiche emporte ${emporte.join(', ')}. Cette action est irréversible.`
-      : `Supprimer définitivement « ${nomComplet} » ? Cette action est irréversible.`
+      ? `« ${nomComplet} » sera emportée avec ${emporte.join(', ')}. Cette action est irréversible.`
+      : `« ${nomComplet} » sera supprimée. Cette action est irréversible.`
 
-    if (!window.confirm(message)) {
+    if (
+      !(await confirmer(message, {
+        titre: 'Supprimer définitivement ce client ?',
+        confirmLabel: 'Supprimer',
+      }))
+    ) {
       setSuppression(false)
       return
     }
@@ -462,11 +476,16 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       nbInfos && pluriel(nbInfos, 'information annexe', 'informations annexes'),
     ].filter(Boolean)
 
-    const message = `Fusionner « ${nomComplet} » dans « ${nomCible} » ?${
-      emporte.length ? ` ${emporte.join(', ')} seront transférés vers « ${nomCible} ».` : ''
-    } « ${nomComplet} » sera ensuite supprimée. Cette action est irréversible.`
+    const message = `${
+      emporte.length ? `${emporte.join(', ')} seront transférés vers « ${nomCible} ». ` : ''
+    }« ${nomComplet} » sera ensuite supprimée. Cette action est irréversible.`
 
-    if (!window.confirm(message)) {
+    if (
+      !(await confirmer(message, {
+        titre: `Fusionner « ${nomComplet} » dans « ${nomCible} » ?`,
+        confirmLabel: 'Fusionner',
+      }))
+    ) {
       setFusion(false)
       return
     }
@@ -837,6 +856,8 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           </button>
         </div>
       )}
+
+      {boîteConfirmation}
     </div>
   )
 }

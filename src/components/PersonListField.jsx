@@ -1,4 +1,5 @@
 import React from 'react'
+import useConfirm from '../hooks/useConfirm'
 
 const LIGNE_VIDE = { prenom: '', nom: '', telephone: '' }
 
@@ -9,19 +10,25 @@ const designer = (p) =>
   'cette ligne'
 
 export default function PersonListField({ label, people, onChange }) {
+  const [confirmer, boîteConfirmation] = useConfirm()
+
   const setAt = (i, key) => (e) => {
     const next = [...people]
     next[i] = { ...next[i], [key]: e.target.value }
     onChange(next)
   }
 
-  const removeAt = (i) => {
+  const removeAt = async (i) => {
     const p = people[i]
     const rempli =
       (p?.prenom ?? '').trim() || (p?.nom ?? '').trim() || (p?.telephone ?? '').trim()
     // On ne demande confirmation que si la ligne contient quelque chose :
     // sur une ligne vide, ce serait de la friction pour rien.
-    if (rempli && !window.confirm(`Retirer ${designer(p)} de la liste « ${label} » ?`)) return
+    if (
+      rempli &&
+      !(await confirmer(`Retirer ${designer(p)} de la liste « ${label} » ?`, { confirmLabel: 'Retirer' }))
+    )
+      return
     onChange(people.filter((_, idx) => idx !== i))
   }
 
@@ -75,6 +82,8 @@ export default function PersonListField({ label, people, onChange }) {
       <button type="button" onClick={add} className="text-accent text-sm mt-2 h-11 px-2 -ml-2 inline-flex items-center">
         + Ajouter
       </button>
+
+      {boîteConfirmation}
     </div>
   )
 }

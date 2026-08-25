@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import TexteModifiable from './TexteModifiable'
+import useConfirm from '../hooks/useConfirm'
 
 const vide = { marque: '', modele: '', annee: '', quantite: '', note: '' }
 
@@ -9,6 +10,7 @@ export default function MaterielInstalle({ clientId }) {
   const [saisie, setSaisie] = useState(vide)
   const [ouvert, setOuvert] = useState(false)
   const [enregistre, setEnregistre] = useState(false)
+  const [confirmer, boîteConfirmation] = useConfirm()
 
   useEffect(() => {
     let actif = true
@@ -71,7 +73,7 @@ export default function MaterielInstalle({ clientId }) {
   }
 
   const supprimer = async (id) => {
-    if (!window.confirm('Retirer cet équipement de la liste ?')) return
+    if (!(await confirmer('Retirer cet équipement de la liste ?', { confirmLabel: 'Retirer' }))) return
     await supabase.from('materiel').delete().eq('id', id)
     setListe((cur) => cur.filter((m) => m.id !== id))
   }
@@ -207,6 +209,8 @@ export default function MaterielInstalle({ clientId }) {
           })}
         </ul>
       )}
+
+      {boîteConfirmation}
     </div>
   )
 }

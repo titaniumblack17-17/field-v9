@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import TexteModifiable from './TexteModifiable'
+import useConfirm from '../hooks/useConfirm'
 
 const TAILLE_MAX = 25 * 1024 * 1024
 
@@ -40,6 +41,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   const [analyse, setAnalyse] = useState(() => new Set())
   const [renommage, setRenommage] = useState(null)
   const [erreur, setErreur] = useState(null)
+  const [confirmer, boîteConfirmation] = useConfirm()
   const champFichier = useRef(null)
 
   // Devis chiffrés en mode remplacement, du plus récent au plus ancien : le
@@ -175,7 +177,12 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   }
 
   const supprimer = async (f) => {
-    if (!window.confirm(`Supprimer définitivement « ${f.nom} » ? Cette action est irréversible.`)) {
+    if (
+      !(await confirmer(`« ${f.nom} » sera supprimée. Cette action est irréversible.`, {
+        titre: 'Supprimer définitivement cette pièce jointe ?',
+        confirmLabel: 'Supprimer',
+      }))
+    ) {
       return
     }
     await supabase.storage.from('documents').remove([f.chemin])
@@ -317,6 +324,8 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
           ))}
         </ul>
       )}
+
+      {boîteConfirmation}
     </div>
   )
 }
