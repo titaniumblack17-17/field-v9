@@ -790,6 +790,10 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
         {/* Discret et en fin de fiche : une suppression ne doit pas se cliquer
             par réflexe en descendant la page. */}
         <div className="mt-8 pt-4 border-t border-separateur space-y-1">
+          {/* Répété ici, pas seulement en haut de fiche : un échec de fusion ou
+              de suppression doit se voir depuis le bouton qu'on vient de
+              presser, pas seulement en remontant toute la page. */}
+          {error && <p className="text-erreur text-sm pb-2">{error}</p>}
           <button
             onClick={() => setAFusionner(true)}
             disabled={fusion}
