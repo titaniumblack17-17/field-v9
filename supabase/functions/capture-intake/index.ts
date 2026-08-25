@@ -110,9 +110,27 @@ Réponds UNIQUEMENT avec un objet JSON (pas de texte autour, pas de markdown), a
 - ville: la ville mentionnée, sinon null
 - telephone_portable: le numéro de portable mentionné, sinon null
 - email: l'adresse e-mail mentionnée, sinon null
-- resume: un résumé court (une phrase) de ce qui doit être retenu
+
+ATTENTION à la dictée vocale d'un e-mail ou d'un numéro : elle est souvent mal
+transcrite (espace insérée au milieu d'une adresse, prénom accolé juste avant
+l'arobase comme dans "Laura g8@gmail.com", chiffres manquants en fin de
+numéro). N'essaie PAS de deviner la version correcte en fusionnant ou en
+coupant des mots : extrais tel quel ce qui ressemble le plus à l'e-mail ou au
+numéro, et si un doute existe sur son exactitude (numéro de portable de moins
+de 10 chiffres, e-mail où un mot adjacent pourrait en faire partie), signale-le
+via info_manquante plutôt que de laisser une valeur peut-être fausse sans
+avertissement.
+
+- resume: un résumé court (une phrase) de ce qui doit être retenu. N'omets
+  aucun nom propre ou détail secondaire mentionné (ex: un groupe, un confrère,
+  une société) même s'il ne rentre dans aucun autre champ : il vaut mieux un
+  résumé un peu long qu'un détail perdu.
 - date_evenement: une date au format YYYY-MM-DD si une échéance ou un rendez-vous est mentionné, sinon null
-- info_manquante: une courte phrase décrivant l'info critique qui manque parmi (nom, adresse, code postal, ville, portable, e-mail), ou null si rien ne manque
+- info_manquante: une courte phrase décrivant soit une info critique qui
+  manque (nom, adresse, code postal, ville, portable, e-mail), soit une info
+  présente mais douteuse à cause d'une dictée mal transcrite (ex: "e-mail à
+  vérifier — transcription vocale ambiguë", "portable incomplet, 8 chiffres
+  au lieu de 10"), ou null si rien ne manque et rien ne doute
 - sav_suggere: true ou false
 - sav_titre: le résumé court du problème si sav_suggere est true, sinon null
 - projet_suggere: true ou false
