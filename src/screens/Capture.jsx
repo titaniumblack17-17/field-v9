@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import ChoixClient from '../components/ChoixClient'
+import { STATUT_PAR_DEFAUT } from '../constants/dossiers'
 
 function SuggestionSav({ capture, enCours, onCreer, onIgnorer, onOuvrir }) {
   if (!capture.sav_suggere || capture.sav_dossier_id) return null
@@ -39,6 +40,43 @@ function SuggestionSav({ capture, enCours, onCreer, onIgnorer, onOuvrir }) {
   )
 }
 
+function SuggestionProjet({ capture, enCours, onCreer, onIgnorer, onOuvrir }) {
+  if (!capture.projet_suggere || capture.projet_dossier_id) return null
+  if (!capture.client_id) {
+    return (
+      <p className="text-xs text-alerte mt-2">
+        ⚠ Ressemble à une opportunité, mais reliez d'abord un client pour créer le dossier.
+      </p>
+    )
+  }
+  return (
+    <div className="bg-accent/10 border border-accent/30 rounded-xl px-3 py-2 mt-2">
+      <p className="text-sm text-texte">
+        💰 Ressemble à un projet : {capture.projet_titre || 'à préciser'}
+      </p>
+      <div className="flex gap-3 mt-1">
+        <button
+          onClick={async () => {
+            const d = await onCreer(capture)
+            if (d) onOuvrir?.(d)
+          }}
+          disabled={enCours}
+          className="text-accent text-sm font-medium h-9 disabled:opacity-50"
+        >
+          {enCours ? 'Création…' : 'Créer le dossier'}
+        </button>
+        <button
+          onClick={() => onIgnorer(capture)}
+          disabled={enCours}
+          className="text-texte-faible text-sm h-9"
+        >
+          Ce n'est pas un projet
+        </button>
+      </div>
+    </div>
+  )
+}
+
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/capture-intake`
 
 export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
@@ -51,6 +89,7 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
   const [aRelier, setARelier] = useState(null)
   const [clientTouche, setClientTouche] = useState(null)
   const [creationSav, setCreationSav] = useState(null)
+  const [creationProjet, setCreationProjet] = useState(null)
 
   // Le dossier SAV n'est jamais créé tout seul : la dictée ne fait que le
   // proposer. C'est Bruce qui confirme, comme pour un rappel ou une fusion.
@@ -89,6 +128,41 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
       cur.map((c) => (c.id === capture.id ? { ...c, sav_suggere: false } : c))
     )
     await supabase.from('captures').update({ sav_suggere: false }).eq('id', capture.id)
+  }
+
+  // Même principe que le SAV : la dictée ne fait que suggérer l'opportunité,
+  // c'est Bruce qui confirme la création du dossier.
+  const creerProjet = async (capture) => {
+    if (!capture.client_id) return
+    setCreationProjet(capture.id)
+    const { data: dossier, error: errDossier } = await supabase
+      .from('dossiers')
+      .insert({
+        client_id: capture.client_id,
+        type: 'projet',
+        statut: STATUT_PAR_DEFAUT.projet,
+        titre: capture.projet_titre || capture.resume || 'Projet',
+      })
+      .select()
+      .single()
+
+    if (!errDossier) {
+      await supabase.from('dossier_notes').insert({
+        dossier_id: dossier.id,
+        texte: capture.texte,
+      })
+      await supabase.from('captures').update({ projet_dossier_id: dossier.id }).eq('id', capture.id)
+    }
+    setCreationProjet(null)
+    return errDossier ? null : dossier
+  }
+
+  const ignorerProjet = async (capture) => {
+    setLastResult((r) => (r?.id === capture.id ? { ...r, projet_suggere: false } : r))
+    setUnclassified((cur) =>
+      cur.map((c) => (c.id === capture.id ? { ...c, projet_suggere: false } : c))
+    )
+    await supabase.from('captures').update({ projet_suggere: false }).eq('id', capture.id)
   }
 
   const relier = async (capture, client) => {
@@ -243,6 +317,13 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
               onIgnorer={ignorerSav}
               onOuvrir={onOpenDossier}
             />
+            <SuggestionProjet
+              capture={lastResult}
+              enCours={creationProjet === lastResult.id}
+              onCreer={creerProjet}
+              onIgnorer={ignorerProjet}
+              onOuvrir={onOpenDossier}
+            />
           </div>
         )}
 
@@ -261,6 +342,12 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
                     enCours={creationSav === c.id}
                     onCreer={creerSav}
                     onIgnorer={ignorerSav}
+                  />
+                  <SuggestionProjet
+                    capture={c}
+                    enCours={creationProjet === c.id}
+                    onCreer={creerProjet}
+                    onIgnorer={ignorerProjet}
                   />
                   <div className="flex items-center gap-3 mt-2">
                     <p className="text-xs text-texte-faible flex-1">

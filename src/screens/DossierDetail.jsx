@@ -485,12 +485,18 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
             )}
           </div>
           <div className="bg-carte rounded-xl shadow-sm p-3 flex gap-2 mb-2">
-            <input
+            <textarea
               value={newNote}
               onChange={(e) => setNewNote(e.target.value)}
               placeholder="Ajouter une note…"
-              className="flex-1 text-texte outline-none bg-transparent"
-              onKeyDown={(e) => e.key === 'Enter' && addNote()}
+              rows={1}
+              className="flex-1 text-texte outline-none bg-transparent resize-none"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  addNote()
+                }
+              }}
             />
             <button
               onClick={addNote}

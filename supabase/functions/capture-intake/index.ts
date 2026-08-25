@@ -77,7 +77,7 @@ Deno.serve(async (req: Request) => {
 
   const today = new Date().toISOString().slice(0, 10)
 
-  const prompt = `Tu aides un commercial en équipement dentaire à traiter une note dictée ou tapée rapidement.
+  const prompt = `Tu aides un commercial en équipement dentaire à traiter une note dictée ou tapée rapidement, souvent en voiture entre deux rendez-vous.
 
 Liste des clients existants (id | nom | cabinet | ville) :
 ${clientsList || "(aucun client enregistré)"}
@@ -97,6 +97,8 @@ IMPORTANT : une dictée vocale peut avoir été coupée avant la fin, et l'utili
 
 DÉTECTION SAV (indépendante de l'action ci-dessus) : la note décrit-elle un équipement en panne, cassé, qui ne fonctionne plus, ou une demande d'intervention/réparation chez un praticien ? Si oui, sav_suggere = true et sav_titre = un résumé très court (moins de 60 caractères) du problème, ex. "Fauteuil ne monte plus", "Autoclave en panne". Une simple relance commerciale, un rendez-vous, une demande de devis ne sont PAS des SAV. Dans le doute, sav_suggere = false — mieux vaut rater une suggestion que la déclencher à tort.
 
+DÉTECTION PROJET (indépendante des deux ci-dessus, exclusive avec SAV — une panne n'est jamais un projet) : la note décrit-elle une opportunité commerciale naissante — un praticien qui envisage d'acheter, d'ajouter, de renouveler ou d'agrandir un équipement ou un cabinet ? Exemples : "il veut ajouter un second fauteuil", "elle envisage d'agrandir son cabinet", "renouvellement de l'autoclave à prévoir". Si oui, projet_suggere = true et projet_titre = un résumé très court (moins de 60 caractères) de l'opportunité, ex. "Ajout d'un second fauteuil", "Renouvellement autoclave". Ce n'est PAS un projet : une simple prise de rendez-vous sans besoin décrit, une relance sur un dossier déjà existant, un événement administratif. Dans le doute, projet_suggere = false — un dossier créé à tort pollue le pipeline plus longtemps qu'une suggestion ratée ne coûte.
+
 Réponds UNIQUEMENT avec un objet JSON (pas de texte autour, pas de markdown), avec ces clés :
 - action: "creer_client" ou "capture"
 - client_id: (si action="capture") l'id exact du client concerné si tu le reconnais dans la liste ci-dessus, sinon null
@@ -112,7 +114,9 @@ Réponds UNIQUEMENT avec un objet JSON (pas de texte autour, pas de markdown), a
 - date_evenement: une date au format YYYY-MM-DD si une échéance ou un rendez-vous est mentionné, sinon null
 - info_manquante: une courte phrase décrivant l'info critique qui manque parmi (nom, adresse, code postal, ville, portable, e-mail), ou null si rien ne manque
 - sav_suggere: true ou false
-- sav_titre: le résumé court du problème si sav_suggere est true, sinon null`
+- sav_titre: le résumé court du problème si sav_suggere est true, sinon null
+- projet_suggere: true ou false
+- projet_titre: le résumé court de l'opportunité si projet_suggere est true, sinon null`
 
   const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -123,7 +127,7 @@ Réponds UNIQUEMENT avec un objet JSON (pas de texte autour, pas de markdown), a
     },
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 500,
+      max_tokens: 600,
       messages: [{ role: "user", content: prompt }],
     }),
   })
@@ -144,7 +148,11 @@ Réponds UNIQUEMENT avec un objet JSON (pas de texte autour, pas de markdown), a
     const jsonMatch = rawText.match(/\{[\s\S]*\}/)
     extracted = JSON.parse(jsonMatch ? jsonMatch[0] : rawText)
   } catch {
-    extracted = { action: "capture", client_id: null, resume: texte.slice(0, 200), date_evenement: null, info_manquante: "extraction échouée", sav_suggere: false, sav_titre: null }
+    extracted = {
+      action: "capture", client_id: null, resume: texte.slice(0, 200), date_evenement: null,
+      info_manquante: "extraction échouée", sav_suggere: false, sav_titre: null,
+      projet_suggere: false, projet_titre: null,
+    }
   }
 
   // Champs dictés, utilisables aussi bien pour créer que pour compléter.
@@ -217,6 +225,11 @@ Réponds UNIQUEMENT avec un objet JSON (pas de texte autour, pas de markdown), a
   const savSuggere = extracted.sav_suggere === true
   const savTitre = savSuggere ? (extracted.sav_titre?.trim().slice(0, 60) || null) : null
 
+  // Un projet ne se déclenche jamais en même temps qu'un SAV : une panne
+  // n'est pas une opportunité, même si le modèle hésite entre les deux.
+  const projetSuggere = !savSuggere && extracted.projet_suggere === true
+  const projetTitre = projetSuggere ? (extracted.projet_titre?.trim().slice(0, 60) || null) : null
+
   const { data: inserted, error } = await supabase
     .from("captures")
     .insert({
@@ -228,6 +241,8 @@ Réponds UNIQUEMENT avec un objet JSON (pas de texte autour, pas de markdown), a
       info_manquante: extracted.info_manquante ?? null,
       sav_suggere: savSuggere,
       sav_titre: savTitre,
+      projet_suggere: projetSuggere,
+      projet_titre: projetTitre,
     })
     .select()
     .single()
