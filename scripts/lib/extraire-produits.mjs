@@ -9,10 +9,11 @@
 //    instruction@2, prix conseillé@4, prix d'offre optionnel@5.
 //  - « Feature » (feuilles « TPMOY Equipements » et « TPMOY Retrofits » :
 //    licences logicielles et pièces de rétrofit) : code@0, désignation@1, pas
-//    de colonne d'offre. La colonne de prix n'est pas à un index fixe (elle
-//    varie selon la feuille — 4 colonnes avec instruction sur l'une, 3
-//    colonnes sans instruction sur l'autre) : on la repère par son libellé
-//    exact « Price € » dans la ligne d'en-tête plutôt que de figer un index.
+//    de colonne d'offre. Ni la colonne de prix ni celle d'instruction ne sont
+//    à un index fixe (l'ordre varie selon la feuille) : les deux sont
+//    repérées par leur libellé dans la ligne d'en-tête plutôt que par une
+//    position supposée, pour ne pas perdre silencieusement une colonne si un
+//    futur fichier tarif change l'ordre.
 export function extraireProduitsDeFeuille(lignes) {
   const indexEntete = lignes.findIndex((ligne) => {
     const premiereCase = String(ligne?.[0] ?? '').trim()
@@ -39,9 +40,14 @@ export function extraireProduitsDeFeuille(lignes) {
         : null
   } else {
     colonnePrix = ligneEntete.findIndex((cellule) => String(cellule ?? '').trim() === 'Price €')
-    // L'instruction n'existe que dans la variante à 4 colonnes (prix en
-    // colonne 3) ; la variante à 3 colonnes n'a aucune donnée d'instruction.
-    colonneInstruction = colonnePrix === 3 ? 2 : null
+    if (colonnePrix === -1) {
+      throw new Error('Feature header found but no "Price €" column — cannot parse this sheet.')
+    }
+    // Repérée par libellé (correspond à « Instruction » comme à « Instructions,
+    // comments »), pas par position : certaines feuilles n'ont pas cette
+    // colonne du tout, auquel cas l'instruction reste nulle pour chaque ligne.
+    colonneInstruction = ligneEntete.findIndex((cellule) => /instruction/i.test(String(cellule ?? '')))
+    if (colonneInstruction === -1) colonneInstruction = null
     colonneOffre = null
     periodeOffreTexte = null
   }

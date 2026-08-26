@@ -171,3 +171,29 @@ test('extrait les produits d\'un en-tête « Feature » à 3 colonnes (sans colo
     },
   ])
 })
+
+// La colonne instruction doit être repérée par son libellé (« Instruction »,
+// « Instructions, comments »), pas par une position supposée à partir de
+// celle du prix : un futur fichier tarif avec un ordre de colonnes différent
+// ne doit pas perdre ses instructions silencieusement.
+test('repère la colonne instruction par libellé même quand le prix la précède', () => {
+  const lignes = [
+    ['Feature', 'Description', 'Price €', 'Instructions, comments'],
+    ['FE009999', 'Widget test', 4200, 'Ne pas vendre seul'],
+  ]
+  const [produit] = extraireProduitsDeFeuille(lignes)
+  assert.equal(produit.designation, 'Widget test')
+  assert.equal(produit.prixConseille, 4200)
+  assert.equal(produit.instruction, 'Ne pas vendre seul')
+})
+
+test('une feuille « Feature » sans colonne « Price € » lève une erreur claire', () => {
+  const lignes = [
+    ['Feature', 'Description', 'Commentaire'],
+    ['FE000001', 'Produit sans prix repérable', 'rien à voir'],
+  ]
+  assert.throws(
+    () => extraireProduitsDeFeuille(lignes),
+    /Feature header found but no "Price €" column/
+  )
+})
