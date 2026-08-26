@@ -8,7 +8,7 @@ const normalize = (s) =>
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
 
-export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, onBrief }) {
+export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, onBrief, onCatalogue }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
@@ -107,6 +107,12 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
               className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-medium shadow"
             >
               Capture
+            </button>
+            <button
+              onClick={onCatalogue}
+              className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-medium shadow"
+            >
+              Catalogue
             </button>
             <button
               onClick={onCreate}

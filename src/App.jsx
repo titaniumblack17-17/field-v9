@@ -7,6 +7,7 @@ import DossierForm from './screens/DossierForm'
 import DossierDetail from './screens/DossierDetail'
 import Pipeline from './screens/Pipeline'
 import BriefSoir from './screens/BriefSoir'
+import Catalogue from './screens/Catalogue'
 
 // Balayage depuis le bord gauche pour revenir. Le geste natif d'iOS est
 // capricieux sur une application à écran unique, et le défilement horizontal
@@ -164,6 +165,10 @@ export default function App() {
     )
   }
 
+  if (view.name === 'catalogue') {
+    return <Catalogue onBack={back} />
+  }
+
   if (view.name === 'dossier-create') {
     return (
       <DossierForm
@@ -192,6 +197,7 @@ export default function App() {
       onCapture={() => push({ name: 'capture' })}
       onPipeline={() => push({ name: 'pipeline' })}
       onBrief={() => push({ name: 'brief' })}
+      onCatalogue={() => push({ name: 'catalogue' })}
     />
   )
 }
