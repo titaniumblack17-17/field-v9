@@ -113,7 +113,7 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
   )
 }
 
-function Column({ etape, dossiers, colRef, onOpen, onMove, dropId, actif }) {
+function Column({ etape, dossiers, colRef, onOpen, onMove, dropId, actif, onSelect }) {
   const { setNodeRef, isOver } = useDroppable({ id: dropId ?? etape[0] })
   return (
     <div
@@ -123,7 +123,14 @@ function Column({ etape, dossiers, colRef, onOpen, onMove, dropId, actif }) {
       }}
       className="flex-shrink-0 w-48 flex flex-col"
     >
-      <div className="flex items-center justify-between px-1 pb-2">
+      {/* Toucher l'en-tête choisit la colonne directement : attendre que le
+          défilement la détecte tout seul est trop lent au doigt, surtout
+          quand deux colonnes se partagent l'écran à peu près à égalité. */}
+      <button
+        type="button"
+        onClick={() => onSelect?.(etape[0])}
+        className="flex items-center justify-between px-1 pb-2 w-full text-left"
+      >
         <span
           className={`text-xs font-medium uppercase tracking-wider ${actif ? 'text-accent' : 'text-texte-doux'}`}
         >
@@ -132,7 +139,7 @@ function Column({ etape, dossiers, colRef, onOpen, onMove, dropId, actif }) {
         {dossiers.length > 0 && (
           <span className="text-xs text-texte-faible bg-carte-douce px-1.5 py-0.5 rounded-full">{dossiers.length}</span>
         )}
-      </div>
+      </button>
       <div
         className="flex flex-col gap-2 min-h-16 rounded-xl transition-colors p-1"
         style={{ background: isOver ? 'rgb(var(--accent) / 0.15)' : 'transparent' }}
@@ -203,6 +210,14 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
       inline: 'start',
       block: 'nearest',
     })
+  }
+
+  // Choisir une colonne au toucher, sans attendre que le défilement la
+  // détecte : la mise en évidence doit réagir tout de suite, le recentrage
+  // suit ensuite.
+  const selectionnerEtape = (cle) => {
+    setEtapeVue(cle)
+    allerA(cle)
   }
 
   const changerEtape = async (dossier, etape) => {
@@ -354,7 +369,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
           <button
             key={cle}
             ref={(el) => { pillRefs.current[cle] = el }}
-            onClick={() => allerA(cle)}
+            onClick={() => selectionnerEtape(cle)}
             className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 transition-colors ${
               etapeVue === cle ? 'bg-accent text-white' : 'bg-carte text-texte-doux'
             }`}
@@ -369,7 +384,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
           <button
             onClick={() => {
               setMontrerPerdus((v) => !v)
-              if (!montrerPerdus) setTimeout(() => allerA('perdu'), 100)
+              if (!montrerPerdus) setTimeout(() => selectionnerEtape('perdu'), 100)
             }}
             className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 ${
               montrerPerdus ? 'bg-accent text-white' : 'bg-carte text-texte-faible'
@@ -392,6 +407,48 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
       </div>
       )}
 
+      {/* SAV et Plan restent peu volumineux : toutes leurs étapes tiennent
+          dans la barre, pas besoin des « vides »/« perdus » du Projet. */}
+      {vue === 'sav' && (
+        <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto flex-shrink-0">
+          {STATUTS_SAV.map(([cle, libelle]) => (
+            <button
+              key={cle}
+              ref={(el) => { pillRefs.current[cle] = el }}
+              onClick={() => selectionnerEtape(cle)}
+              className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 transition-colors ${
+                etapeVue === cle ? 'bg-accent text-white' : 'bg-carte text-texte-doux'
+              }`}
+            >
+              {libelle}
+              <span className={etapeVue === cle ? 'text-white/70' : 'text-texte-faible'}>
+                {bySavEtape[cle].length}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {vue === 'plan' && (
+        <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto flex-shrink-0">
+          {STATUTS_PLAN.map(([cle, libelle]) => (
+            <button
+              key={cle}
+              ref={(el) => { pillRefs.current[cle] = el }}
+              onClick={() => selectionnerEtape(cle)}
+              className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 transition-colors ${
+                etapeVue === cle ? 'bg-accent text-white' : 'bg-carte text-texte-doux'
+              }`}
+            >
+              {libelle}
+              <span className={etapeVue === cle ? 'text-white/70' : 'text-texte-faible'}>
+                {byPlanEtape[cle].length}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div
           ref={zoneRef}
@@ -410,6 +467,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
                 onOpen={onOpenDossier}
                 onMove={setADeplacer}
                 actif={!etapeVue || etape[0] === etapeVue}
+                onSelect={selectionnerEtape}
               />
             ))}
 
@@ -426,6 +484,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
                 onMove={setADeplacer}
                 dropId={`sav:${etape[0]}`}
                 actif={!etapeVue || etape[0] === etapeVue}
+                onSelect={selectionnerEtape}
               />
             ))}
 
@@ -442,6 +501,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
                 onMove={setADeplacer}
                 dropId={`plan:${etape[0]}`}
                 actif={!etapeVue || etape[0] === etapeVue}
+                onSelect={selectionnerEtape}
               />
             ))}
         </div>
