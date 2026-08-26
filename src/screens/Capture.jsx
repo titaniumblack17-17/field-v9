@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import ChoixClient from '../components/ChoixClient'
-import { SuggestionSav, SuggestionProjet } from '../components/SuggestionCapture'
+import { SuggestionSav, SuggestionProjet, SuggestionPlan } from '../components/SuggestionCapture'
 import { creerDossierDepuisSuggestion, ignorerSuggestion } from '../lib/suggestions'
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/capture-intake`
@@ -17,6 +17,7 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
   const [clientTouche, setClientTouche] = useState(null)
   const [creationSav, setCreationSav] = useState(null)
   const [creationProjet, setCreationProjet] = useState(null)
+  const [creationPlan, setCreationPlan] = useState(null)
 
   // Le dossier n'est jamais créé tout seul : la dictée ne fait que le
   // proposer. C'est Bruce qui confirme, comme pour un rappel ou une fusion.
@@ -48,6 +49,21 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
       cur.map((c) => (c.id === capture.id ? { ...c, projet_suggere: false } : c))
     )
     await ignorerSuggestion(capture, 'projet')
+  }
+
+  const creerPlan = async (capture) => {
+    setCreationPlan(capture.id)
+    const dossier = await creerDossierDepuisSuggestion(capture, 'plan')
+    setCreationPlan(null)
+    return dossier
+  }
+
+  const ignorerPlan = async (capture) => {
+    setLastResult((r) => (r?.id === capture.id ? { ...r, plan_suggere: false } : r))
+    setUnclassified((cur) =>
+      cur.map((c) => (c.id === capture.id ? { ...c, plan_suggere: false } : c))
+    )
+    await ignorerSuggestion(capture, 'plan')
   }
 
   const relier = async (capture, client) => {
@@ -209,6 +225,13 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
               onIgnorer={ignorerProjet}
               onOuvrir={onOpenDossier}
             />
+            <SuggestionPlan
+              capture={lastResult}
+              enCours={creationPlan === lastResult.id}
+              onCreer={creerPlan}
+              onIgnorer={ignorerPlan}
+              onOuvrir={onOpenDossier}
+            />
           </div>
         )}
 
@@ -233,6 +256,12 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
                     enCours={creationProjet === c.id}
                     onCreer={creerProjet}
                     onIgnorer={ignorerProjet}
+                  />
+                  <SuggestionPlan
+                    capture={c}
+                    enCours={creationPlan === c.id}
+                    onCreer={creerPlan}
+                    onIgnorer={ignorerPlan}
                   />
                   <div className="flex items-center gap-3 mt-2">
                     <p className="text-xs text-texte-faible flex-1">

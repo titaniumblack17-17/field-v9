@@ -7,7 +7,7 @@ import NoteTexte from '../components/NoteTexte'
 import TexteModifiable from '../components/TexteModifiable'
 import ChoixClient from '../components/ChoixClient'
 import useConfirm from '../hooks/useConfirm'
-import { SuggestionSav, SuggestionProjet } from '../components/SuggestionCapture'
+import { SuggestionSav, SuggestionProjet, SuggestionPlan } from '../components/SuggestionCapture'
 import { creerDossierDepuisSuggestion, ignorerSuggestion } from '../lib/suggestions'
 import { retirerRappelsTodoist, etatRappel } from '../lib/rappel'
 import {
@@ -99,6 +99,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   const [fusion, setFusion] = useState(false)
   const [creationSav, setCreationSav] = useState(null)
   const [creationProjet, setCreationProjet] = useState(null)
+  const [creationPlan, setCreationPlan] = useState(null)
 
   const supprimerCapture = async (capture) => {
     const extrait = (capture.resume || capture.texte || '').slice(0, 60)
@@ -137,6 +138,16 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     setJournal((cur) => cur.map((c) => (c.id === capture.id ? { ...c, projet_suggere: false } : c)))
     await ignorerSuggestion(capture, 'projet')
   }
+  const creerPlan = async (capture) => {
+    setCreationPlan(capture.id)
+    const dossier = await creerDossierDepuisSuggestion(capture, 'plan')
+    setCreationPlan(null)
+    return dossier
+  }
+  const ignorerPlan = async (capture) => {
+    setJournal((cur) => cur.map((c) => (c.id === capture.id ? { ...c, plan_suggere: false } : c)))
+    await ignorerSuggestion(capture, 'plan')
+  }
 
   const setField = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }))
 
@@ -144,7 +155,9 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   // « Afficher toutes les entrées » : sinon on retombe dans le trou qu'on
   // vient de combler.
   const enAttenteSuggestion = (c) =>
-    (c.sav_suggere && !c.sav_dossier_id) || (c.projet_suggere && !c.projet_dossier_id)
+    (c.sav_suggere && !c.sav_dossier_id) ||
+    (c.projet_suggere && !c.projet_dossier_id) ||
+    (c.plan_suggere && !c.plan_dossier_id)
 
   const journalVisible = useMemo(() => {
     if (toutLeJournal) return journal
@@ -799,6 +812,13 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                     enCours={creationProjet === c.id}
                     onCreer={creerProjet}
                     onIgnorer={ignorerProjet}
+                    onOuvrir={onOpenDossier}
+                  />
+                  <SuggestionPlan
+                    capture={c}
+                    enCours={creationPlan === c.id}
+                    onCreer={creerPlan}
+                    onIgnorer={ignorerPlan}
                     onOuvrir={onOpenDossier}
                   />
                 </li>

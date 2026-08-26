@@ -99,6 +99,8 @@ DÉTECTION SAV (indépendante de l'action ci-dessus) : la note décrit-elle un �
 
 DÉTECTION PROJET (indépendante des deux ci-dessus, exclusive avec SAV — une panne n'est jamais un projet) : la note décrit-elle une opportunité commerciale naissante — un praticien qui envisage d'acheter, d'ajouter, de renouveler ou d'agrandir un équipement ou un cabinet, OU la création/le rachat/la reprise d'un cabinet (même partiellement décrit, même avec des détails d'équipement en vrac) ? Exemples : "il veut ajouter un second fauteuil", "elle envisage d'agrandir son cabinet", "renouvellement de l'autoclave à prévoir", "création d'un nouveau cabinet", "rachat d'un cabinet existant d'un praticien qui part à la retraite", "transfert de son matériel vers son nouveau local". Une liste d'équipements à transférer ou à commander pour un nouveau cabinet EST un projet, même sans montant chiffré. Si oui, projet_suggere = true et projet_titre = un résumé très court (moins de 60 caractères) de l'opportunité, ex. "Ajout d'un second fauteuil", "Renouvellement autoclave", "Rachat de cabinet existant", "Création de cabinet". Ce n'est PAS un projet : une simple prise de rendez-vous sans besoin décrit, une relance sur un dossier déjà existant sans nouvel élément, un événement administratif. Dans le doute, projet_suggere = false — un dossier créé à tort pollue le pipeline plus longtemps qu'une suggestion ratée ne coûte.
 
+DÉTECTION PLAN (indépendante des détections ci-dessus, exclusive avec SAV et Projet) : la note décrit-elle une demande de plan d'implantation ou de cahier des charges à produire comme PRESTATION TECHNIQUE SÉPARÉE — pour un autre commercial, en projet partagé, ou facturée à part — et non un plan lié à une vente que Bruce mène lui-même ? Exemples qui déclenchent plan_suggere : "il faut faire un plan pour le dossier de Marc", "cahier des charges à produire pour un confrère", "plan à faire, projet partagé avec untel". Ce n'est PAS un plan à signaler séparément : un plan mentionné dans le cadre d'un de ses propres projets de vente — laisse la détection Projet ci-dessus s'en occuper normalement, ne double-compte pas. Dans le doute, plan_suggere = false — un dossier Plan créé à tort pour ce qui n'est qu'une tâche d'un projet existant serait pire qu'une suggestion ratée.
+
 Réponds UNIQUEMENT avec un objet JSON (pas de texte autour, pas de markdown), avec ces clés :
 - action: "creer_client" ou "capture"
 - client_id: (si action="capture") l'id exact du client concerné si tu le reconnais dans la liste ci-dessus, sinon null
@@ -134,7 +136,9 @@ avertissement.
 - sav_suggere: true ou false
 - sav_titre: le résumé court du problème si sav_suggere est true, sinon null
 - projet_suggere: true ou false
-- projet_titre: le résumé court de l'opportunité si projet_suggere est true, sinon null`
+- projet_titre: le résumé court de l'opportunité si projet_suggere est true, sinon null
+- plan_suggere: true ou false
+- plan_titre: le résumé court de la demande si plan_suggere est true, sinon null`
 
   const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -169,7 +173,7 @@ avertissement.
     extracted = {
       action: "capture", client_id: null, resume: texte.slice(0, 200), date_evenement: null,
       info_manquante: "extraction échouée", sav_suggere: false, sav_titre: null,
-      projet_suggere: false, projet_titre: null,
+      projet_suggere: false, projet_titre: null, plan_suggere: false, plan_titre: null,
     }
   }
 
@@ -274,6 +278,11 @@ avertissement.
   const projetSuggere = !savSuggere && extracted.projet_suggere === true
   const projetTitre = projetSuggere ? (extracted.projet_titre?.trim().slice(0, 60) || null) : null
 
+  // Un plan n'est une prestation à part que si elle n'est ni un SAV ni un
+  // projet de vente : les trois détections restent mutuellement exclusives.
+  const planSuggere = !savSuggere && !projetSuggere && extracted.plan_suggere === true
+  const planTitre = planSuggere ? (extracted.plan_titre?.trim().slice(0, 60) || null) : null
+
   // Le info_manquante du modèle et les avertissements déterministes ci-dessus
   // se complètent : on garde les deux plutôt que de laisser l'un écraser l'autre.
   const infoManquante =
@@ -292,6 +301,8 @@ avertissement.
       sav_titre: savTitre,
       projet_suggere: projetSuggere,
       projet_titre: projetTitre,
+      plan_suggere: planSuggere,
+      plan_titre: planTitre,
     })
     .select()
     .single()
