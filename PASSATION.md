@@ -51,6 +51,11 @@ avec commentaire. Historique consultable. Synchronisés avec Todoist.
 montant du dossier suit. Un devis remplace par défaut, il ne s'additionne que
 si la case « devis complémentaire » est cochée.
 
+**Catalogue** — recherche de produits par nom, code ou modèle. Prix conseillé
+et offre en cours côte à côte. Pilote sur la marque Planmeca (2629 produits) ;
+les 17 autres marques restent à faire. Réimport manuel via
+`node scripts/importer-catalogue-planmeca.mjs <chemin du fichier tarif>`.
+
 ## Schéma
 
 - `clients` — praticien, cabinet, adresse, téléphones, e-mails, `associes` et
@@ -60,6 +65,10 @@ si la case « devis complémentaire » est cochée.
   et les reflets `rappel_date` / `rappel_heure` / `rappel_note`
 - `rappels` — dossier_id, date, heure, note, fait_at, commentaire, todoist_task_id
 - `dossier_notes`, `captures`, `materiel`, `fichiers`
+- `produits` — catalogue tarifaire (pilote Planmeca) : marque, modèle, code,
+  désignation, instruction, prix conseillé et prix d'offre + sa période,
+  fichier source et date d'import ; réimport = remplacement complet de la
+  marque, pas d'historique de versions
 - Dépôt `documents` (privé, 25 Mo, PDF et images), liens signés 60 s
 
 **Déclencheurs**
@@ -134,7 +143,14 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
 3. **5 devis non lus** par la fonction, tous à raison : ils proposent plusieurs
    variantes chiffrées (Grunberg 4 études, Mimoune 3, Alakian 2 fois) et le
    modèle refuse de choisir. Montants à saisir à la main.
-4. **Reste de la spec** : catalogue produits (phase 3), génération de devis (phase 4).
+4. **Reste de la spec** : phase 3 (pilote catalogue Planmeca) est faite.
+   Restent les 17 autres marques du catalogue et la génération de devis
+   (phase 4). Les fichiers tarifs source vivent dans
+   `~/Library/Mobile Documents/com~apple~CloudDocs/Bailleul (IcD)/Configurateur/<MARQUE>/<ANNÉE>/`.
+   macOS refuse souvent la lecture directe de ce chemin iCloud depuis le
+   script (`Operation not permitted`) : copier le fichier tarif dans
+   `scripts/` d'abord (ignoré par git, voir `.gitignore`) puis pointer
+   l'import dessus.
 
 ## Pièges d'environnement
 
