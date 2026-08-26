@@ -21,6 +21,10 @@ export default function Catalogue({ onBack }) {
   //
   // Supabase/PostgREST plafonne une requête sans pagination à 1000 lignes :
   // on récupère donc le catalogue par pages de 1000 jusqu'à épuisement.
+  // Le tri inclut `id` en critère secondaire : de nombreux produits
+  // partagent la même désignation, et un tri sur la seule désignation
+  // n'est pas stable d'une requête à l'autre — deux pages consécutives
+  // peuvent alors se chevaucher ou laisser passer une ligne entre les deux.
   useEffect(() => {
     let actif = true
 
@@ -33,6 +37,7 @@ export default function Catalogue({ onBack }) {
           .from('produits')
           .select('*')
           .order('designation', { ascending: true })
+          .order('id', { ascending: true })
           .range(debut, debut + TAILLE_PAGE - 1)
         if (error) throw error
         tous = tous.concat(data ?? [])
