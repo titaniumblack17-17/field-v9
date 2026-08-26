@@ -1,33 +1,74 @@
 // Une ligne compte comme un produit si elle porte un code (colonne 0) ET un
-// prix conseillé numérique (colonne 4) — les lignes de titre de section
+// prix conseillé numérique (colonne du prix) — les lignes de titre de section
 // (« 1. Supports du patient supplémentaires ») et la ligne de totaux juste
 // après l'en-tête n'ont ni l'un ni l'autre, et sont donc ignorées sans règle
 // spéciale : le même filtre les exclut naturellement.
+//
+// Deux formes d'en-tête sont reconnues dans le tarif Planmeca :
+//  - « Code » (la grande majorité des feuilles) : code@0, désignation@1,
+//    instruction@2, prix conseillé@4, prix d'offre optionnel@5.
+//  - « Feature » (feuilles « TPMOY Equipements » et « TPMOY Retrofits » :
+//    licences logicielles et pièces de rétrofit) : code@0, désignation@1, pas
+//    de colonne d'offre. La colonne de prix n'est pas à un index fixe (elle
+//    varie selon la feuille — 4 colonnes avec instruction sur l'une, 3
+//    colonnes sans instruction sur l'autre) : on la repère par son libellé
+//    exact « Price € » dans la ligne d'en-tête plutôt que de figer un index.
 export function extraireProduitsDeFeuille(lignes) {
-  const indexEntete = lignes.findIndex((ligne) => String(ligne?.[0] ?? '').trim() === 'Code')
+  const indexEntete = lignes.findIndex((ligne) => {
+    const premiereCase = String(ligne?.[0] ?? '').trim()
+    return premiereCase === 'Code' || premiereCase === 'Feature'
+  })
   if (indexEntete === -1) return []
 
-  const periodeOffreBrute = lignes[indexEntete][5]
-  const periodeOffreTexte =
-    typeof periodeOffreBrute === 'string' && periodeOffreBrute.trim()
-      ? periodeOffreBrute.trim()
-      : null
+  const ligneEntete = lignes[indexEntete]
+  const formatCode = String(ligneEntete[0]).trim() === 'Code'
+
+  let colonneInstruction
+  let colonnePrix
+  let colonneOffre
+  let periodeOffreTexte
+
+  if (formatCode) {
+    colonneInstruction = 2
+    colonnePrix = 4
+    colonneOffre = 5
+    const periodeOffreBrute = ligneEntete[5]
+    periodeOffreTexte =
+      typeof periodeOffreBrute === 'string' && periodeOffreBrute.trim()
+        ? periodeOffreBrute.trim()
+        : null
+  } else {
+    colonnePrix = ligneEntete.findIndex((cellule) => String(cellule ?? '').trim() === 'Price €')
+    // L'instruction n'existe que dans la variante à 4 colonnes (prix en
+    // colonne 3) ; la variante à 3 colonnes n'a aucune donnée d'instruction.
+    colonneInstruction = colonnePrix === 3 ? 2 : null
+    colonneOffre = null
+    periodeOffreTexte = null
+  }
 
   const produits = []
   for (const ligne of lignes.slice(indexEntete + 1)) {
     const code = ligne?.[0]
-    const prixConseille = ligne?.[4]
+    const prixConseille = ligne?.[colonnePrix]
     if (code == null || String(code).trim() === '') continue
     if (typeof prixConseille !== 'number' || !Number.isFinite(prixConseille)) continue
 
     const prixOffre =
-      typeof ligne[5] === 'number' && Number.isFinite(ligne[5]) ? ligne[5] : null
+      colonneOffre != null &&
+      typeof ligne[colonneOffre] === 'number' &&
+      Number.isFinite(ligne[colonneOffre])
+        ? ligne[colonneOffre]
+        : null
 
     produits.push({
       code: String(code).trim(),
       designation: String(ligne[1] ?? '').trim() || String(code).trim(),
       instruction:
-        ligne[2] != null && String(ligne[2]).trim() ? String(ligne[2]).trim() : null,
+        colonneInstruction != null &&
+        ligne[colonneInstruction] != null &&
+        String(ligne[colonneInstruction]).trim()
+          ? String(ligne[colonneInstruction]).trim()
+          : null,
       prixConseille,
       prixOffre,
       offrePeriode: prixOffre != null ? periodeOffreTexte : null,

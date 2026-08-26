@@ -94,3 +94,80 @@ test('renvoie un tableau vide si aucune ligne d\'en-tête « Code » n\'est trou
   ]
   assert.deepEqual(extraireProduitsDeFeuille(lignes), [])
 })
+
+// Deux feuilles du tarif (« TPMOY Equipements », « TPMOY Retrofits ») utilisent
+// un second format d'en-tête, distinct du format « Code » habituel : la ligne
+// d'en-tête commence par « Feature » au lieu de « Code », et ce format n'a
+// jamais de colonne d'offre (prixOffre et offrePeriode sont donc toujours nuls).
+test('extrait les produits d\'un en-tête « Feature » à 4 colonnes, avec instruction présente ou absente', () => {
+  const lignes = [
+    ['Feature', 'Description', 'Instructions, comments', 'Price €'],
+    [
+      'FE005211',
+      'PlanCAD Premium Full',
+      'Licence incluant tous les modules disponibles',
+      19148,
+    ],
+    [
+      30047801,
+      'Mise à niveau annuelle PlanCAD Premium Full',
+      'Contrat de mise à niveau annuel',
+      3911,
+    ],
+    ['FE003700', 'PlanCAD Premium – module Bite Splint', null, 2119],
+  ]
+  const produits = extraireProduitsDeFeuille(lignes)
+  assert.deepEqual(produits, [
+    {
+      code: 'FE005211',
+      designation: 'PlanCAD Premium Full',
+      instruction: 'Licence incluant tous les modules disponibles',
+      prixConseille: 19148,
+      prixOffre: null,
+      offrePeriode: null,
+    },
+    {
+      code: '30047801',
+      designation: 'Mise à niveau annuelle PlanCAD Premium Full',
+      instruction: 'Contrat de mise à niveau annuel',
+      prixConseille: 3911,
+      prixOffre: null,
+      offrePeriode: null,
+    },
+    {
+      code: 'FE003700',
+      designation: 'PlanCAD Premium – module Bite Splint',
+      instruction: null,
+      prixConseille: 2119,
+      prixOffre: null,
+      offrePeriode: null,
+    },
+  ])
+})
+
+test('extrait les produits d\'un en-tête « Feature » à 3 colonnes (sans colonne instruction, prix en colonne 2)', () => {
+  const lignes = [
+    ['Feature', 'Description', 'Price €'],
+    ['FE003462', 'Seringue Luzzani Minibright à 6 fonctions avec LED', 1383],
+    ['FE001233', 'Seringue Luzzani Ergo 3 fonctions', 725],
+  ]
+  const produits = extraireProduitsDeFeuille(lignes)
+  assert.deepEqual(produits, [
+    {
+      code: 'FE003462',
+      designation: 'Seringue Luzzani Minibright à 6 fonctions avec LED',
+      instruction: null,
+      prixConseille: 1383,
+      prixOffre: null,
+      offrePeriode: null,
+    },
+    {
+      code: 'FE001233',
+      designation: 'Seringue Luzzani Ergo 3 fonctions',
+      instruction: null,
+      prixConseille: 725,
+      prixOffre: null,
+      offrePeriode: null,
+    },
+  ])
+})
