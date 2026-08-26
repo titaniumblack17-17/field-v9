@@ -118,6 +118,10 @@ function Column({ etape, dossiers, colRef, onOpen, onMove, dropId }) {
 
 export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   const [dossiers, setDossiers] = useState([])
+  // Les deux pipelines n'ont ni le même vocabulaire d'étapes ni le même
+  // volume : les montrer bout à bout obligeait à faire défiler loin pour
+  // atteindre le SAV. Un seul kanban à l'écran à la fois, choisi ici.
+  const [vue, setVue] = useState('projet')
   const [activeDrag, setActiveDrag] = useState(null)
   const [aDeplacer, setADeplacer] = useState(null)
   const colRefs = useRef({})
@@ -280,7 +284,17 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
         <button onClick={onBack} className="text-accent text-sm font-medium h-11 -ml-2 pl-2 pr-1 flex items-center">
           ← Clients
         </button>
-        <h1 className="text-lg font-semibold text-texte flex-1">Pipeline</h1>
+        <h1 className="text-lg font-semibold text-texte">Pipeline</h1>
+        <select
+          value={vue}
+          onChange={(e) => setVue(e.target.value)}
+          aria-label="Choisir le kanban"
+          className="bg-carte text-texte-doux text-sm font-medium rounded-full h-9 pl-3 pr-2 outline-none border border-bordure"
+        >
+          <option value="projet">Projet · {dossiers.filter((d) => d.type === 'projet').length}</option>
+          <option value="sav">SAV · {dossiers.filter((d) => d.type === 'sav').length}</option>
+        </select>
+        <div className="flex-1" />
         {onCreate && (
           <button
             onClick={onCreate}
@@ -292,6 +306,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
         )}
       </header>
 
+      {vue === 'projet' && (
       <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto flex-shrink-0">
         {ETAPES_PROJET.filter(([cle]) => cle !== 'perdu' && byEtape[cle].length > 0).map(([cle, libelle]) => (
           <button
@@ -333,47 +348,39 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
           </button>
         )}
       </div>
+      )}
 
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div
           ref={zoneRef}
-          onScroll={suivreDefilement}
+          onScroll={vue === 'projet' ? suivreDefilement : undefined}
           className="flex gap-3 px-4 pb-4 overflow-x-auto flex-1 items-start"
         >
-          {etapesVisibles.map((etape) => (
-            <Column
-              key={etape[0]}
-              etape={etape}
-              dossiers={byEtape[etape[0]] || []}
-              colRef={(el) => {
-                colRefs.current[etape[0]] = el
-              }}
-              onOpen={onOpenDossier}
-              onMove={setADeplacer}
-            />
-          ))}
+          {vue === 'projet' &&
+            etapesVisibles.map((etape) => (
+              <Column
+                key={etape[0]}
+                etape={etape}
+                dossiers={byEtape[etape[0]] || []}
+                colRef={(el) => {
+                  colRefs.current[etape[0]] = el
+                }}
+                onOpen={onOpenDossier}
+                onMove={setADeplacer}
+              />
+            ))}
 
-          {/* Séparateur visuel entre les colonnes Projet et les colonnes SAV :
-              deux pipelines distincts, pas une suite de colonnes du même flux.
-              Le SAV reste peu volumineux (une poignée de dossiers) : pas
-              besoin de la logique « vides »/« perdus » du Projet, toutes ses
-              colonnes restent affichées en permanence. */}
-          <div className="flex-shrink-0 self-stretch w-px bg-separateur mx-1" aria-hidden="true" />
-          <div className="flex-shrink-0 flex flex-col">
-            <div className="px-1 pb-2">
-              <span className="text-xs font-medium uppercase tracking-wider text-texte-doux">SAV</span>
-            </div>
-          </div>
-          {STATUTS_SAV.map((etape) => (
-            <Column
-              key={`sav:${etape[0]}`}
-              etape={etape}
-              dossiers={bySavEtape[etape[0]] || []}
-              onOpen={onOpenDossier}
-              onMove={setADeplacer}
-              dropId={`sav:${etape[0]}`}
-            />
-          ))}
+          {vue === 'sav' &&
+            STATUTS_SAV.map((etape) => (
+              <Column
+                key={`sav:${etape[0]}`}
+                etape={etape}
+                dossiers={bySavEtape[etape[0]] || []}
+                onOpen={onOpenDossier}
+                onMove={setADeplacer}
+                dropId={`sav:${etape[0]}`}
+              />
+            ))}
         </div>
         <DragOverlay>{activeDrag && <Card dossier={activeDrag} onOpen={() => {}} isDragging />}</DragOverlay>
       </DndContext>
