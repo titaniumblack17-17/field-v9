@@ -18,18 +18,44 @@ export default function Catalogue({ onBack }) {
 
   // Le catalogue ne change que par réimport manuel (script), jamais depuis
   // l'app : un chargement unique suffit, pas d'abonnement temps réel.
+  //
+  // Supabase/PostgREST plafonne une requête sans pagination à 1000 lignes :
+  // on récupère donc le catalogue par pages de 1000 jusqu'à épuisement.
   useEffect(() => {
     let actif = true
-    supabase
-      .from('produits')
-      .select('*')
-      .order('designation', { ascending: true })
-      .then(({ data }) => {
+
+    const recupererTousLesProduits = async () => {
+      const TAILLE_PAGE = 1000
+      let tous = []
+      let debut = 0
+      while (true) {
+        const { data, error } = await supabase
+          .from('produits')
+          .select('*')
+          .order('designation', { ascending: true })
+          .range(debut, debut + TAILLE_PAGE - 1)
+        if (error) throw error
+        tous = tous.concat(data ?? [])
+        if (!data || data.length < TAILLE_PAGE) break
+        debut += TAILLE_PAGE
+      }
+      return tous
+    }
+
+    recupererTousLesProduits()
+      .then((tous) => {
         if (actif) {
-          setProduits(data ?? [])
+          setProduits(tous)
           setLoading(false)
         }
       })
+      .catch((error) => {
+        console.error('Erreur lors du chargement du catalogue :', error)
+        if (actif) {
+          setLoading(false)
+        }
+      })
+
     return () => {
       actif = false
     }
