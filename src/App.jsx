@@ -161,6 +161,7 @@ export default function App() {
       <Pipeline
         onBack={back}
         onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
+        onCreate={() => push({ name: 'create' })}
       />
     )
   }
@@ -174,7 +175,7 @@ export default function App() {
       <DossierForm
         client={view.client}
         onCancel={back}
-        onCreated={back}
+        onCreated={(dossier) => replace({ name: 'dossier-detail', dossier })}
       />
     )
   }

@@ -109,7 +109,7 @@ function Column({ etape, dossiers, colRef, onOpen, onMove }) {
   )
 }
 
-export default function Pipeline({ onBack, onOpenDossier }) {
+export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   const [dossiers, setDossiers] = useState([])
   const [activeDrag, setActiveDrag] = useState(null)
   const [aDeplacer, setADeplacer] = useState(null)
@@ -251,7 +251,16 @@ export default function Pipeline({ onBack, onOpenDossier }) {
         <button onClick={onBack} className="text-accent text-sm font-medium h-11 -ml-2 pl-2 pr-1 flex items-center">
           ← Clients
         </button>
-        <h1 className="text-lg font-semibold text-texte">Pipeline</h1>
+        <h1 className="text-lg font-semibold text-texte flex-1">Pipeline</h1>
+        {onCreate && (
+          <button
+            onClick={onCreate}
+            aria-label="Nouveau client"
+            className="w-11 h-11 flex-shrink-0 rounded-full bg-accent text-white text-xl leading-none flex items-center justify-center shadow"
+          >
+            +
+          </button>
+        )}
       </header>
 
       <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto flex-shrink-0">
