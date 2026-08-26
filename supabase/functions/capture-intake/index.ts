@@ -184,6 +184,32 @@ avertissement.
     email: extracted.email?.trim() || null,
   }
 
+  // Garde-fou déterministe : demander au modèle de signaler un e-mail ou un
+  // portable douteux via info_manquante ne suffit pas, il oublie parfois. On
+  // revalide en code, systématiquement, pour qu'une valeur invalide ne puisse
+  // jamais atterrir dans un champ réel — ni à la création, ni en complétant
+  // une fiche existante (les deux branches ci-dessous partagent ce `champs`).
+  const validationWarnings: string[] = []
+
+  if (champs.telephone_portable) {
+    const valeurOriginale = champs.telephone_portable
+    const chiffres = valeurOriginale.replace(/\D/g, "")
+    if (chiffres.length !== 10) {
+      champs.telephone_portable = null
+      validationWarnings.push(
+        `portable incomplet ou invalide (${chiffres.length} chiffres) : « ${valeurOriginale} »`
+      )
+    }
+  }
+
+  if (champs.email) {
+    const valeurOriginale = champs.email
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valeurOriginale)) {
+      champs.email = null
+      validationWarnings.push(`e-mail invalide : « ${valeurOriginale} »`)
+    }
+  }
+
   let client_id: string | null = null
   let cree = false
   let enrichi = false
@@ -248,6 +274,11 @@ avertissement.
   const projetSuggere = !savSuggere && extracted.projet_suggere === true
   const projetTitre = projetSuggere ? (extracted.projet_titre?.trim().slice(0, 60) || null) : null
 
+  // Le info_manquante du modèle et les avertissements déterministes ci-dessus
+  // se complètent : on garde les deux plutôt que de laisser l'un écraser l'autre.
+  const infoManquante =
+    [extracted.info_manquante, ...validationWarnings].filter(Boolean).join(" · ") || null
+
   const { data: inserted, error } = await supabase
     .from("captures")
     .insert({
@@ -256,7 +287,7 @@ avertissement.
       client_id,
       resume: extracted.resume ?? null,
       date_evenement: extracted.date_evenement ?? null,
-      info_manquante: extracted.info_manquante ?? null,
+      info_manquante: infoManquante,
       sav_suggere: savSuggere,
       sav_titre: savTitre,
       projet_suggere: projetSuggere,
