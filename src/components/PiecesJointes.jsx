@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import TexteModifiable from './TexteModifiable'
 import useConfirm from '../hooks/useConfirm'
+import Rubrique from './Rubrique'
 
 const TAILLE_MAX = 25 * 1024 * 1024
 
@@ -208,18 +209,9 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   }
 
   return (
-    <div className="mt-4">
-      <div className="flex items-center justify-between px-1 mb-2">
-        <p className="text-xs text-texte-faible">Pièces jointes</p>
-        <button
-          onClick={() => champFichier.current?.click()}
-          disabled={envoi}
-          className="text-accent text-sm font-medium h-11 px-2 -mr-2 inline-flex items-center disabled:opacity-50"
-        >
-          {envoi ? 'Envoi…' : '+ Ajouter'}
-        </button>
-      </div>
-
+    <>
+      {/* Hors de la Rubrique : le champ doit rester monté pour que le bouton
+          + Ajouter, visible même repliée, puisse encore le déclencher. */}
       <input
         ref={champFichier}
         type="file"
@@ -227,7 +219,20 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
         onChange={envoyer}
         className="hidden"
       />
-
+      <Rubrique
+        titre="Pièces jointes"
+        compte={liste.length}
+        forceOuvert={envoi}
+        action={
+          <button
+            onClick={() => champFichier.current?.click()}
+            disabled={envoi}
+            className="text-accent text-sm font-medium h-11 px-2 -mr-2 inline-flex items-center disabled:opacity-50"
+          >
+            {envoi ? 'Envoi…' : '+ Ajouter'}
+          </button>
+        }
+      >
       {erreur && <p className="text-erreur text-sm mb-2 px-1">{erreur}</p>}
 
       {/* Deux devis chiffrés qui se remplacent, c'est presque toujours deux
@@ -353,6 +358,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
       )}
 
       {boîteConfirmation}
-    </div>
+      </Rubrique>
+    </>
   )
 }

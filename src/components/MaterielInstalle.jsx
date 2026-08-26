@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import TexteModifiable from './TexteModifiable'
 import useConfirm from '../hooks/useConfirm'
+import Rubrique from './Rubrique'
 
 const vide = { marque: '', modele: '', annee: '', quantite: '', note: '' }
 
 export default function MaterielInstalle({ clientId }) {
   const [liste, setListe] = useState([])
   const [saisie, setSaisie] = useState(vide)
-  const [ouvert, setOuvert] = useState(false)
+  const [formulaireOuvert, setFormulaireOuvert] = useState(false)
   const [enregistre, setEnregistre] = useState(false)
   const [confirmer, boîteConfirmation] = useConfirm()
 
@@ -62,7 +63,7 @@ export default function MaterielInstalle({ clientId }) {
       note: saisie.note.trim() || null,
     })
     setSaisie(vide)
-    setOuvert(false)
+    setFormulaireOuvert(false)
     setEnregistre(false)
   }
 
@@ -81,15 +82,20 @@ export default function MaterielInstalle({ clientId }) {
   const anneeCourante = new Date().getFullYear()
 
   return (
-    <div className="mt-4">
-      <div className="flex items-center justify-between px-1 mb-2">
-        <p className="text-xs text-texte-faible">Matériel installé</p>
-        <button onClick={() => setOuvert((o) => !o)} className="text-accent text-sm font-medium h-11 px-2 -mr-2 inline-flex items-center">
-          {ouvert ? 'Fermer' : '+ Ajouter'}
+    <Rubrique
+      titre="Matériel installé"
+      compte={liste.length}
+      forceOuvert={formulaireOuvert}
+      action={
+        <button
+          onClick={() => setFormulaireOuvert((o) => !o)}
+          className="text-accent text-sm font-medium h-11 px-2 -mr-2 inline-flex items-center"
+        >
+          {formulaireOuvert ? 'Fermer' : '+ Ajouter'}
         </button>
-      </div>
-
-      {ouvert && (
+      }
+    >
+      {formulaireOuvert && (
         <div className="bg-carte rounded-xl shadow-sm divide-y divide-separateur mb-2">
           <div className="px-4 py-3">
             <label className="text-xs text-texte-faible" htmlFor="mat-marque">Marque</label>
@@ -160,7 +166,7 @@ export default function MaterielInstalle({ clientId }) {
       )}
 
       {liste.length === 0 ? (
-        !ouvert && <p className="text-texte-faible text-sm px-1">Aucun matériel renseigné.</p>
+        <p className="text-texte-faible text-sm px-1">Aucun matériel renseigné.</p>
       ) : (
         <ul className="space-y-2">
           {liste.map((m) => {
@@ -211,6 +217,6 @@ export default function MaterielInstalle({ clientId }) {
       )}
 
       {boîteConfirmation}
-    </div>
+    </Rubrique>
   )
 }

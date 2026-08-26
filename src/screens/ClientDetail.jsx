@@ -6,6 +6,7 @@ import PiecesJointes from '../components/PiecesJointes'
 import NoteTexte from '../components/NoteTexte'
 import TexteModifiable from '../components/TexteModifiable'
 import ChoixClient from '../components/ChoixClient'
+import Rubrique from '../components/Rubrique'
 import useConfirm from '../hooks/useConfirm'
 import { SuggestionSav, SuggestionProjet, SuggestionPlan } from '../components/SuggestionCapture'
 import { creerDossierDepuisSuggestion, ignorerSuggestion } from '../lib/suggestions'
@@ -580,13 +581,16 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
         <PiecesJointes clientId={client.id} />
 
-        <div className="mt-4">
-          <div className="flex items-center justify-between px-1 mb-2">
-            <p className="text-xs text-texte-faible">Dossiers</p>
+        <Rubrique
+          titre="Dossiers"
+          compte={dossiers.length}
+          defautOuvert
+          action={
             <button onClick={() => onNewDossier(client)} className="text-accent text-sm font-medium h-11 px-2 -mr-2 inline-flex items-center">
               + Nouveau dossier
             </button>
-          </div>
+          }
+        >
           {dossiers.length === 0 ? (
             <p className="text-texte-faible text-sm px-1">Aucun dossier pour l'instant.</p>
           ) : (
@@ -643,21 +647,21 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
               })}
             </ul>
           )}
-        </div>
+        </Rubrique>
 
-        <div className="mt-4">
-          <div className="flex items-baseline justify-between px-1 mb-2">
-            <p className="text-xs text-texte-faible">
-              Informations annexes{infosAnnexes.length > 0 ? ` · ${infosAnnexes.length}` : ''}
-            </p>
+        <Rubrique
+          titre="Informations annexes"
+          compte={infosAnnexes.length}
+          forceOuvert={ajoutInfoOuvert}
+          action={
             <button
               onClick={() => setAjoutInfoOuvert((v) => !v)}
               className="text-accent text-sm font-medium h-11 px-2 -mr-2 inline-flex items-center"
             >
               {ajoutInfoOuvert ? 'Fermer' : '+ Ajouter'}
             </button>
-          </div>
-
+          }
+        >
           {ajoutInfoOuvert && (
             <div className="bg-carte rounded-xl shadow-sm p-3 mb-2">
               <textarea
@@ -726,21 +730,24 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
               </li>
             ))}
           </ul>
-        </div>
+        </Rubrique>
 
         {journal.length > 0 && (
-          <div className="mt-4">
-            <div className="flex items-baseline justify-between px-1 mb-2">
-              <p className="text-xs text-texte-faible">Journal · {journal.length}</p>
-              {journal.length > 2 && (
+          <Rubrique
+            titre="Journal"
+            compte={journal.length}
+            forceOuvert={journal.some(enAttenteSuggestion)}
+            action={
+              journal.length > 2 && (
                 <button
                   onClick={() => setToutLeJournal((v) => !v)}
                   className="text-accent text-xs font-medium h-9 px-2 -mr-2 flex items-center"
                 >
                   {toutLeJournal ? 'Réduire' : `Afficher les ${journal.length} entrées`}
                 </button>
-              )}
-            </div>
+              )
+            }
+          >
             <ul className="space-y-2">
               {journalVisible.map((c) => (
                 <li key={c.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
@@ -824,7 +831,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                 </li>
               ))}
             </ul>
-          </div>
+          </Rubrique>
         )}
         {/* Discret et en fin de fiche : une suppression ne doit pas se cliquer
             par réflexe en descendant la page. */}
