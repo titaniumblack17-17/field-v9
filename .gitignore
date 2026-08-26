@@ -5,3 +5,9 @@ dist
 
 # Dépôt cloné à part, posé ici par accident : suivi par lui-même.
 agency-agents/
+
+# Tarifs fabricant copiés ici à la main (contournement d'un blocage macOS
+# d'accès à iCloud Drive) pour les scripts d'import du catalogue produits —
+# jamais suivis par git, ce sont des fichiers métier de Bruce, pas du code.
+scripts/*.xlsx
+scripts/*.xls
