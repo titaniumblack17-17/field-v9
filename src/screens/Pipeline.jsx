@@ -12,7 +12,7 @@ import {
 } from '@dnd-kit/core'
 import { supabase } from '../lib/supabaseClient'
 import { etatRappel } from '../lib/rappel'
-import { ETAPES_PROJET, STATUTS_SAV, PLAN_STATUT_LABELS } from '../constants/dossiers'
+import { ETAPES_PROJET, STATUTS_SAV, STATUTS_PLAN, PLAN_STATUT_LABELS } from '../constants/dossiers'
 
 function Card({ dossier, onOpen, onMove, isDragging }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: dossier.id })
@@ -184,7 +184,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     supabase
       .from('dossiers')
       .select('*, clients(id, prenom_praticien, nom_praticien, ville)')
-      .in('type', ['projet', 'sav'])
+      .in('type', ['projet', 'sav', 'plan'])
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         if (active) setDossiers(data ?? [])
@@ -200,7 +200,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
             setDossiers((current) => current.filter((d) => d.id !== payload.old.id))
             return
           }
-          if (!['projet', 'sav'].includes(payload.new?.type)) return
+          if (!['projet', 'sav', 'plan'].includes(payload.new?.type)) return
           setDossiers((current) => {
             const exists = current.some((d) => d.id === payload.new.id)
             if (exists) {
@@ -226,16 +226,23 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   STATUTS_SAV.forEach(([id]) => {
     bySavEtape[id] = []
   })
+  const byPlanEtape = {}
+  STATUTS_PLAN.forEach(([id]) => {
+    byPlanEtape[id] = []
+  })
   // Un statut sans colonne correspondante (valeur par défaut de la base,
   // import futur, étape retirée du code) atterrit dans « À classer » plutôt
-  // que de disparaître du tableau sans un mot. Le SAV a son propre
-  // vocabulaire de statuts : « À classer » n'existe pas pour lui, un SAV au
-  // statut inconnu rejoint donc la première colonne SAV plutôt que d'être
-  // perdu silencieusement.
+  // que de disparaître du tableau sans un mot. SAV et Plan ont chacun leur
+  // propre vocabulaire de statuts : « À classer » n'existe pas pour eux, un
+  // dossier au statut inconnu rejoint donc la première colonne de son propre
+  // type plutôt que d'être perdu silencieusement.
   dossiers.forEach((d) => {
     if (d.type === 'sav') {
       const colonne = bySavEtape[d.statut] ? d.statut : STATUTS_SAV[0][0]
       bySavEtape[colonne].push(d)
+    } else if (d.type === 'plan') {
+      const colonne = byPlanEtape[d.statut] ? d.statut : STATUTS_PLAN[0][0]
+      byPlanEtape[colonne].push(d)
     } else {
       const colonne = byEtape[d.statut] ? d.statut : 'a_classer'
       byEtape[colonne].push(d)
@@ -265,14 +272,14 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     const d = dossiers.find((x) => x.id === active.id)
     if (!d) return
     const overId = String(over.id)
-    // Les colonnes SAV portent un id préfixé « sav: » (voir dropId plus bas) :
-    // Projet et SAV n'ont pas le même vocabulaire de statuts, donc un dossier
-    // ne peut être déposé que sur une colonne de son propre type. Sans cette
-    // garde, un dossier SAV lâché près d'une colonne Projet écrirait un
-    // statut du mauvais vocabulaire (ou l'inverse).
-    const estColonneSav = overId.startsWith('sav:')
-    if (estColonneSav !== (d.type === 'sav')) return
-    const statut = estColonneSav ? overId.slice(4) : overId
+    // Les colonnes SAV et Plan portent un id préfixé (« sav: », « plan: » —
+    // voir dropId plus bas) : chaque type a son propre vocabulaire de
+    // statuts, un dossier ne peut être déposé que sur une colonne de son
+    // propre type. Sans cette garde, un dossier lâché près d'une colonne
+    // d'un autre type écrirait un statut du mauvais vocabulaire.
+    const prefixe = ['sav', 'plan'].find((p) => overId.startsWith(`${p}:`))
+    if ((prefixe ?? 'projet') !== d.type) return
+    const statut = prefixe ? overId.slice(prefixe.length + 1) : overId
     if (d.statut === statut) return
     setDossiers((current) => current.map((x) => (x.id === d.id ? { ...x, statut } : x)))
     await supabase.from('dossiers').update({ statut }).eq('id', d.id)
@@ -293,6 +300,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
         >
           <option value="projet">Projet · {dossiers.filter((d) => d.type === 'projet').length}</option>
           <option value="sav">SAV · {dossiers.filter((d) => d.type === 'sav').length}</option>
+          <option value="plan">Plan · {dossiers.filter((d) => d.type === 'plan').length}</option>
         </select>
         <div className="flex-1" />
         {onCreate && (
@@ -381,6 +389,18 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
                 dropId={`sav:${etape[0]}`}
               />
             ))}
+
+          {vue === 'plan' &&
+            STATUTS_PLAN.map((etape) => (
+              <Column
+                key={`plan:${etape[0]}`}
+                etape={etape}
+                dossiers={byPlanEtape[etape[0]] || []}
+                onOpen={onOpenDossier}
+                onMove={setADeplacer}
+                dropId={`plan:${etape[0]}`}
+              />
+            ))}
         </div>
         <DragOverlay>{activeDrag && <Card dossier={activeDrag} onOpen={() => {}} isDragging />}</DragOverlay>
       </DndContext>
@@ -406,8 +426,13 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
             <div className="flex flex-col gap-2">
               {/* Le menu « Déplacer » doit proposer le vocabulaire du bon
                   type : un dossier SAV n'a pas d'étape « Devis envoyé », et
-                  un Projet n'a pas de statut « Clos ». */}
-              {(aDeplacer.type === 'sav' ? STATUTS_SAV : ETAPES_PROJET).map(([valeur, libelle]) => {
+                  un Projet n'a pas de statut « Clos » ou « Soldé ». */}
+              {(aDeplacer.type === 'sav'
+                ? STATUTS_SAV
+                : aDeplacer.type === 'plan'
+                  ? STATUTS_PLAN
+                  : ETAPES_PROJET
+              ).map(([valeur, libelle]) => {
                 const courante = valeur === aDeplacer.statut
                 return (
                   <button
