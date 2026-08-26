@@ -5,7 +5,7 @@ const normalize = (s) =>
   (s ?? '')
     .toString()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
 
 const formaterPrix = (n) => `${new Intl.NumberFormat('fr-FR').format(n)} €`
@@ -13,6 +13,7 @@ const formaterPrix = (n) => `${new Intl.NumberFormat('fr-FR').format(n)} €`
 export default function Catalogue({ onBack }) {
   const [produits, setProduits] = useState([])
   const [loading, setLoading] = useState(true)
+  const [erreur, setErreur] = useState(null)
   const [query, setQuery] = useState('')
   const [ouvert, setOuvert] = useState(null)
 
@@ -57,6 +58,7 @@ export default function Catalogue({ onBack }) {
       .catch((error) => {
         console.error('Erreur lors du chargement du catalogue :', error)
         if (actif) {
+          setErreur('Impossible de charger le catalogue.')
           setLoading(false)
         }
       })
@@ -167,19 +169,23 @@ export default function Catalogue({ onBack }) {
       <main className="px-4 pb-8">
         {loading && <p className="text-texte-faible text-sm">Chargement…</p>}
 
-        {!loading && produits.length === 0 && (
+        {!loading && erreur && (
+          <p className="text-erreur text-sm mt-8 text-center">{erreur}</p>
+        )}
+
+        {!loading && !erreur && produits.length === 0 && (
           <p className="text-texte-faible text-sm mt-8 text-center">
             Aucun produit importé pour l'instant.
           </p>
         )}
 
-        {!loading && produits.length > 0 && resultats.length === 0 && (
+        {!loading && !erreur && produits.length > 0 && resultats.length === 0 && (
           <p className="text-texte-faible text-sm mt-8 text-center">
             Aucun produit pour « {query} ».
           </p>
         )}
 
-        {query && resultats.length > 0 && (
+        {!erreur && query && resultats.length > 0 && (
           <p className="text-xs text-texte-faible mb-2 px-1">
             {resultats.length} résultat{resultats.length > 1 ? 's' : ''}
           </p>
