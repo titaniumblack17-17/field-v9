@@ -207,9 +207,14 @@ export default function Catalogue({ onBack }) {
                     {formaterPrix(p.prix_conseille)}
                   </p>
                   {p.prix_offre != null && (
-                    <p className="text-xs text-accent font-semibold tabular-nums mt-0.5">
-                      {formaterPrix(p.prix_offre)} en offre
-                    </p>
+                    <>
+                      <p className="text-xs text-accent font-semibold tabular-nums mt-0.5">
+                        {formaterPrix(p.prix_offre)} en offre
+                      </p>
+                      {p.offre_periode && (
+                        <p className="text-xs text-texte-faible mt-0.5">{p.offre_periode}</p>
+                      )}
+                    </>
                   )}
                 </div>
               </button>
