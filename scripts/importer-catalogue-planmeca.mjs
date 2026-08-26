@@ -39,7 +39,16 @@ for (const nomFeuille of classeur.SheetNames) {
   if (FEUILLES_IGNOREES.has(nomFeuille)) continue
   const feuille = classeur.Sheets[nomFeuille]
   const lignes = XLSX.utils.sheet_to_json(feuille, { header: 1, defval: null })
-  const extraits = extraireProduitsDeFeuille(lignes)
+  // Une feuille au format inattendu (ex. « Feature » sans colonne « Price € »)
+  // ne doit pas planter tout l'import : on la signale et on continue avec les
+  // autres feuilles, plutôt que de perdre le résultat des feuilles déjà lues.
+  let extraits
+  try {
+    extraits = extraireProduitsDeFeuille(lignes)
+  } catch (e) {
+    console.error(`  ⚠ ${nomFeuille} : erreur — ${e.message}`)
+    continue
+  }
   resumeParFeuille.push([nomFeuille, extraits.length])
   for (const p of extraits) {
     produits.push({
@@ -57,9 +66,7 @@ for (const nomFeuille of classeur.SheetNames) {
   }
 }
 
-console.log(
-  `${produits.length} produits extraits de ${classeur.SheetNames.length - FEUILLES_IGNOREES.size} feuilles :`
-)
+console.log(`${produits.length} produits extraits de ${resumeParFeuille.length} feuilles :`)
 for (const [feuille, n] of resumeParFeuille) {
   console.log(n === 0 ? `  ⚠ ${feuille} : aucun produit (à vérifier si inattendu)` : `  ${feuille} : ${n}`)
 }
@@ -69,16 +76,13 @@ if (produits.length === 0) {
   process.exit(1)
 }
 
-// Réimporter remplace entièrement les produits de la marque (vidage puis
-// réinsertion) plutôt qu'une mise à jour ligne par ligne : un produit disparu
-// du nouveau tarif disparaît aussi du catalogue, sans laisser de fiche
-// périmée invisible.
-const { error: erreurSuppression } = await supabase.from('produits').delete().eq('marque', MARQUE)
-if (erreurSuppression) {
-  console.error('Échec de la suppression des produits existants :', erreurSuppression.message)
-  process.exit(1)
-}
-
+// Réimporter remplace entièrement les produits de la marque, mais en insérant
+// D'ABORD les nouvelles lignes puis en supprimant ENSUITE les anciennes (par
+// date d'import antérieure à celle-ci) — jamais l'inverse. Si un lot d'insertion
+// échoue en cours de route, la table garde alors l'intégralité de l'ancien
+// catalogue (avec, au pire, quelques doublons transitoires), plutôt que de se
+// retrouver amputée d'une partie de ses produits sans qu'aucune version
+// complète ne subsiste.
 const TAILLE_LOT = 500
 for (let i = 0; i < produits.length; i += TAILLE_LOT) {
   const lot = produits.slice(i, i + TAILLE_LOT)
@@ -87,6 +91,16 @@ for (let i = 0; i < produits.length; i += TAILLE_LOT) {
     console.error(`Échec de l'import du lot ${Math.floor(i / TAILLE_LOT) + 1} :`, error.message)
     process.exit(1)
   }
+}
+
+const { error: erreurSuppression } = await supabase
+  .from('produits')
+  .delete()
+  .eq('marque', MARQUE)
+  .lt('importe_le', importeLe)
+if (erreurSuppression) {
+  console.error('Échec de la suppression des anciens produits :', erreurSuppression.message)
+  process.exit(1)
 }
 
 console.log(`Import terminé : ${produits.length} produits Planmeca en base.`)
