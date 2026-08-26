@@ -12,7 +12,7 @@ import {
 } from '@dnd-kit/core'
 import { supabase } from '../lib/supabaseClient'
 import { etatRappel } from '../lib/rappel'
-import { ETAPES_PROJET, PLAN_STATUT_LABELS } from '../constants/dossiers'
+import { ETAPES_PROJET, STATUTS_SAV, PLAN_STATUT_LABELS } from '../constants/dossiers'
 
 function Card({ dossier, onOpen, onMove, isDragging }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: dossier.id })
@@ -61,6 +61,13 @@ function Card({ dossier, onOpen, onMove, isDragging }) {
           📐 Plan {PLAN_STATUT_LABELS[dossier.plan_statut]?.toLowerCase()}
         </p>
       )}
+      {/* Un SAV « en attente » sans le motif force à ouvrir la fiche pour
+          savoir quoi relancer — même logique que dans le brief du soir. */}
+      {dossier.type === 'sav' && dossier.statut === 'en_attente' && (
+        <p className="text-[10px] text-texte-doux mt-1 truncate">
+          ⏳ En attente{dossier.bloque_par ? ` — ${dossier.bloque_par}` : ' — motif à préciser'}
+        </p>
+      )}
       {/* Le glisser-déposer ne peut pas franchir 14 colonnes sur un écran de
           téléphone : ce bouton ouvre la liste des étapes. */}
       {onMove && (
@@ -81,8 +88,8 @@ function Card({ dossier, onOpen, onMove, isDragging }) {
   )
 }
 
-function Column({ etape, dossiers, colRef, onOpen, onMove }) {
-  const { setNodeRef, isOver } = useDroppable({ id: etape[0] })
+function Column({ etape, dossiers, colRef, onOpen, onMove, dropId }) {
+  const { setNodeRef, isOver } = useDroppable({ id: dropId ?? etape[0] })
   return (
     <div
       ref={(el) => {
@@ -173,7 +180,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     supabase
       .from('dossiers')
       .select('*, clients(id, prenom_praticien, nom_praticien, ville)')
-      .eq('type', 'projet')
+      .in('type', ['projet', 'sav'])
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         if (active) setDossiers(data ?? [])
@@ -189,7 +196,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
             setDossiers((current) => current.filter((d) => d.id !== payload.old.id))
             return
           }
-          if (payload.new?.type !== 'projet') return
+          if (!['projet', 'sav'].includes(payload.new?.type)) return
           setDossiers((current) => {
             const exists = current.some((d) => d.id === payload.new.id)
             if (exists) {
@@ -211,12 +218,24 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   ETAPES_PROJET.forEach(([id]) => {
     byEtape[id] = []
   })
+  const bySavEtape = {}
+  STATUTS_SAV.forEach(([id]) => {
+    bySavEtape[id] = []
+  })
   // Un statut sans colonne correspondante (valeur par défaut de la base,
   // import futur, étape retirée du code) atterrit dans « À classer » plutôt
-  // que de disparaître du tableau sans un mot.
+  // que de disparaître du tableau sans un mot. Le SAV a son propre
+  // vocabulaire de statuts : « À classer » n'existe pas pour lui, un SAV au
+  // statut inconnu rejoint donc la première colonne SAV plutôt que d'être
+  // perdu silencieusement.
   dossiers.forEach((d) => {
-    const colonne = byEtape[d.statut] ? d.statut : 'a_classer'
-    byEtape[colonne].push(d)
+    if (d.type === 'sav') {
+      const colonne = bySavEtape[d.statut] ? d.statut : STATUTS_SAV[0][0]
+      bySavEtape[colonne].push(d)
+    } else {
+      const colonne = byEtape[d.statut] ? d.statut : 'a_classer'
+      byEtape[colonne].push(d)
+    }
   })
 
   // Une étape vide reste affichée si elle est la destination d'un glissé en
@@ -240,9 +259,19 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     setActiveDrag(null)
     if (!over) return
     const d = dossiers.find((x) => x.id === active.id)
-    if (!d || d.statut === over.id) return
-    setDossiers((current) => current.map((x) => (x.id === d.id ? { ...x, statut: over.id } : x)))
-    await supabase.from('dossiers').update({ statut: over.id }).eq('id', d.id)
+    if (!d) return
+    const overId = String(over.id)
+    // Les colonnes SAV portent un id préfixé « sav: » (voir dropId plus bas) :
+    // Projet et SAV n'ont pas le même vocabulaire de statuts, donc un dossier
+    // ne peut être déposé que sur une colonne de son propre type. Sans cette
+    // garde, un dossier SAV lâché près d'une colonne Projet écrirait un
+    // statut du mauvais vocabulaire (ou l'inverse).
+    const estColonneSav = overId.startsWith('sav:')
+    if (estColonneSav !== (d.type === 'sav')) return
+    const statut = estColonneSav ? overId.slice(4) : overId
+    if (d.statut === statut) return
+    setDossiers((current) => current.map((x) => (x.id === d.id ? { ...x, statut } : x)))
+    await supabase.from('dossiers').update({ statut }).eq('id', d.id)
   }
 
   return (
@@ -323,6 +352,28 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
               onMove={setADeplacer}
             />
           ))}
+
+          {/* Séparateur visuel entre les colonnes Projet et les colonnes SAV :
+              deux pipelines distincts, pas une suite de colonnes du même flux.
+              Le SAV reste peu volumineux (une poignée de dossiers) : pas
+              besoin de la logique « vides »/« perdus » du Projet, toutes ses
+              colonnes restent affichées en permanence. */}
+          <div className="flex-shrink-0 self-stretch w-px bg-separateur mx-1" aria-hidden="true" />
+          <div className="flex-shrink-0 flex flex-col">
+            <div className="px-1 pb-2">
+              <span className="text-xs font-medium uppercase tracking-wider text-texte-doux">SAV</span>
+            </div>
+          </div>
+          {STATUTS_SAV.map((etape) => (
+            <Column
+              key={`sav:${etape[0]}`}
+              etape={etape}
+              dossiers={bySavEtape[etape[0]] || []}
+              onOpen={onOpenDossier}
+              onMove={setADeplacer}
+              dropId={`sav:${etape[0]}`}
+            />
+          ))}
         </div>
         <DragOverlay>{activeDrag && <Card dossier={activeDrag} onOpen={() => {}} isDragging />}</DragOverlay>
       </DndContext>
@@ -346,7 +397,10 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
             <p className="text-xs text-texte-faible mb-4">Choisir la nouvelle étape</p>
 
             <div className="flex flex-col gap-2">
-              {ETAPES_PROJET.map(([valeur, libelle]) => {
+              {/* Le menu « Déplacer » doit proposer le vocabulaire du bon
+                  type : un dossier SAV n'a pas d'étape « Devis envoyé », et
+                  un Projet n'a pas de statut « Clos ». */}
+              {(aDeplacer.type === 'sav' ? STATUTS_SAV : ETAPES_PROJET).map(([valeur, libelle]) => {
                 const courante = valeur === aDeplacer.statut
                 return (
                   <button
