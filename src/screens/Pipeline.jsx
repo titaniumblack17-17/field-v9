@@ -12,9 +12,16 @@ import {
 } from '@dnd-kit/core'
 import { supabase } from '../lib/supabaseClient'
 import { etatRappel } from '../lib/rappel'
-import { ETAPES_PROJET, STATUTS_SAV, STATUTS_PLAN, PLAN_STATUT_LABELS } from '../constants/dossiers'
+import {
+  ETAPES_PROJET,
+  STATUTS_SAV,
+  STATUTS_PLAN,
+  PLAN_STATUT_LABELS,
+  COMMERCIAUX_LABELS,
+  PLAN_SANS_COMMERCIAL,
+} from '../constants/dossiers'
 
-function Card({ dossier, onOpen, onMove, isDragging }) {
+function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: dossier.id })
   const style = transform ? { transform: `translate(${transform.x}px,${transform.y}px)`, zIndex: 50 } : {}
   const client = dossier.clients
@@ -26,8 +33,16 @@ function Card({ dossier, onOpen, onMove, isDragging }) {
       {...attributes}
       {...listeners}
       onClick={() => onOpen(dossier)}
+      // La colonne où on se trouve en faisant défiler le kanban ressort : ses
+      // fiches restent nettes, celles des colonnes voisines à peine visibles
+      // s'effacent — sans ça, impossible de dire d'un coup d'œil dans quelle
+      // étape on est vraiment quand deux colonnes se partagent l'écran.
       className={`bg-carte rounded-xl border select-none cursor-pointer transition-all p-2.5 ${
-        isDragging ? 'shadow-xl rotate-1 opacity-90' : 'border-bordure shadow-sm hover:border-bordure'
+        isDragging
+          ? 'shadow-xl rotate-1 opacity-90'
+          : dansColonneActive
+            ? 'border-accent/50 shadow-sm ring-1 ring-accent/30'
+            : 'border-bordure shadow-sm opacity-40'
       }`}
     >
       <p className="text-[13px] font-medium text-texte leading-tight mb-0.5">
@@ -68,6 +83,16 @@ function Card({ dossier, onOpen, onMove, isDragging }) {
           ⏳ En attente{dossier.bloque_par ? ` — ${dossier.bloque_par}` : ' — motif à préciser'}
         </p>
       )}
+      {/* Pour qui est ce plan se voit sans ouvrir la fiche : Bruce trie ses
+          plans en premier lieu par commercial destinataire, pas par étape. */}
+      {dossier.type === 'plan' && dossier.commercial && (
+        <p className="text-[10px] font-medium text-texte-doux mt-1 truncate">
+          👤 {COMMERCIAUX_LABELS[dossier.commercial] ?? dossier.commercial}
+        </p>
+      )}
+      {PLAN_SANS_COMMERCIAL(dossier) && (
+        <p className="text-[10px] font-medium text-alerte mt-1">👤 Commercial ?</p>
+      )}
       {/* Le glisser-déposer ne peut pas franchir 14 colonnes sur un écran de
           téléphone : ce bouton ouvre la liste des étapes. */}
       {onMove && (
@@ -88,7 +113,7 @@ function Card({ dossier, onOpen, onMove, isDragging }) {
   )
 }
 
-function Column({ etape, dossiers, colRef, onOpen, onMove, dropId }) {
+function Column({ etape, dossiers, colRef, onOpen, onMove, dropId, actif }) {
   const { setNodeRef, isOver } = useDroppable({ id: dropId ?? etape[0] })
   return (
     <div
@@ -99,7 +124,11 @@ function Column({ etape, dossiers, colRef, onOpen, onMove, dropId }) {
       className="flex-shrink-0 w-48 flex flex-col"
     >
       <div className="flex items-center justify-between px-1 pb-2">
-        <span className="text-xs font-medium uppercase tracking-wider text-texte-doux">{etape[1]}</span>
+        <span
+          className={`text-xs font-medium uppercase tracking-wider ${actif ? 'text-accent' : 'text-texte-doux'}`}
+        >
+          {etape[1]}
+        </span>
         {dossiers.length > 0 && (
           <span className="text-xs text-texte-faible bg-carte-douce px-1.5 py-0.5 rounded-full">{dossiers.length}</span>
         )}
@@ -109,7 +138,7 @@ function Column({ etape, dossiers, colRef, onOpen, onMove, dropId }) {
         style={{ background: isOver ? 'rgb(var(--accent) / 0.15)' : 'transparent' }}
       >
         {dossiers.map((d) => (
-          <Card key={d.id} dossier={d} onOpen={onOpen} onMove={onMove} />
+          <Card key={d.id} dossier={d} onOpen={onOpen} onMove={onMove} dansColonneActive={actif} />
         ))}
       </div>
     </div>
@@ -140,7 +169,11 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   const zoneRef = useRef(null)
   const pillRefs = useRef({})
 
-  const suivreDefilement = () => {
+  // force ignore la comparaison avec l'étape courante : après un changement
+  // de kanban, « en_cours » (SAV et Plan partagent cette clé) resterait sinon
+  // désignée par erreur comme l'étape active de l'un parce qu'elle l'était
+  // déjà pour l'autre, sans qu'aucun scroll ne vienne corriger l'erreur.
+  const suivreDefilement = (force = false) => {
     const zone = zoneRef.current
     if (!zone) return
     const bord = zone.getBoundingClientRect().left
@@ -151,17 +184,18 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
       const d = Math.abs(el.getBoundingClientRect().left - bord)
       if (d < ecart) { ecart = d; proche = cle }
     }
-    if (proche && proche !== etapeVue) {
+    if (proche && (force || proche !== etapeVue)) {
       setEtapeVue(proche)
       pillRefs.current[proche]?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' })
     }
   }
 
-  // Au premier rendu, aucune étape n'est marquée tant qu'on n'a pas défilé.
-  // On désigne donc la première dès que les colonnes sont posées.
+  // Aucune étape n'est marquée tant qu'on n'a pas défilé, ni juste après un
+  // changement de kanban : on désigne donc la première dès que les colonnes
+  // du kanban choisi sont posées.
   useEffect(() => {
-    if (dossiers.length) suivreDefilement()
-  }, [dossiers.length])
+    if (dossiers.length) suivreDefilement(true)
+  }, [dossiers.length, vue])
 
   const allerA = (cle) => {
     colRefs.current[cle]?.scrollIntoView({
@@ -361,7 +395,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div
           ref={zoneRef}
-          onScroll={vue === 'projet' ? suivreDefilement : undefined}
+          onScroll={() => suivreDefilement()}
           className="flex gap-3 px-4 pb-4 overflow-x-auto flex-1 items-start"
         >
           {vue === 'projet' &&
@@ -375,6 +409,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
                 }}
                 onOpen={onOpenDossier}
                 onMove={setADeplacer}
+                actif={!etapeVue || etape[0] === etapeVue}
               />
             ))}
 
@@ -384,9 +419,13 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
                 key={`sav:${etape[0]}`}
                 etape={etape}
                 dossiers={bySavEtape[etape[0]] || []}
+                colRef={(el) => {
+                  colRefs.current[etape[0]] = el
+                }}
                 onOpen={onOpenDossier}
                 onMove={setADeplacer}
                 dropId={`sav:${etape[0]}`}
+                actif={!etapeVue || etape[0] === etapeVue}
               />
             ))}
 
@@ -396,9 +435,13 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
                 key={`plan:${etape[0]}`}
                 etape={etape}
                 dossiers={byPlanEtape[etape[0]] || []}
+                colRef={(el) => {
+                  colRefs.current[etape[0]] = el
+                }}
                 onOpen={onOpenDossier}
                 onMove={setADeplacer}
                 dropId={`plan:${etape[0]}`}
+                actif={!etapeVue || etape[0] === etapeVue}
               />
             ))}
         </div>
