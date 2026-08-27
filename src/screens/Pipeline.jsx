@@ -22,7 +22,14 @@ import {
 } from '../constants/dossiers'
 
 function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: dossier.id })
+  // Un plan encore dû sur son propre projet est emprunté au kanban Projet
+  // pour se voir aussi dans Plan (sans dossier Plan séparé) : son statut
+  // appartient au vocabulaire Projet, pas Plan — le glisser-déposer et le
+  // bouton « Déplacer » n'ont donc pas de sens ici, seule l'ouverture reste.
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+    id: dossier.id,
+    disabled: dossier.emprunte,
+  })
   const style = transform ? { transform: `translate(${transform.x}px,${transform.y}px)`, zIndex: 50 } : {}
   const client = dossier.clients
 
@@ -93,9 +100,14 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
       {PLAN_SANS_COMMERCIAL(dossier) && (
         <p className="text-[10px] font-medium text-alerte mt-1">👤 Commercial ?</p>
       )}
+      {/* Emprunté au Projet : jamais facturé, pas de commercial à préciser —
+          la fiche le rappelle pour ne pas le confondre avec un vrai dossier Plan. */}
+      {dossier.emprunte && (
+        <p className="text-[10px] font-medium text-texte-doux mt-1">👤 Vous — non facturé</p>
+      )}
       {/* Le glisser-déposer ne peut pas franchir 14 colonnes sur un écran de
           téléphone : ce bouton ouvre la liste des étapes. */}
-      {onMove && (
+      {onMove && !dossier.emprunte && (
         <button
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
@@ -295,6 +307,14 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     } else {
       const colonne = byEtape[d.statut] ? d.statut : 'a_classer'
       byEtape[colonne].push(d)
+      // Un plan encore dû ou en cours sur sa propre vente doit se voir dans
+      // Plan aussi, sans qu'un dossier Plan séparé n'existe : Bruce veut tout
+      // son travail de plan au même endroit, facturé ou non. Une fois « fait »
+      // il n'y a plus rien à suivre côté Plan (pas de facturation à solder).
+      if (d.plan_statut === 'a_faire' || d.plan_statut === 'en_cours') {
+        const colPlan = d.plan_statut === 'a_faire' ? 'a_planifier' : 'en_cours'
+        byPlanEtape[colPlan].push({ ...d, emprunte: true })
+      }
     }
   })
 
@@ -349,7 +369,12 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
         >
           <option value="projet">Projet · {dossiers.filter((d) => d.type === 'projet').length}</option>
           <option value="sav">SAV · {dossiers.filter((d) => d.type === 'sav').length}</option>
-          <option value="plan">Plan · {dossiers.filter((d) => d.type === 'plan').length}</option>
+          <option value="plan">
+            Plan ·{' '}
+            {dossiers.filter(
+              (d) => d.type === 'plan' || (d.type === 'projet' && ['a_faire', 'en_cours'].includes(d.plan_statut))
+            ).length}
+          </option>
         </select>
         <div className="flex-1" />
         {onCreate && (
