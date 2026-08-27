@@ -30,3 +30,33 @@ export const lienifier = (texte) => {
     )
   })
 }
+
+// L'API Clipboard moderne refuse parfois l'écriture (document sans focus,
+// contexte embarqué, restriction du navigateur) sans que ce soit un vrai
+// problème d'autorisation à corriger côté utilisateur — un repli avec un
+// champ texte temporaire + execCommand('copy') marche dans bien plus de
+// situations, quitte à être une API dépréciée.
+export const copierPressePapier = async (texte) => {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(texte)
+      return true
+    } catch {
+      // on retente avec le repli ci-dessous
+    }
+  }
+  try {
+    const zone = document.createElement('textarea')
+    zone.value = texte
+    zone.style.position = 'fixed'
+    zone.style.opacity = '0'
+    document.body.appendChild(zone)
+    zone.focus()
+    zone.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(zone)
+    return ok
+  } catch {
+    return false
+  }
+}

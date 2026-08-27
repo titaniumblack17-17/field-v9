@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { nomClient } from '../lib/client'
 import { resumeDossier } from '../lib/resume'
+import { copierPressePapier } from '../lib/texte'
 import ChampChoix from '../components/ChampChoix'
 import PiecesJointes from '../components/PiecesJointes'
 import Rappels from '../components/Rappels'
@@ -60,12 +61,12 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   // partagé dans Field V9, ça passe par un texte propre à coller dans un
   // SMS/mail plutôt que de recopier chaque champ à la main.
   const copierResume = async () => {
-    try {
-      await navigator.clipboard.writeText(resumeDossier(dossier, client, notes))
+    const ok = await copierPressePapier(resumeDossier(dossier, client, notes))
+    if (ok) {
       setResumeCopie(true)
       setTimeout(() => setResumeCopie(false), 3000)
-    } catch {
-      setError("Impossible de copier — réessayez, ou vérifiez l'autorisation presse-papier du navigateur.")
+    } else {
+      setError('Impossible de copier — sélectionnez et copiez le texte manuellement.')
     }
   }
 
