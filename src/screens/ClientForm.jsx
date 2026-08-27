@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import PersonListField from '../components/PersonListField'
+import ChampChoix from '../components/ChampChoix'
+import { SOURCE_OPTIONS, SOURCE_DETAIL_PLACEHOLDER } from '../constants/clients'
 
 const FIELDS = [
   ['prenom_praticien', 'Prénom du praticien', false],
@@ -92,6 +94,27 @@ export default function ClientForm({ onCreated, onCancel }) {
           ))}
           <PersonListField label="Associé(s)" people={associes} onChange={setAssocies} />
           <PersonListField label="Assistante(s)" people={assistantes} onChange={setAssistantes} />
+          <ChampChoix
+            id="source_type"
+            label="D'où vient ce contact ?"
+            value={values.source_type ?? ''}
+            options={SOURCE_OPTIONS}
+            videLibelle="À préciser"
+            onChange={(v) => setValues((x) => ({ ...x, source_type: v || null }))}
+          />
+          {values.source_type && (
+            <div className="px-4 py-3">
+              <label className="text-xs text-texte-faible" htmlFor="source_detail">
+                {SOURCE_DETAIL_PLACEHOLDER[values.source_type]}
+              </label>
+              <input
+                id="source_detail"
+                value={values.source_detail ?? ''}
+                onChange={setField('source_detail')}
+                className="w-full text-texte outline-none bg-transparent"
+              />
+            </div>
+          )}
           <div className="px-4 py-3">
             <label className="text-xs text-texte-faible" htmlFor="notes">
               Informations annexes (mail, SMS, ou toute autre info à coller)

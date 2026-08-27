@@ -3,6 +3,8 @@ import { nomClient } from '../lib/client'
 import { lienifier } from '../lib/texte'
 import { supabase } from '../lib/supabaseClient'
 import PersonListField from '../components/PersonListField'
+import ChampChoix from '../components/ChampChoix'
+import { SOURCE_OPTIONS, SOURCE_DETAIL_PLACEHOLDER } from '../constants/clients'
 import MaterielInstalle from '../components/MaterielInstalle'
 import PiecesJointes from '../components/PiecesJointes'
 import NoteTexte from '../components/NoteTexte'
@@ -196,7 +198,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   const dirty = useMemo(() => {
     // « notes » n'est plus édité ici : c'est désormais une liste d'entrées
     // horodatées (client_notes), pas un champ du formulaire.
-    const champs = FIELDS.map(([k]) => k).some(
+    const champs = [...FIELDS.map(([k]) => k), 'source_type', 'source_detail'].some(
       (k) => (values[k] ?? '') !== (client[k] ?? '')
     )
     const gens =
@@ -225,6 +227,8 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     )
     update.associes = cleanPeople(associes)
     update.assistantes = cleanPeople(assistantes)
+    update.source_type = values.source_type || null
+    update.source_detail = (values.source_detail ?? '').trim() || null
 
     const { data, error: dbError } = await supabase
       .from('clients')
@@ -590,6 +594,28 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           ))}
           <PersonListField label="Associé(s)" people={associes} onChange={setAssocies} />
           <PersonListField label="Assistante(s)" people={assistantes} onChange={setAssistantes} />
+          <ChampChoix
+            id="source_type"
+            label="D'où vient ce contact ?"
+            value={values.source_type ?? ''}
+            options={SOURCE_OPTIONS}
+            videLibelle="À préciser"
+            onChange={(v) => setValues((x) => ({ ...x, source_type: v || null }))}
+          />
+          {values.source_type && (
+            <div className="px-4 py-3">
+              <label className="text-xs text-texte-faible" htmlFor="source_detail">
+                {SOURCE_DETAIL_PLACEHOLDER[values.source_type]}
+              </label>
+              <input
+                id="source_detail"
+                value={values.source_detail ?? ''}
+                onChange={setField('source_detail')}
+                placeholder="—"
+                className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome"
+              />
+            </div>
+          )}
         </div>
 
         {error && <p className="text-erreur text-sm mt-3">{error}</p>}
