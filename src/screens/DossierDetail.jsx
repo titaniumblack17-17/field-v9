@@ -60,9 +60,13 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   // partagé dans Field V9, ça passe par un texte propre à coller dans un
   // SMS/mail plutôt que de recopier chaque champ à la main.
   const copierResume = async () => {
-    await navigator.clipboard.writeText(resumeDossier(dossier, client, notes))
-    setResumeCopie(true)
-    setTimeout(() => setResumeCopie(false), 3000)
+    try {
+      await navigator.clipboard.writeText(resumeDossier(dossier, client, notes))
+      setResumeCopie(true)
+      setTimeout(() => setResumeCopie(false), 3000)
+    } catch {
+      setError("Impossible de copier — réessayez, ou vérifiez l'autorisation presse-papier du navigateur.")
+    }
   }
 
   // Une note tapée sur plusieurs lignes doit rester entièrement visible

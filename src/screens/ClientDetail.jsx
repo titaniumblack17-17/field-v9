@@ -115,9 +115,13 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   // Partager une fiche avec un collègue aujourd'hui, faute de compte partagé
   // dans Field V9, ça passe par un texte propre à coller dans un SMS/mail.
   const copierResume = async () => {
-    await navigator.clipboard.writeText(resumeClient(client, dossiers))
-    setResumeCopie(true)
-    setTimeout(() => setResumeCopie(false), 3000)
+    try {
+      await navigator.clipboard.writeText(resumeClient(client, dossiers))
+      setResumeCopie(true)
+      setTimeout(() => setResumeCopie(false), 3000)
+    } catch {
+      setError("Impossible de copier — réessayez, ou vérifiez l'autorisation presse-papier du navigateur.")
+    }
   }
 
   // Une transcription complète (Plaud, réunion) ne rentre jamais dans le
