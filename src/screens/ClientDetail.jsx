@@ -102,6 +102,22 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   const [creationSav, setCreationSav] = useState(null)
   const [creationProjet, setCreationProjet] = useState(null)
   const [creationPlan, setCreationPlan] = useState(null)
+  // Choix du dossier cible quand il y en a plusieurs sur la fiche ; copie
+  // directe s'il n'y en a qu'un — pas de sélection pour rien.
+  const [captureACopier, setCaptureACopier] = useState(null)
+  const [copieFaite, setCopieFaite] = useState(null)
+
+  // Une transcription complète (Plaud, réunion) ne rentre jamais dans le
+  // résumé d'une phrase de la capture — le texte intégral part tel quel dans
+  // les notes du dossier, sans repasser par l'IA, pour ne rien perdre.
+  const copierDansDossier = async (capture, dossier) => {
+    await supabase
+      .from('dossier_notes')
+      .insert({ dossier_id: dossier.id, texte: capture.texte })
+    setCaptureACopier(null)
+    setCopieFaite({ captureId: capture.id, titre: dossier.titre || TYPE_LABELS[dossier.type] })
+    setTimeout(() => setCopieFaite((v) => (v?.captureId === capture.id ? null : v)), 4000)
+  }
 
   const supprimerCapture = async (capture) => {
     const extrait = (capture.resume || capture.texte || '').slice(0, 60)
@@ -796,6 +812,18 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                         Modifier
                       </button>
                     )}
+                    {c.texte && dossiers.length > 0 && (
+                      <button
+                        onClick={() =>
+                          dossiers.length === 1
+                            ? copierDansDossier(c, dossiers[0])
+                            : setCaptureACopier(c)
+                        }
+                        className="text-accent text-xs font-medium h-9 px-1"
+                      >
+                        → Dossier
+                      </button>
+                    )}
                     <button
                       onClick={() => supprimerCapture(c)}
                       className="text-texte-fantome text-xs h-9 px-1"
@@ -803,6 +831,12 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                       Supprimer
                     </button>
                   </div>
+
+                  {copieFaite?.captureId === c.id && (
+                    <p className="text-xs text-accent mt-1">
+                      ✓ Copié dans « {copieFaite.titre} »
+                    </p>
+                  )}
 
                   {c.info_manquante && (
                     <p className="text-xs text-alerte mt-1">⚠ {c.info_manquante}</p>
@@ -864,6 +898,37 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           onChoisir={fusionner}
           onFermer={() => setAFusionner(false)}
         />
+      )}
+
+      {captureACopier && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-end"
+          onClick={() => setCaptureACopier(null)}
+        >
+          <div
+            className="bg-carte w-full rounded-t-2xl p-4 max-h-[75vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-sm font-semibold text-texte mb-3">Copier dans quel dossier ?</p>
+            <div className="flex flex-col gap-2">
+              {dossiers.map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => copierDansDossier(captureACopier, d)}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-bordure text-left text-sm text-texte-doux"
+                >
+                  {d.titre || TYPE_LABELS[d.type]}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setCaptureACopier(null)}
+              className="w-full mt-3 py-3 rounded-xl bg-carte-douce text-texte-doux text-sm font-medium"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
       )}
 
       {dirty && (
