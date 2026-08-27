@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import ChampChoix from '../components/ChampChoix'
 import PiecesJointes from '../components/PiecesJointes'
@@ -51,6 +51,16 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   const [toutesNotes, setToutesNotes] = useState(false)
   const [noteEnEdition, setNoteEnEdition] = useState(null)
   const [confirmer, boîteConfirmation] = useConfirm()
+  const noteTextareaRef = useRef(null)
+
+  // Une note tapée sur plusieurs lignes doit rester entièrement visible
+  // pendant la saisie — une hauteur fixe à 1 ligne obligeait à faire défiler
+  // dans le champ pour relire ce qu'on venait d'écrire.
+  const ajusterHauteurNote = (el) => {
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
 
   const supprimerNote = async (note) => {
     const extrait = note.texte.length > 60 ? note.texte.slice(0, 60) + '…' : note.texte
@@ -287,6 +297,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
     setAddingNote(true)
     await supabase.from('dossier_notes').insert({ dossier_id: dossier.id, texte: newNote.trim() })
     setNewNote('')
+    ajusterHauteurNote(noteTextareaRef.current)
     setAddingNote(false)
   }
 
@@ -512,11 +523,15 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
           </div>
           <div className="bg-carte rounded-xl shadow-sm p-3 flex gap-2 mb-2">
             <textarea
+              ref={noteTextareaRef}
               value={newNote}
-              onChange={(e) => setNewNote(e.target.value)}
+              onChange={(e) => {
+                setNewNote(e.target.value)
+                ajusterHauteurNote(e.target)
+              }}
               placeholder="Ajouter une note…"
               rows={1}
-              className="flex-1 text-texte outline-none bg-transparent resize-none"
+              className="flex-1 text-texte outline-none bg-transparent resize-none overflow-hidden"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
