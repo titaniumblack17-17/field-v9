@@ -31,13 +31,25 @@ export default function TexteModifiable({
   const [enCours, setEnCours] = useState(false)
   const champRef = useRef(null)
 
+  // Une note longue rouvre à sa taille fixe (3 lignes) et reste tronquée
+  // jusqu'à la première frappe : sans cet ajustement au montage, on ne voit
+  // pas la fin de ce qu'on avait déjà écrit avant même de continuer à taper.
+  const ajusterHauteur = (el) => {
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
+
   useEffect(() => {
     if (!edition) setBrouillon(valeur ?? '')
   }, [valeur, edition])
 
   useEffect(() => {
-    if (edition) champRef.current?.focus()
-  }, [edition])
+    if (edition) {
+      champRef.current?.focus()
+      if (multiligne) ajusterHauteur(champRef.current)
+    }
+  }, [edition, multiligne])
 
   const enregistrer = async () => {
     const propre = typeof brouillon === 'string' ? brouillon.trim() : brouillon
@@ -81,13 +93,16 @@ export default function TexteModifiable({
         type={multiligne ? undefined : type}
         rows={multiligne ? 3 : undefined}
         value={brouillon}
-        onChange={(e) => setBrouillon(e.target.value)}
+        onChange={(e) => {
+          setBrouillon(e.target.value)
+          if (multiligne) ajusterHauteur(e.target)
+        }}
         placeholder={placeholder}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !multiligne) enregistrer()
           if (e.key === 'Escape') annuler()
         }}
-        className="flex-1 min-w-0 bg-carte-douce rounded-lg px-2 py-1 text-texte outline-none placeholder:text-texte-fantome resize-none"
+        className={`flex-1 min-w-0 bg-carte-douce rounded-lg px-2 py-1 text-texte outline-none placeholder:text-texte-fantome resize-none ${multiligne ? 'overflow-hidden' : ''}`}
       />
       <button
         onClick={annuler}
