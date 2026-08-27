@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Field V9</title>
     <meta name="theme-color" content="#378ADD" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" href="/icon-192.png" type="image/png" />
+    <!-- Sans ça, iOS ouvre l'app épinglée dans un onglet Safari complet
+         (barre d'adresse comprise) plutôt qu'en plein écran façon appli. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Field V9" />
   </head>
   <body>
     <div id="root"></div>
