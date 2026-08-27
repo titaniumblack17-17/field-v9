@@ -19,6 +19,7 @@ import {
   PLAN_STATUT_LABELS,
   COMMERCIAUX_LABELS,
   PLAN_SANS_COMMERCIAL,
+  joursDevisSansReponse,
 } from '../constants/dossiers'
 
 function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
@@ -81,6 +82,14 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
       {dossier.plan_statut && dossier.plan_statut !== 'fait' && (
         <p className="text-[10px] text-accent mt-1">
           📐 Plan {PLAN_STATUT_LABELS[dossier.plan_statut]?.toLowerCase()}
+        </p>
+      )}
+      {/* Un devis resté sans réponse au-delà du seuil n'est plus une affaire
+          en cours : il faut décider quoi en faire (relancer, perdu, refaire
+          un devis), pas le laisser occuper la colonne indéfiniment. */}
+      {joursDevisSansReponse(dossier) != null && (
+        <p className="text-[10px] font-medium text-alerte mt-1">
+          ⚠ Sans réponse depuis {joursDevisSansReponse(dossier)} j
         </p>
       )}
       {/* Un SAV « en attente » sans le motif force à ouvrir la fiche pour

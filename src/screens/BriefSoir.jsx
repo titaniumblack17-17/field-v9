@@ -10,6 +10,7 @@ import {
   PLAN_SANS_COMMERCIAL,
   TYPE_LABELS,
   styleDossier,
+  joursDevisSansReponse,
 } from '../constants/dossiers'
 
 // Objectif annuel de la spec (§1) : 5 M€ TTC.
@@ -210,6 +211,14 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       .filter((d) => d.type === 'sav' && d.statut !== 'clos')
       .sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''))
 
+    // Un devis sans réponse depuis plus d'un mois n'est plus une affaire en
+    // cours : soit il se relance, soit il faut le passer perdu et rouvrir un
+    // nouveau dossier si le client revient — mais ça se décide, ça ne se
+    // laisse pas dormir en « Devis envoyé ».
+    const devisSansReponse = dossiers
+      .filter((d) => joursDevisSansReponse(d) != null)
+      .sort((a, b) => joursDevisSansReponse(b) - joursDevisSansReponse(a))
+
     const aRappeler = dossiers
       .filter((d) => d.rappel_date && d.rappel_date <= aujourdhui)
       .sort((a, b) => a.rappel_date.localeCompare(b.rappel_date))
@@ -244,6 +253,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
 
     return {
       savOuverts,
+      devisSansReponse,
       aRappeler,
       aVenir,
       plansAProduire,
@@ -302,6 +312,22 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
                       ? `En attente${d.bloque_par ? ` — ${d.bloque_par}` : ' — motif à préciser'}`
                       : null
                   }
+                />
+              ))}
+            </Section>
+
+            <Section
+              titre="Devis sans réponse"
+              compte={bilan.devisSansReponse.length}
+              vide="Aucun devis oublié."
+            >
+              {bilan.devisSansReponse.map((d) => (
+                <Ligne
+                  key={d.id}
+                  dossier={d}
+                  onOuvrir={onOpenDossier}
+                  droite={`${joursDevisSansReponse(d)} j`}
+                  alerte
                 />
               ))}
             </Section>
