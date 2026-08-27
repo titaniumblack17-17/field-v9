@@ -97,9 +97,9 @@ IMPORTANT : une dictée vocale peut avoir été coupée avant la fin, et l'utili
 
 DÉTECTION SAV (indépendante de l'action ci-dessus) : la note décrit-elle un équipement en panne, cassé, qui ne fonctionne plus, ou une demande d'intervention/réparation chez un praticien ? Si oui, sav_suggere = true et sav_titre = un résumé très court (moins de 60 caractères) du problème, ex. "Fauteuil ne monte plus", "Autoclave en panne". Une simple relance commerciale, un rendez-vous, une demande de devis ne sont PAS des SAV. Dans le doute, sav_suggere = false — mieux vaut rater une suggestion que la déclencher à tort.
 
-DÉTECTION PROJET (indépendante des deux ci-dessus, exclusive avec SAV — une panne n'est jamais un projet) : la note décrit-elle une opportunité commerciale naissante — un praticien qui envisage d'acheter, d'ajouter, de renouveler ou d'agrandir un équipement ou un cabinet, OU la création/le rachat/la reprise d'un cabinet (même partiellement décrit, même avec des détails d'équipement en vrac) ? Exemples : "il veut ajouter un second fauteuil", "elle envisage d'agrandir son cabinet", "renouvellement de l'autoclave à prévoir", "création d'un nouveau cabinet", "rachat d'un cabinet existant d'un praticien qui part à la retraite", "transfert de son matériel vers son nouveau local". Une liste d'équipements à transférer ou à commander pour un nouveau cabinet EST un projet, même sans montant chiffré. Si oui, projet_suggere = true et projet_titre = un résumé très court (moins de 60 caractères) de l'opportunité, ex. "Ajout d'un second fauteuil", "Renouvellement autoclave", "Rachat de cabinet existant", "Création de cabinet". Ce n'est PAS un projet : une simple prise de rendez-vous sans besoin décrit, une relance sur un dossier déjà existant sans nouvel élément, un événement administratif. Dans le doute, projet_suggere = false — un dossier créé à tort pollue le pipeline plus longtemps qu'une suggestion ratée ne coûte.
+DÉTECTION PLAN (indépendante des deux ci-dessus, exclusive avec SAV et Projet, à trancher AVANT Projet) : la note décrit-elle une demande de plan d'implantation ou de cahier des charges à produire comme PRESTATION TECHNIQUE SÉPARÉE — pour un autre commercial, en projet partagé, ou facturée à part — et non un plan lié à une vente que Bruce mène lui-même ? Signal fort et non ambigu : un commercial autre que Bruce est nommé (initiales ou nom — JYM/Jean-Yves Mevel, AB/Alain Bailleul, PL/Pierre Lecomte, PF/Paul Fouillet, SDR/Stéphane Do Rego, LG/Laurent Gaston, DB/Didier Bellaz) accompagné d'un plan/cahier des charges à produire pour lui, avec ou sans montant de facturation précisé. Exemples qui déclenchent plan_suggere : "il faut faire un plan pour le dossier de Marc", "cahier des charges à produire pour un confrère", "plan à faire, projet partagé avec untel", "plan et cahier des charges pour jym, facturation 500€". Ce n'est PAS un plan à signaler séparément : un plan mentionné dans le cadre d'un de ses propres projets de vente (aucun commercial tiers nommé) — laisse la détection Projet ci-dessous s'en occuper normalement, ne double-compte pas. Dès qu'un commercial tiers est nommé pour un plan/cahier des charges, c'est un plan et PAS un projet — même si la note contient par ailleurs une adresse ou ressemble à l'ouverture d'un nouveau dossier : ne coche pas projet_suggere dans ce cas. Dans le doute (aucun commercial tiers nommé), plan_suggere = false.
 
-DÉTECTION PLAN (indépendante des détections ci-dessus, exclusive avec SAV et Projet) : la note décrit-elle une demande de plan d'implantation ou de cahier des charges à produire comme PRESTATION TECHNIQUE SÉPARÉE — pour un autre commercial, en projet partagé, ou facturée à part — et non un plan lié à une vente que Bruce mène lui-même ? Exemples qui déclenchent plan_suggere : "il faut faire un plan pour le dossier de Marc", "cahier des charges à produire pour un confrère", "plan à faire, projet partagé avec untel". Ce n'est PAS un plan à signaler séparément : un plan mentionné dans le cadre d'un de ses propres projets de vente — laisse la détection Projet ci-dessus s'en occuper normalement, ne double-compte pas. Dans le doute, plan_suggere = false — un dossier Plan créé à tort pour ce qui n'est qu'une tâche d'un projet existant serait pire qu'une suggestion ratée.
+DÉTECTION PROJET (indépendante des deux ci-dessus, exclusive avec SAV et avec Plan — si Plan est vrai, projet_suggere doit rester false) : la note décrit-elle une opportunité commerciale naissante — un praticien qui envisage d'acheter, d'ajouter, de renouveler ou d'agrandir un équipement ou un cabinet, OU la création/le rachat/la reprise d'un cabinet (même partiellement décrit, même avec des détails d'équipement en vrac) ? Exemples : "il veut ajouter un second fauteuil", "elle envisage d'agrandir son cabinet", "renouvellement de l'autoclave à prévoir", "création d'un nouveau cabinet", "rachat d'un cabinet existant d'un praticien qui part à la retraite", "transfert de son matériel vers son nouveau local". Une liste d'équipements à transférer ou à commander pour un nouveau cabinet EST un projet, même sans montant chiffré. Si oui, projet_suggere = true et projet_titre = un résumé très court (moins de 60 caractères) de l'opportunité, ex. "Ajout d'un second fauteuil", "Renouvellement autoclave", "Rachat de cabinet existant", "Création de cabinet". Ce n'est PAS un projet : une simple prise de rendez-vous sans besoin décrit, une relance sur un dossier déjà existant sans nouvel élément, un événement administratif. Dans le doute, projet_suggere = false — un dossier créé à tort pollue le pipeline plus longtemps qu'une suggestion ratée ne coûte.
 
 Réponds UNIQUEMENT avec un objet JSON (pas de texte autour, pas de markdown), avec ces clés :
 - action: "creer_client" ou "capture"
@@ -273,15 +273,18 @@ avertissement.
   const savSuggere = extracted.sav_suggere === true
   const savTitre = savSuggere ? (extracted.sav_titre?.trim().slice(0, 60) || null) : null
 
-  // Un projet ne se déclenche jamais en même temps qu'un SAV : une panne
-  // n'est pas une opportunité, même si le modèle hésite entre les deux.
-  const projetSuggere = !savSuggere && extracted.projet_suggere === true
-  const projetTitre = projetSuggere ? (extracted.projet_titre?.trim().slice(0, 60) || null) : null
-
-  // Un plan n'est une prestation à part que si elle n'est ni un SAV ni un
-  // projet de vente : les trois détections restent mutuellement exclusives.
-  const planSuggere = !savSuggere && !projetSuggere && extracted.plan_suggere === true
+  // Un plan pour un confrère est le signal le plus spécifique des trois : il
+  // ne se déclenche que sur une mention explicite (commercial nommé,
+  // facturation séparée). Le modèle hedge parfois et coche aussi projet_suggere
+  // sur la même note (nouvelle fiche + adresse ressemble à une opportunité) —
+  // dans ce cas le plan doit gagner, pas être écrasé. Résolu avant Projet.
+  const planSuggere = !savSuggere && extracted.plan_suggere === true
   const planTitre = planSuggere ? (extracted.plan_titre?.trim().slice(0, 60) || null) : null
+
+  // Un projet ne se déclenche jamais en même temps qu'un SAV ni qu'un plan :
+  // les trois détections restent mutuellement exclusives.
+  const projetSuggere = !savSuggere && !planSuggere && extracted.projet_suggere === true
+  const projetTitre = projetSuggere ? (extracted.projet_titre?.trim().slice(0, 60) || null) : null
 
   // Le info_manquante du modèle et les avertissements déterministes ci-dessus
   // se complètent : on garde les deux plutôt que de laisser l'un écraser l'autre.

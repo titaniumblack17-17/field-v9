@@ -176,7 +176,14 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
       type: values.type,
       // Le plan intégré n'a de sens que sur une vente.
       plan_statut: values.type === 'projet' ? values.plan_statut || null : null,
-      remuneration_type: values.type === 'plan' ? values.remuneration_type || null : null,
+      // Un plan pour lui-même (BDS) n'est jamais facturé, quelle que soit la
+      // valeur affichée avant que le champ ne se grise.
+      remuneration_type:
+        values.type === 'plan'
+          ? values.commercial === 'BDS'
+            ? 'integre'
+            : values.remuneration_type || null
+          : null,
       // Un projet ou un SAV n'est fait pour personne d'autre que Bruce.
       commercial: values.type === 'plan' ? values.commercial || null : null,
       // Ce qui bloque n'a de sens que sur un SAV en attente.
@@ -426,15 +433,24 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
                 value={values.commercial ?? ''}
                 options={COMMERCIAL_OPTIONS}
                 videLibelle="À préciser"
-                onChange={(v) => setValues((x) => ({ ...x, commercial: v || null }))}
+                onChange={(v) =>
+                  setValues((x) => ({
+                    ...x,
+                    commercial: v || null,
+                    // Un plan pour lui-même n'est jamais facturé — pas de choix à faire.
+                    remuneration_type: v === 'BDS' ? 'integre' : x.remuneration_type,
+                  }))
+                }
               />
               <ChampChoix
                 id="remuneration"
                 label="Rémunération"
-                value={values.remuneration_type ?? ''}
+                value={(values.commercial === 'BDS' ? 'integre' : values.remuneration_type) ?? ''}
                 options={REMUNERATION_OPTIONS}
                 videLibelle="À préciser"
                 onChange={(v) => setValues((x) => ({ ...x, remuneration_type: v }))}
+                disabled={values.commercial === 'BDS'}
+                raisonDesactive={values.commercial === 'BDS' ? 'Plan pour vous-même : jamais facturé' : undefined}
               />
               {values.remuneration_type === 'partage' && (
                 <p className="text-xs text-alerte px-4 pb-3 -mt-2">

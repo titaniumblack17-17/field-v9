@@ -15,6 +15,8 @@ export default function ChampChoix({
   onChange,
   videLibelle,
   id,
+  disabled = false,
+  raisonDesactive,
 }) {
   const [ouvert, setOuvert] = useState(false)
   const courant = options.find(([v]) => v === value)
@@ -28,16 +30,20 @@ export default function ChampChoix({
       <button
         id={id}
         type="button"
-        onClick={() => setOuvert(true)}
-        className="w-full flex items-center justify-between gap-2 text-left"
+        disabled={disabled}
+        onClick={() => !disabled && setOuvert(true)}
+        className={`w-full flex items-center justify-between gap-2 text-left ${disabled ? 'opacity-50' : ''}`}
       >
         <span className={courant ? 'text-texte' : 'text-texte-fantome'}>
           {courant ? courant[1] : videLibelle || '—'}
         </span>
-        <span className="text-texte-faible text-xs flex-shrink-0">▾</span>
+        {!disabled && <span className="text-texte-faible text-xs flex-shrink-0">▾</span>}
       </button>
+      {disabled && raisonDesactive && (
+        <p className="text-xs text-texte-faible mt-1">{raisonDesactive}</p>
+      )}
 
-      {ouvert && (
+      {ouvert && !disabled && (
         <div
           className="fixed inset-0 z-50 bg-black/40 flex items-end"
           onClick={() => setOuvert(false)}
