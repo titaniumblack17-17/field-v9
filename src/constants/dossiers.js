@@ -72,6 +72,16 @@ export const STATUTS_SAV = [
 
 export const STATUTS_SAV_LABELS = Object.fromEntries(STATUTS_SAV)
 
+export const ETAPES_PROJET_LABELS = Object.fromEntries(ETAPES_PROJET)
+
+// Chaque type de dossier a son propre vocabulaire d'étape — un seul endroit
+// pour choisir le bon plutôt que de répéter ce ternaire à chaque écran.
+export const libelleEtapeDossier = (d) => {
+  if (d?.type === 'sav') return STATUTS_SAV_LABELS[d.statut] ?? d.statut
+  if (d?.type === 'plan') return STATUTS_PLAN_LABELS[d.statut] ?? d.statut
+  return ETAPES_PROJET_LABELS[d?.statut] ?? d?.statut
+}
+
 // Les commerciaux pour qui Bruce produit des plans. BDS, c'est lui : un plan
 // à son propre nom est intégré à sa vente, pas facturé.
 export const COMMERCIAUX = [

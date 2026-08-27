@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { nomClient } from '../lib/client'
+import { resumeDossier } from '../lib/resume'
 import ChampChoix from '../components/ChampChoix'
 import PiecesJointes from '../components/PiecesJointes'
 import Rappels from '../components/Rappels'
@@ -52,7 +53,17 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   const [toutesNotes, setToutesNotes] = useState(false)
   const [noteEnEdition, setNoteEnEdition] = useState(null)
   const [confirmer, boîteConfirmation] = useConfirm()
+  const [resumeCopie, setResumeCopie] = useState(false)
   const noteTextareaRef = useRef(null)
+
+  // Partager un dossier avec un collègue aujourd'hui, faute de compte
+  // partagé dans Field V9, ça passe par un texte propre à coller dans un
+  // SMS/mail plutôt que de recopier chaque champ à la main.
+  const copierResume = async () => {
+    await navigator.clipboard.writeText(resumeDossier(dossier, client, notes))
+    setResumeCopie(true)
+    setTimeout(() => setResumeCopie(false), 3000)
+  }
 
   // Une note tapée sur plusieurs lignes doit rester entièrement visible
   // pendant la saisie — une hauteur fixe à 1 ligne obligeait à faire défiler
@@ -351,9 +362,17 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
           )}
         </div>
 
-        <h1 className="text-2xl font-semibold text-texte mb-4">
-          {values.titre || TYPE_LABELS[values.type]}
-        </h1>
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h1 className="text-2xl font-semibold text-texte">
+            {values.titre || TYPE_LABELS[values.type]}
+          </h1>
+          <button
+            onClick={copierResume}
+            className="text-accent text-sm font-medium flex-shrink-0 h-11 px-2 -mr-2"
+          >
+            {resumeCopie ? '✓ Copié' : 'Copier le résumé'}
+          </button>
+        </div>
 
         <div
           style={{ borderColor: s.bordure }}

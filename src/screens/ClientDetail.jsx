@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { nomClient } from '../lib/client'
 import { lienifier } from '../lib/texte'
+import { resumeClient } from '../lib/resume'
 import { supabase } from '../lib/supabaseClient'
 import PersonListField from '../components/PersonListField'
 import ChampChoix from '../components/ChampChoix'
@@ -109,6 +110,15 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   // directe s'il n'y en a qu'un — pas de sélection pour rien.
   const [captureACopier, setCaptureACopier] = useState(null)
   const [copieFaite, setCopieFaite] = useState(null)
+  const [resumeCopie, setResumeCopie] = useState(false)
+
+  // Partager une fiche avec un collègue aujourd'hui, faute de compte partagé
+  // dans Field V9, ça passe par un texte propre à coller dans un SMS/mail.
+  const copierResume = async () => {
+    await navigator.clipboard.writeText(resumeClient(client, dossiers))
+    setResumeCopie(true)
+    setTimeout(() => setResumeCopie(false), 3000)
+  }
 
   // Une transcription complète (Plaud, réunion) ne rentre jamais dans le
   // résumé d'une phrase de la capture — le texte intégral part tel quel dans
@@ -573,9 +583,17 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       </header>
 
       <main className={`px-4 pt-2 ${dirty ? 'pb-28' : 'pb-8'}`}>
-        <h1 className="text-2xl font-semibold text-texte mb-4">
-          {nomClient(client) ?? 'Client'}
-        </h1>
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h1 className="text-2xl font-semibold text-texte">
+            {nomClient(client) ?? 'Client'}
+          </h1>
+          <button
+            onClick={copierResume}
+            className="text-accent text-sm font-medium flex-shrink-0 h-11 px-2 -mr-2"
+          >
+            {resumeCopie ? '✓ Copié' : 'Copier le résumé'}
+          </button>
+        </div>
 
         <div className="bg-carte rounded-xl shadow-sm divide-y divide-separateur">
           {FIELDS.map(([key, label]) => (
