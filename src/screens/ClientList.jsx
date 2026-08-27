@@ -1,6 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { nomClient } from '../lib/client'
+
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+
+// Un centre dont le nom commence par un chiffre ou un symbole n'a pas de
+// lettre à lui — il rejoint un repère « # » plutôt que de disparaître de
+// l'index.
+const lettreDe = (client) => {
+  const n = nomClient(client)
+  if (!n) return '#'
+  const l = normalize(n)[0]
+  return l && /[a-z]/.test(l) ? l.toUpperCase() : '#'
+}
 
 const normalize = (s) =>
   (s ?? '')
@@ -86,6 +98,23 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
       return termes.every((t) => champs.includes(t))
     })
   }, [clients, query])
+
+  // Sauter directement à une lettre plutôt que de faire défiler toute la
+  // liste à la main — utile dès qu'on a plus d'une vingtaine de fiches.
+  const lettresDisponibles = useMemo(() => new Set(clients.map(lettreDe)), [clients])
+  const premierIdParLettre = useMemo(() => {
+    const map = {}
+    for (const c of resultats) {
+      const l = lettreDe(c)
+      if (!(l in map)) map[l] = c.id
+    }
+    return map
+  }, [resultats])
+  const ligneRefs = useRef({})
+  const allerALaLettre = (lettre) => {
+    const id = premierIdParLettre[lettre]
+    ligneRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   return (
     <div className="min-h-screen bg-fond">
@@ -179,7 +208,7 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
               .filter(Boolean)
               .join(' · ')
             return (
-              <li key={client.id}>
+              <li key={client.id} ref={(el) => { ligneRefs.current[client.id] = el }}>
                 <button
                   onClick={() => onSelect(client)}
                   className="w-full text-left bg-carte rounded-xl px-4 py-3 shadow-sm active:scale-[0.98] transition"
@@ -195,6 +224,28 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
           })}
         </ul>
       </main>
+
+      {/* Pendant une recherche la liste est déjà courte : l'index n'a plus
+          d'utilité et gênerait pour rien. */}
+      {!query && clients.length > 12 && (
+        <div className="fixed right-0.5 top-1/2 -translate-y-1/2 flex flex-col items-center z-20">
+          {[...ALPHABET, '#'].map((lettre) => {
+            const disponible = lettresDisponibles.has(lettre)
+            return (
+              <button
+                key={lettre}
+                onClick={() => disponible && allerALaLettre(lettre)}
+                disabled={!disponible}
+                className={`text-[10px] leading-[13px] w-4 font-medium ${
+                  disponible ? 'text-accent' : 'text-texte-fantome/40'
+                }`}
+              >
+                {lettre}
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
