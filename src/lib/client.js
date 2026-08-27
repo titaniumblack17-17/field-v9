@@ -2,6 +2,6 @@
 // cabinet sert alors d'identité à afficher, pas seulement de complément.
 export const nomClient = (c) => {
   if (!c) return null
-  const praticien = [c.prenom_praticien, c.nom_praticien].filter(Boolean).join(' ')
+  const praticien = [c.nom_praticien, c.prenom_praticien].filter(Boolean).join(' ')
   return praticien || c.nom_cabinet || null
 }
