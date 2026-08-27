@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { nomClient } from '../lib/client'
 
 const normalize = (s) =>
   (s ?? '')
@@ -63,6 +64,9 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
   const homonymes = useMemo(() => {
     const compte = {}
     clients.forEach((c) => {
+      // Un centre sans praticien nommé n'a rien à désambiguïser par nom : le
+      // compter viendrait à tort marquer tous les centres comme homonymes.
+      if (!c.nom_praticien) return
       const clef = normalize(c.nom_praticien)
       compte[clef] = (compte[clef] ?? 0) + 1
     })
@@ -168,17 +172,19 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
 
         <ul className="space-y-2">
           {resultats.map((client) => {
-            const ambigu = homonymes[normalize(client.nom_praticien)] > 1
-            const sousTitre = [client.nom_cabinet, client.ville].filter(Boolean).join(' · ')
+            const ambigu = client.nom_praticien && homonymes[normalize(client.nom_praticien)] > 1
+            // Le cabinet ne se répète pas en dessous s'il sert déjà de nom
+            // principal (centre sans praticien nommé).
+            const sousTitre = [client.nom_praticien && client.nom_cabinet, client.ville]
+              .filter(Boolean)
+              .join(' · ')
             return (
               <li key={client.id}>
                 <button
                   onClick={() => onSelect(client)}
                   className="w-full text-left bg-carte rounded-xl px-4 py-3 shadow-sm active:scale-[0.98] transition"
                 >
-                  <p className="font-medium text-texte">
-                    {[client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ')}
-                  </p>
+                  <p className="font-medium text-texte">{nomClient(client) ?? 'Client'}</p>
                   {sousTitre && <p className="text-sm text-texte-doux">{sousTitre}</p>}
                   {ambigu && client.adresse && (
                     <p className="text-xs text-texte-faible mt-0.5">{client.adresse}</p>

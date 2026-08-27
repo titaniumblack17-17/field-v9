@@ -4,7 +4,7 @@ import PersonListField from '../components/PersonListField'
 
 const FIELDS = [
   ['prenom_praticien', 'Prénom du praticien', false],
-  ['nom_praticien', 'Nom du praticien', true],
+  ['nom_praticien', 'Nom du praticien', false],
   ['nom_cabinet', 'Cabinet', false],
   ['adresse', 'Adresse', false],
   ['code_postal', 'Code postal', false],
@@ -35,8 +35,10 @@ export default function ClientForm({ onCreated, onCancel }) {
 
   const submit = async (e) => {
     e.preventDefault()
-    if (!values.nom_praticien?.trim()) {
-      setError('Le nom du praticien est obligatoire.')
+    // Un centre (CHSF, SCM, mutuelle...) n'a pas de praticien nommé : le nom
+    // du cabinet suffit à identifier la fiche. Il faut au moins l'un des deux.
+    if (!values.nom_praticien?.trim() && !values.nom_cabinet?.trim()) {
+      setError('Le nom du praticien ou le nom du cabinet est obligatoire.')
       return
     }
     setSaving(true)

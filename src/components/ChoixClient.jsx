@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { nomClient } from '../lib/client'
 
 const sansAccent = (v) =>
   String(v ?? '')
@@ -72,14 +73,14 @@ export default function ChoixClient({ titre = 'Relier à un client', onChoisir, 
                 onClick={() => onChoisir(c)}
                 className="w-full text-left bg-carte rounded-xl px-4 py-3 shadow-sm active:scale-[0.98] transition"
               >
-                <p className="text-texte font-medium">
-                  {[c.prenom_praticien, c.nom_praticien].filter(Boolean).join(' ')}
-                </p>
-                {(c.nom_cabinet || c.ville) && (
+                <p className="text-texte font-medium">{nomClient(c) ?? 'Client'}</p>
+                {/* Le cabinet ne se répète pas en dessous s'il sert déjà de
+                    nom principal (centre sans praticien nommé). */}
+                {(c.nom_praticien && c.nom_cabinet) || c.ville ? (
                   <p className="text-sm text-texte-doux">
-                    {[c.nom_cabinet, c.ville].filter(Boolean).join(' · ')}
+                    {[c.nom_praticien && c.nom_cabinet, c.ville].filter(Boolean).join(' · ')}
                   </p>
-                )}
+                ) : null}
               </button>
             </li>
           ))}

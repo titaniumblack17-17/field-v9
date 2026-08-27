@@ -11,6 +11,22 @@ import useConfirm from '../hooks/useConfirm'
 
 const aujourdhui = () => new Date().toISOString().slice(0, 10)
 
+const dansNJours = (n) => {
+  const d = new Date()
+  d.setDate(d.getDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+// Cadence de relance des pros du secteur : première relance à J+3, seconde
+// à J+7 après. Poser un rappel juste après l'envoi ou pendant une relance
+// n'a donc pas la même échéance naturelle — plutôt que de retomber
+// systématiquement sur aujourd'hui, la date proposée suit ce rythme.
+const dateParDefaut = (statut) => {
+  if (statut === 'devis_envoye') return dansNJours(3)
+  if (statut === 'relance') return dansNJours(7)
+  return aujourdhui()
+}
+
 const leJour = (v) =>
   v ? new Date(v).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : ''
 
@@ -21,7 +37,7 @@ const leJour = (v) =>
  * son histoire — ce qui a été dit, quand, ce qu'on en a retenu. Les afficher
  * de haut en bas vaut mieux qu'une date unique qui écrase la précédente.
  */
-export default function Rappels({ dossierId }) {
+export default function Rappels({ dossierId, statut }) {
   const [liste, setListe] = useState([])
   const [ouvertureForm, setOuvertureForm] = useState(false)
   const [date, setDate] = useState(aujourdhui())
@@ -134,7 +150,10 @@ export default function Rappels({ dossierId }) {
           Rappels{ouverts.length > 0 ? ` · ${ouverts.length} en cours` : ''}
         </p>
         <button
-          onClick={() => setOuvertureForm((v) => !v)}
+          onClick={() => {
+            if (!ouvertureForm) setDate(dateParDefaut(statut))
+            setOuvertureForm((v) => !v)
+          }}
           className="text-accent text-sm font-medium h-11 px-2 -mr-2 inline-flex items-center"
         >
           {ouvertureForm ? 'Fermer' : '+ Ajouter'}

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { nomClient } from '../lib/client'
 import { supabase } from '../lib/supabaseClient'
 import PersonListField from '../components/PersonListField'
 import MaterielInstalle from '../components/MaterielInstalle'
@@ -193,8 +194,10 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   }, [dirty, onDirtyChange])
 
   const save = async () => {
-    if (!values.nom_praticien?.trim()) {
-      setError('Le nom du praticien est obligatoire.')
+    // Un centre (CHSF, SCM, mutuelle...) n'a pas de praticien nommé : le nom
+    // du cabinet suffit à identifier la fiche. Il faut au moins l'un des deux.
+    if (!values.nom_praticien?.trim() && !values.nom_cabinet?.trim()) {
+      setError('Le nom du praticien ou le nom du cabinet est obligatoire.')
       return
     }
     setSaving(true)
@@ -355,7 +358,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     }
   }, [client.id])
 
-  const nomComplet = [values.prenom_praticien, values.nom_praticien].filter(Boolean).join(' ')
+  const nomComplet = nomClient(values) ?? 'Client'
 
   const supprimer = async () => {
     setSuppression(true)
@@ -478,9 +481,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       compter('client_notes'),
     ])
 
-    const nomCible = [cibleComplete?.prenom_praticien, cibleComplete?.nom_praticien]
-      .filter(Boolean)
-      .join(' ')
+    const nomCible = nomClient(cibleComplete) ?? 'Client'
     const pluriel = (n, mot, pluriels) => `${n} ${n > 1 ? pluriels : mot}`
     const emporte = [
       dossiersReels?.length && pluriel(dossiersReels.length, 'dossier', 'dossiers'),
@@ -546,13 +547,13 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           ← Clients
         </button>
         <p className="text-texte font-semibold truncate">
-          {[values.prenom_praticien, values.nom_praticien].filter(Boolean).join(' ') || 'Client'}
+          {nomClient(values) ?? 'Client'}
         </p>
       </header>
 
       <main className={`px-4 pt-2 ${dirty ? 'pb-28' : 'pb-8'}`}>
         <h1 className="text-2xl font-semibold text-texte mb-4">
-          {[client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ') || 'Client'}
+          {nomClient(client) ?? 'Client'}
         </h1>
 
         <div className="bg-carte rounded-xl shadow-sm divide-y divide-separateur">
@@ -560,7 +561,6 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
             <div key={key} className="px-4 py-3">
               <label className="text-xs text-texte-faible" htmlFor={key}>
                 {label}
-                {key === 'nom_praticien' ? ' *' : ''}
               </label>
               <input
                 id={key}

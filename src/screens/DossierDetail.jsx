@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { nomClient } from '../lib/client'
 import ChampChoix from '../components/ChampChoix'
 import PiecesJointes from '../components/PiecesJointes'
 import Rappels from '../components/Rappels'
@@ -318,7 +319,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
             onClick={() => onOpenClient?.(client)}
             className="text-accent text-sm font-medium truncate max-w-full"
           >
-            {[client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ')}
+            {nomClient(client) ?? 'Client'}
             {client.ville ? ` · ${client.ville}` : ''}
           </button>
         </div>
@@ -503,7 +504,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
 
         {error && <p className="text-erreur text-sm mt-3">{error}</p>}
 
-        <Rappels dossierId={dossier.id} />
+        <Rappels dossierId={dossier.id} statut={dossier.statut} />
 
         <PiecesJointes dossierId={dossier.id} onMontantChange={relireMontant} />
 

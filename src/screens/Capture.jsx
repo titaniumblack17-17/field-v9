@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { nomClient } from '../lib/client'
 import { supabase } from '../lib/supabaseClient'
 import ChoixClient from '../components/ChoixClient'
 import { SuggestionSav, SuggestionProjet, SuggestionPlan } from '../components/SuggestionCapture'
@@ -136,7 +137,7 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
       if (data.client_id) {
         const { data: c } = await supabase
           .from('clients')
-          .select('id, prenom_praticien, nom_praticien, ville')
+          .select('id, prenom_praticien, nom_praticien, nom_cabinet, ville')
           .eq('id', data.client_id)
           .maybeSingle()
         setClientTouche(c ?? null)
@@ -200,9 +201,7 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
                     ? '✓ Fiche complétée'
                     : '✓ Rattaché'}
                 {' · '}
-                {[clientTouche.prenom_praticien, clientTouche.nom_praticien]
-                  .filter(Boolean)
-                  .join(' ')}
+                {nomClient(clientTouche) ?? 'Client'}
                 {' →'}
               </button>
             )}

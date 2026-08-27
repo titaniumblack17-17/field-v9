@@ -12,6 +12,7 @@ import {
 } from '@dnd-kit/core'
 import { supabase } from '../lib/supabaseClient'
 import { etatRappel } from '../lib/rappel'
+import { nomClient } from '../lib/client'
 import {
   ETAPES_PROJET,
   STATUTS_SAV,
@@ -54,7 +55,7 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
       }`}
     >
       <p className="text-[13px] font-medium text-texte leading-tight mb-0.5">
-        {client ? [client.prenom_praticien, client.nom_praticien].filter(Boolean).join(' ') : '—'}
+        {nomClient(client) ?? '—'}
       </p>
       {dossier.titre && <p className="text-[11px] text-texte-faible mb-1 truncate">{dossier.titre}</p>}
       {dossier.montant_estime != null && (
@@ -253,7 +254,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
 
     supabase
       .from('dossiers')
-      .select('*, clients(id, prenom_praticien, nom_praticien, ville)')
+      .select('*, clients(id, prenom_praticien, nom_praticien, nom_cabinet, ville)')
       .in('type', ['projet', 'sav', 'plan'])
       .order('created_at', { ascending: false })
       .then(({ data }) => {
@@ -552,11 +553,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-sm font-semibold text-texte">
-              {aDeplacer.clients
-                ? [aDeplacer.clients.prenom_praticien, aDeplacer.clients.nom_praticien]
-                    .filter(Boolean)
-                    .join(' ')
-                : aDeplacer.titre}
+              {aDeplacer.clients ? (nomClient(aDeplacer.clients) ?? aDeplacer.titre) : aDeplacer.titre}
             </p>
             <p className="text-xs text-texte-faible mb-4">Choisir la nouvelle étape</p>
 

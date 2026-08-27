@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import JaugeObjectif from '../components/JaugeObjectif'
 import { etatRappel, cloreProchainRappel, reconcilierRappels } from '../lib/rappel'
+import { nomClient } from '../lib/client'
 import {
   ETAPES_PROJET,
   PLAN_STATUT_LABELS,
@@ -38,9 +39,6 @@ const ETAPES_FACTUREES = ['finition']
 const euros = (n) =>
   n == null ? '—' : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n) + ' €'
 
-const nomClient = (c) =>
-  c ? [c.prenom_praticien, c.nom_praticien].filter(Boolean).join(' ') : '—'
-
 const libelleEtape = (v) => ETAPES_PROJET.find(([k]) => k === v)?.[1] ?? v
 
 function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTitre, ligneSecondaire }) {
@@ -64,7 +62,7 @@ function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTi
         className="flex-1 min-w-0 text-left px-4 py-3 active:scale-[0.98] transition flex items-center gap-3"
       >
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-texte truncate">{nomClient(dossier.clients)}</p>
+          <p className="font-medium text-texte truncate">{nomClient(dossier.clients) ?? '—'}</p>
           <p className="text-sm text-texte-doux truncate">
             {dossier.commercial ? `${dossier.commercial} · ` : ''}
             {/* Le titre du dossier est souvent vide ou générique
@@ -147,7 +145,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       .then(() =>
         supabase
           .from('dossiers')
-          .select('*, clients(id, prenom_praticien, nom_praticien, ville)')
+          .select('*, clients(id, prenom_praticien, nom_praticien, nom_cabinet, ville)')
       )
       .then(({ data }) => {
         if (actif) {
