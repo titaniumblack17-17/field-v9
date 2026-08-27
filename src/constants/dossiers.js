@@ -94,16 +94,18 @@ export const COMMERCIAL_OPTIONS = COMMERCIAUX.map(([code, nom]) => [code, `${cod
 export const PLAN_SANS_COMMERCIAL = (d) =>
   d?.type === 'plan' && !d.commercial && ['a_planifier', 'en_cours'].includes(d.statut)
 
-// Au-delà de ce délai sans mouvement, un devis envoyé est mort : les
-// pratiques du secteur situent la relance efficace à J+3/J+10, et un devis
-// resté sans réponse au-delà d'un mois n'est plus une affaire en cours, il
-// faut décider quoi en faire plutôt que le laisser occuper « Devis envoyé ».
+// Au-delà de ce délai sans mouvement, un devis envoyé — ou une relance qui
+// n'a jamais abouti — est mort : les pratiques du secteur situent la relance
+// efficace à J+3/J+10, et au-delà d'un mois ce n'est plus une affaire en
+// cours, il faut décider quoi en faire plutôt que le laisser stagner.
 export const SEUIL_DEVIS_SANS_REPONSE_JOURS = 30
 
 // Jours écoulés depuis le dernier changement d'étape, seulement pour un devis
-// resté en « Devis envoyé » plus longtemps que le seuil — null sinon.
+// resté en « Devis envoyé » ou « Relance » plus longtemps que le seuil —
+// null sinon.
 export const joursDevisSansReponse = (d) => {
-  if (d?.type !== 'projet' || d.statut !== 'devis_envoye' || !d.statut_changed_at) return null
+  if (d?.type !== 'projet' || !['devis_envoye', 'relance'].includes(d.statut) || !d.statut_changed_at)
+    return null
   const jours = Math.floor((Date.now() - new Date(d.statut_changed_at).getTime()) / 86_400_000)
   return jours >= SEUIL_DEVIS_SANS_REPONSE_JOURS ? jours : null
 }
