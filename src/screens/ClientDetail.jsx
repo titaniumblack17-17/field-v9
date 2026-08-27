@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { nomClient } from '../lib/client'
+import { lienifier } from '../lib/texte'
 import { supabase } from '../lib/supabaseClient'
 import PersonListField from '../components/PersonListField'
 import MaterielInstalle from '../components/MaterielInstalle'
@@ -787,7 +788,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                       se trompe, elle dit pourquoi. */}
                   {dicteeVisible === c.id && c.texte && c.texte !== c.resume && (
                     <p className="text-xs text-texte-faible mt-2 pl-2 border-l-2 border-separateur italic">
-                      {c.texte}
+                      {lienifier(c.texte)}
                     </p>
                   )}
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { lienifier } from '../lib/texte'
 
 /**
  * Texte de note replié à quelques lignes. Les notes reprises de Todoist font
@@ -40,7 +41,7 @@ export default function NoteTexte({ texte, lignes = 4 }) {
               }
         }
       >
-        {texte}
+        {lienifier(texte)}
       </p>
       {(deborde || ouvert) && (
         <button
