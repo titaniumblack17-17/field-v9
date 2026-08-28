@@ -99,6 +99,28 @@ const dateParDefaut = (statut) => {
 const leJour = (v) =>
   v ? new Date(v).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : ''
 
+// Le clavier natif iOS pour un <input type="time"> impose une molette à
+// faire défiler — plus lent que taper. On accepte donc une saisie libre au
+// clavier normal et on la comprend dans plusieurs formats usuels :
+// « 09:30 », « 9h30 », « 0930 », « 930 », ou juste « 9 » (⇒ 09:00).
+const normaliserHeure = (saisie) => {
+  const chiffres = (saisie ?? '').replace(/[^0-9]/g, '')
+  if (!chiffres) return null
+  let h, m
+  if (chiffres.length <= 2) {
+    h = Number(chiffres)
+    m = 0
+  } else if (chiffres.length === 3) {
+    h = Number(chiffres.slice(0, 1))
+    m = Number(chiffres.slice(1))
+  } else {
+    h = Number(chiffres.slice(0, 2))
+    m = Number(chiffres.slice(2, 4))
+  }
+  if (h > 23 || m > 59) return null
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
 /**
  * Rappels d'un dossier : ceux qui restent, puis ceux qui sont faits.
  *
@@ -161,9 +183,17 @@ export default function Rappels({ dossierId, statut }) {
 
   const ajouter = async () => {
     if (!date) return
+    let heureNormalisee = null
+    if (heure.trim()) {
+      heureNormalisee = normaliserHeure(heure)
+      if (!heureNormalisee) {
+        setErreur('Heure invalide — écrivez par exemple 09:30 ou 9h30.')
+        return
+      }
+    }
     setEnCours('ajout')
     setErreur(null)
-    const r = await ajouterRappel(dossierId, date, note, heure)
+    const r = await ajouterRappel(dossierId, date, note, heureNormalisee)
     if (r?.erreur) setErreur(r.erreur)
     else {
       setNote('')
@@ -205,6 +235,26 @@ export default function Rappels({ dossierId, statut }) {
   // Même fenêtre que pour clore un rappel ou ajouter une note de dossier —
   // pas l'édition en ligne avec ses ✓/× minuscules, source de deux bugs
   // récents (mauvais bouton touché, événement de clic sauvé par erreur).
+  const modifierHeure = async (rappel) => {
+    const saisie = await demanderTexte('', {
+      titre: 'Heure du rappel',
+      confirmLabel: 'Enregistrer',
+      placeholder: '09:30',
+      valeurInitiale: rappel.heure ? rappel.heure.slice(0, 5) : '',
+    })
+    if (saisie === null) return
+    if (!saisie.trim()) {
+      await modifier(rappel, { heure: null })
+      return
+    }
+    const heureNormalisee = normaliserHeure(saisie)
+    if (!heureNormalisee) {
+      setErreur('Heure invalide — écrivez par exemple 09:30 ou 9h30.')
+      return
+    }
+    await modifier(rappel, { heure: heureNormalisee })
+  }
+
   const modifierObjet = async (rappel) => {
     const texte = await demanderTexte('', {
       titre: 'Objet du rappel',
@@ -278,10 +328,13 @@ export default function Rappels({ dossierId, statut }) {
               </label>
               <input
                 id="rappel-heure"
-                type="time"
+                type="text"
+                inputMode="numeric"
+                placeholder="09:30"
                 value={heure}
                 onChange={(e) => setHeure(e.target.value)}
-                className="w-full text-texte outline-none bg-transparent"
+                onKeyDown={(e) => e.key === 'Enter' && ajouter()}
+                className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome"
               />
             </div>
           </div>
@@ -327,14 +380,16 @@ export default function Rappels({ dossierId, statut }) {
                     rendu={() => e?.texte}
                     onEnregistrer={(v) => v && modifier(r, { date: v })}
                   />
-                  <TexteModifiable
-                    valeur={r.heure}
-                    type="time"
-                    vide="+ heure"
+                  {/* Le texte de l'heure se lit déjà dans la date à gauche
+                      (« à 09 h 00 ») — ce bouton ne sert qu'à la poser ou la
+                      changer, en tapant plutôt qu'en faisant défiler la
+                      molette native. */}
+                  <button
+                    onClick={() => modifierHeure(r)}
                     className="text-xs text-texte-faible underline decoration-dotted underline-offset-2 flex-shrink-0"
-                    rendu={() => ''}
-                    onEnregistrer={(v) => modifier(r, { heure: v })}
-                  />
+                  >
+                    {r.heure ? '' : '+ heure'}
+                  </button>
                 </div>
                 <button
                   onClick={() => modifierObjet(r)}
