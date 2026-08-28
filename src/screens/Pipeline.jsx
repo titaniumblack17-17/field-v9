@@ -222,6 +222,16 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   // de kanban, « en_cours » (SAV et Plan partagent cette clé) resterait sinon
   // désignée par erreur comme l'étape active de l'un parce qu'elle l'était
   // déjà pour l'autre, sans qu'aucun scroll ne vienne corriger l'erreur.
+  // Le clic sur une pastille fixe etapeVue explicitement, puis lance un
+  // défilement animé vers la colonne visée. Le détecteur ci-dessous
+  // continue d'écouter les évènements de scroll pendant cette animation —
+  // et sur un grand écran où tout tient déjà à l'écran (rien à faire
+  // défiler), ou pendant les à-coups intermédiaires de l'animation, il
+  // pouvait désigner une tout autre colonne que celle demandée, écrasant
+  // le choix explicite. On l'ignore le temps que ça se stabilise.
+  const ignorerDefilement = useRef(false)
+  const minuteurDefilement = useRef(null)
+
   const suivreDefilement = (force = false) => {
     const zone = zoneRef.current
     if (!zone) return
@@ -247,6 +257,11 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   }, [dossiers.length, vue])
 
   const allerA = (cle) => {
+    ignorerDefilement.current = true
+    if (minuteurDefilement.current) clearTimeout(minuteurDefilement.current)
+    minuteurDefilement.current = setTimeout(() => {
+      ignorerDefilement.current = false
+    }, 700)
     colRefs.current[cle]?.scrollIntoView({
       behavior: 'smooth',
       inline: 'start',
@@ -568,7 +583,9 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div
           ref={zoneRef}
-          onScroll={() => suivreDefilement()}
+          onScroll={() => {
+            if (!ignorerDefilement.current) suivreDefilement()
+          }}
           className="flex gap-3 px-4 pb-4 overflow-x-auto flex-1 items-start"
         >
           {vue === 'projet' &&
