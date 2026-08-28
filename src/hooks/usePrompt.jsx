@@ -16,10 +16,13 @@ export default function usePrompt() {
   const [valeur, setValeur] = useState('')
 
   const demander = useCallback(
-    (message, { titre, confirmLabel = 'Valider', placeholder = '', valeurInitiale = '' } = {}) =>
+    (
+      message,
+      { titre, confirmLabel = 'Valider', placeholder = '', valeurInitiale = '', numerique = false } = {}
+    ) =>
       new Promise((resolve) => {
         setValeur(valeurInitiale)
-        setÉtat({ message, titre, confirmLabel, placeholder, resolve })
+        setÉtat({ message, titre, confirmLabel, placeholder, numerique, resolve })
       }),
     []
   )
@@ -42,18 +45,37 @@ export default function usePrompt() {
         {état.message && (
           <p className="text-texte-doux text-sm whitespace-pre-line mb-3">{état.message}</p>
         )}
-        <textarea
-          autoFocus
-          value={valeur}
-          onChange={(e) => {
-            setValeur(e.target.value)
-            e.target.style.height = 'auto'
-            e.target.style.height = `${e.target.scrollHeight}px`
-          }}
-          placeholder={état.placeholder}
-          rows={3}
-          className="w-full bg-carte rounded-xl px-3 py-2 text-texte outline-none placeholder:text-texte-fantome resize-none overflow-hidden"
-        />
+        {état.numerique ? (
+          // Une heure ne se saisit pas comme une note : un clavier alphabétique
+          // plein écran (celui du textarea ci-dessous) pour taper « 09:30 » est
+          // pénible sur iPhone, et Entrée y ajoute une ligne au lieu de valider.
+          // Même champ, même clavier numérique que le formulaire d'ajout d'un
+          // rappel, pour que modifier une heure existante soit aussi simple que
+          // d'en poser une nouvelle.
+          <input
+            autoFocus
+            type="text"
+            inputMode="numeric"
+            value={valeur}
+            onChange={(e) => setValeur(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && répondre(valeur)}
+            placeholder={état.placeholder}
+            className="w-full bg-carte rounded-xl px-3 py-2 text-texte outline-none placeholder:text-texte-fantome"
+          />
+        ) : (
+          <textarea
+            autoFocus
+            value={valeur}
+            onChange={(e) => {
+              setValeur(e.target.value)
+              e.target.style.height = 'auto'
+              e.target.style.height = `${e.target.scrollHeight}px`
+            }}
+            placeholder={état.placeholder}
+            rows={3}
+            className="w-full bg-carte rounded-xl px-3 py-2 text-texte outline-none placeholder:text-texte-fantome resize-none overflow-hidden"
+          />
+        )}
         <div className="mt-4 flex gap-3">
           <button
             onClick={() => répondre(null)}

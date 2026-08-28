@@ -160,6 +160,7 @@ export default function Rappels({ dossierId, statut }) {
       confirmLabel: 'Enregistrer',
       placeholder: '09:30',
       valeurInitiale: rappel.heure ? rappel.heure.slice(0, 5) : '',
+      numerique: true,
     })
     if (saisie === null) return
     if (!saisie.trim()) {
