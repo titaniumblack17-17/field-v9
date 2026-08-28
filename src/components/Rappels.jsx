@@ -5,96 +5,12 @@ import {
   ajouterRappel,
   cloreRappel,
   synchroniserRappel,
+  aujourdhui,
+  dateParDefaut,
 } from '../lib/rappel'
 import TexteModifiable from './TexteModifiable'
 import useConfirm from '../hooks/useConfirm'
 import usePrompt from '../hooks/usePrompt'
-
-const aujourdhui = () => new Date().toISOString().slice(0, 10)
-
-const JOURS_FERIES_FIXES = [
-  [1, 1], // Jour de l'an
-  [5, 1], // Fête du travail
-  [5, 8], // Victoire 1945
-  [7, 14], // Fête nationale
-  [8, 15], // Assomption
-  [11, 1], // Toussaint
-  [11, 11], // Armistice
-  [12, 25], // Noël
-]
-
-// Dimanche de Pâques (algorithme de Gauss/Meeus) : sert à dériver les trois
-// fériés mobiles français, tous fixés par rapport à cette date.
-const paques = (annee) => {
-  const a = annee % 19
-  const b = Math.floor(annee / 100)
-  const c = annee % 100
-  const d = Math.floor(b / 4)
-  const e = b % 4
-  const f = Math.floor((b + 8) / 25)
-  const g = Math.floor((b - f + 1) / 3)
-  const h = (19 * a + b - d - g + 15) % 30
-  const i = Math.floor(c / 4)
-  const k = c % 4
-  const l = (32 + 2 * e + 2 * i - h - k) % 7
-  const m = Math.floor((a + 11 * h + 22 * l) / 451)
-  const mois = Math.floor((h + l - 7 * m + 114) / 31)
-  const jour = ((h + l - 7 * m + 114) % 31) + 1
-  return new Date(annee, mois - 1, jour)
-}
-
-const plusJoursCalendaires = (date, n) => {
-  const d = new Date(date)
-  d.setDate(d.getDate() + n)
-  return d
-}
-
-// Formatage en date locale, pas `toISOString()` : ces fériés sont construits
-// à minuit local, et minuit à Paris tombe la veille en UTC (23h ou 22h selon
-// la saison) — passer par l'ISO ferait glisser chaque férié d'un jour et ne
-// matcherait plus jamais la date du jour.
-const versISO = (date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-
-const joursFeries = (annee) => {
-  const p = paques(annee)
-  return [
-    ...JOURS_FERIES_FIXES.map(([m, j]) => new Date(annee, m - 1, j)),
-    plusJoursCalendaires(p, 1), // Lundi de Pâques
-    plusJoursCalendaires(p, 39), // Ascension
-    plusJoursCalendaires(p, 50), // Lundi de Pentecôte
-  ].map(versISO)
-}
-
-const estJourOuvre = (date) => {
-  const jourSemaine = date.getDay()
-  if (jourSemaine === 0 || jourSemaine === 6) return false
-  return !joursFeries(date.getFullYear()).includes(versISO(date))
-}
-
-// Se relancer un samedi ou un jour férié n'a pas de sens : personne ne
-// décroche. On avance donc jour par jour et on ne compte que les jours
-// ouvrés, jusqu'à en avoir cumulé n — la date obtenue tombe alors forcément
-// sur un jour ouvré.
-const dansNJoursOuvres = (n) => {
-  const d = new Date()
-  let restants = n
-  while (restants > 0) {
-    d.setDate(d.getDate() + 1)
-    if (estJourOuvre(d)) restants -= 1
-  }
-  return d.toISOString().slice(0, 10)
-}
-
-// Cadence de relance des pros du secteur : première relance à J+3, seconde
-// à J+7 après. Poser un rappel juste après l'envoi ou pendant une relance
-// n'a donc pas la même échéance naturelle — plutôt que de retomber
-// systématiquement sur aujourd'hui, la date proposée suit ce rythme.
-const dateParDefaut = (statut) => {
-  if (statut === 'devis_envoye') return dansNJoursOuvres(3)
-  if (statut === 'relance') return dansNJoursOuvres(7)
-  return aujourdhui()
-}
 
 const leJour = (v) =>
   v ? new Date(v).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : ''

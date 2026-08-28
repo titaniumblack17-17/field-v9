@@ -11,7 +11,7 @@ import {
   useDraggable,
 } from '@dnd-kit/core'
 import { supabase } from '../lib/supabaseClient'
-import { etatRappel } from '../lib/rappel'
+import { etatRappel, assurerRappelDeRelance } from '../lib/rappel'
 import { nomClient } from '../lib/client'
 import {
   ETAPES_PROJET,
@@ -266,6 +266,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     if (dossier.statut === etape) return
     setDossiers((current) => current.map((d) => (d.id === dossier.id ? { ...d, statut: etape } : d)))
     await supabase.from('dossiers').update({ statut: etape }).eq('id', dossier.id)
+    await assurerRappelDeRelance(dossier.id, etape)
   }
 
   useEffect(() => {
@@ -384,6 +385,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     if (d.statut === statut) return
     setDossiers((current) => current.map((x) => (x.id === d.id ? { ...x, statut } : x)))
     await supabase.from('dossiers').update({ statut }).eq('id', d.id)
+    await assurerRappelDeRelance(d.id, statut)
   }
 
   return (

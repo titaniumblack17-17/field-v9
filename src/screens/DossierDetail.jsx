@@ -8,7 +8,7 @@ import PiecesJointes from '../components/PiecesJointes'
 import Rappels from '../components/Rappels'
 import NoteTexte from '../components/NoteTexte'
 import TexteModifiable from '../components/TexteModifiable'
-import { retirerRappelsTodoist } from '../lib/rappel'
+import { retirerRappelsTodoist, assurerRappelDeRelance } from '../lib/rappel'
 import useConfirm from '../hooks/useConfirm'
 import usePrompt from '../hooks/usePrompt'
 import {
@@ -185,6 +185,10 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
     setSaving(true)
     setError(null)
 
+    // Capturé avant l'écriture : `dossier` est muté juste en dessous
+    // (Object.assign), comparer après aurait toujours trouvé une égalité.
+    const ancienStatut = dossier.statut
+
     const update = {
       titre: (values.titre ?? '').trim() || null,
       statut: values.statut,
@@ -250,6 +254,13 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
 
     Object.assign(dossier, data)
     setValues({ ...data })
+
+    // Seulement sur un vrai changement d'étape : sauver un autre champ
+    // pendant qu'un dossier reste en « Devis envoyé » ne doit pas
+    // ressusciter un rappel que Bruce vient de supprimer.
+    if (update.type === 'projet' && ancienStatut !== update.statut) {
+      await assurerRappelDeRelance(dossier.id, update.statut)
+    }
   }
 
   const annuler = () => {
