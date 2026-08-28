@@ -56,7 +56,29 @@ function useSwipeRetour(actif, onRetour) {
   }, [actif, onRetour])
 }
 
+// Sans repère de connexion, un écran qui ne charge pas ressemblait à une
+// panne — rien ne disait « c'est le réseau, pas l'app ». En visite, une
+// coupure passagère (cave, ascenseur, parking) est courante ; ce bandeau
+// dit tout de suite ce qui se passe, et disparaît de lui-même au retour du
+// signal — les boutons Réessayer déjà posés sur chaque écran font le reste.
+function useEnLigne() {
+  const [enLigne, setEnLigne] = useState(navigator.onLine)
+  useEffect(() => {
+    const surLigne = () => setEnLigne(true)
+    const horsLigne = () => setEnLigne(false)
+    window.addEventListener('online', surLigne)
+    window.addEventListener('offline', horsLigne)
+    return () => {
+      window.removeEventListener('online', surLigne)
+      window.removeEventListener('offline', horsLigne)
+    }
+  }, [])
+  return enLigne
+}
+
 export default function App() {
+  const enLigne = useEnLigne()
+
   // Pile d'écrans doublée d'entrées dans l'historique du navigateur : le swipe
   // natif iOS et le bouton Retour du navigateur reviennent d'un écran, sans
   // geste maison qui entrerait en conflit avec le glisser-déposer du Pipeline.
@@ -213,6 +235,11 @@ export default function App() {
 
   return (
     <>
+      {!enLigne && (
+        <div className="sticky top-0 z-30 bg-erreur text-white text-xs font-medium text-center py-1.5">
+          Hors ligne — reconnexion automatique dès que possible
+        </div>
+      )}
       <Suspense fallback={attente}>
         {largeurLibre ? écran : <div className="max-w-2xl mx-auto">{écran}</div>}
       </Suspense>
