@@ -281,9 +281,10 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
       .select('id, prenom_praticien, nom_praticien, nom_cabinet, ville')
       .eq('id', dossier.client_id)
       .maybeSingle()
-      .then(({ data }) => {
-        if (actif) setClient(data)
+      .then(({ data, error }) => {
+        if (actif && !error) setClient(data)
       })
+      .catch(() => {})
     return () => {
       actif = false
     }
@@ -297,9 +298,10 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
       .select('*')
       .eq('dossier_id', dossier.id)
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (active) setNotes(data ?? [])
+      .then(({ data, error }) => {
+        if (active && !error) setNotes(data ?? [])
       })
+      .catch(() => {})
 
     const channel = supabase
       .channel(`dossier-notes-${dossier.id}`)

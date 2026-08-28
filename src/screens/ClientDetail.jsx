@@ -279,9 +279,10 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       .select('*')
       .eq('client_id', client.id)
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (active) setJournal(data ?? [])
+      .then(({ data, error }) => {
+        if (active && !error) setJournal(data ?? [])
       })
+      .catch(() => {})
 
     const channel = supabase
       .channel(`captures-client-${client.id}`)
@@ -320,9 +321,10 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       .select('*')
       .eq('client_id', client.id)
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (actif) setInfosAnnexes(data ?? [])
+      .then(({ data, error }) => {
+        if (actif && !error) setInfosAnnexes(data ?? [])
       })
+      .catch(() => {})
 
     const canal = supabase
       .channel(`client-notes-${client.id}`)
@@ -352,16 +354,31 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     }
   }, [client.id])
 
+  const [erreurDossiers, setErreurDossiers] = useState(null)
+  const [tentativeDossiers, setTentativeDossiers] = useState(0)
+
   useEffect(() => {
     let active = true
+    setErreurDossiers(null)
 
     supabase
       .from('dossiers')
       .select('*')
       .eq('client_id', client.id)
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (active) setDossiers(data ?? [])
+      .then(({ data, error }) => {
+        if (!active) return
+        if (error) {
+          // Une affaire en cours qui semble absente parce que la liste n'a
+          // pas pu charger, c'est le pire des deux mondes : ça ressemble à
+          // un client sans rien à suivre.
+          setErreurDossiers('Impossible de charger les dossiers.')
+          return
+        }
+        setDossiers(data ?? [])
+      })
+      .catch(() => {
+        if (active) setErreurDossiers('Impossible de charger les dossiers.')
       })
 
     const channel = supabase
@@ -391,7 +408,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       active = false
       supabase.removeChannel(channel)
     }
-  }, [client.id])
+  }, [client.id, tentativeDossiers])
 
   const nomComplet = nomClient(values) ?? 'Client'
 
@@ -656,7 +673,14 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
             </button>
           }
         >
-          {dossiers.length === 0 ? (
+          {erreurDossiers ? (
+            <p className="text-erreur text-sm px-1">
+              {erreurDossiers}{' '}
+              <button onClick={() => setTentativeDossiers((t) => t + 1)} className="text-accent font-medium">
+                Réessayer
+              </button>
+            </p>
+          ) : dossiers.length === 0 ? (
             <p className="text-texte-faible text-sm px-1">Aucun dossier pour l'instant.</p>
           ) : (
             <ul className="space-y-2">

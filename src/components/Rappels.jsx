@@ -64,9 +64,10 @@ export default function Rappels({ dossierId, statut }) {
       .select('*')
       .eq('dossier_id', dossierId)
       .order('date', { ascending: true })
-      .then(({ data }) => {
-        if (actif) setListe(data ?? [])
+      .then(({ data, error }) => {
+        if (actif && !error) setListe(data ?? [])
       })
+      .catch(() => {})
 
     const canal = supabase
       .channel(`rappels-${dossierId}`)
@@ -144,7 +145,9 @@ export default function Rappels({ dossierId, statut }) {
       return
     }
     if (!rappel.fait_at && ('date' in champs || 'note' in champs)) {
-      await synchroniserRappel(rappel.id)
+      // En tâche de fond : la base est déjà à jour, pas besoin d'attendre
+      // Todoist pour que la fenêtre se referme.
+      synchroniserRappel(rappel.id)
     }
   }
 

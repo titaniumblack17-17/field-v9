@@ -165,7 +165,12 @@ export async function ajouterRappel(dossierId, date, note, heure) {
     .select()
     .single()
   if (error) return { erreur: error.message }
-  await synchroniserRappel(data.id)
+  // Todoist en tâche de fond : le rappel existe déjà en base (ce qui compte
+  // pour Field V9), pas besoin d'attendre l'aller-retour externe pour
+  // libérer l'écran — sur une connexion faible en visite, cette attente se
+  // sentait comme un gel sur une action qui devrait être instantanée.
+  // synchroniserRappel ne lève jamais, sûr à ne pas attendre.
+  synchroniserRappel(data.id)
   return data
 }
 
@@ -181,7 +186,9 @@ export async function cloreRappel(rappelId, commentaire) {
     .eq('id', rappelId)
   if (error) return { erreur: error.message }
   // fait_at est posé : la fonction supprime la tâche au lieu d'en créer une.
-  return synchroniserRappel(rappelId)
+  // Là aussi en tâche de fond, même raison que ajouterRappel ci-dessus.
+  synchroniserRappel(rappelId)
+  return {}
 }
 
 /** Clôt le prochain rappel ouvert d'un dossier — utilisé depuis le Brief, qui

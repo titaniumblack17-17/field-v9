@@ -13,6 +13,7 @@ import {
 import { supabase } from '../lib/supabaseClient'
 import { etatRappel, assurerRappelDeRelance } from '../lib/rappel'
 import { nomClient } from '../lib/client'
+import EtatErreur from '../components/EtatErreur'
 import {
   ETAPES_PROJET,
   STATUTS_SAV,
@@ -269,16 +270,37 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     await assurerRappelDeRelance(dossier.id, etape)
   }
 
+  const [chargement, setChargement] = useState(true)
+  const [erreur, setErreur] = useState(null)
+  const [tentative, setTentative] = useState(0)
+
   useEffect(() => {
     let active = true
+    setChargement(true)
+    setErreur(null)
 
     supabase
       .from('dossiers')
       .select('*, clients(id, prenom_praticien, nom_praticien, nom_cabinet, ville)')
       .in('type', ['projet', 'sav', 'plan'])
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (active) setDossiers(data ?? [])
+      .then(({ data, error }) => {
+        if (!active) return
+        if (error) {
+          // Sans ça, un chargement raté affichait un pipeline à zéro dossier
+          // partout — indiscernable d'un vrai pipeline vide.
+          setErreur('Impossible de charger le pipeline.')
+          setChargement(false)
+          return
+        }
+        setDossiers(data ?? [])
+        setChargement(false)
+      })
+      .catch(() => {
+        if (active) {
+          setErreur('Impossible de charger le pipeline.')
+          setChargement(false)
+        }
       })
 
     const channel = supabase
@@ -307,7 +329,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
       active = false
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [tentative])
 
   const byEtape = {}
   ETAPES_PROJET.forEach(([id]) => {
@@ -422,6 +444,14 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
         )}
       </header>
 
+      {chargement && <p className="text-texte-faible text-sm px-4">Chargement…</p>}
+
+      {!chargement && erreur && (
+        <EtatErreur message={erreur} onReessayer={() => setTentative((t) => t + 1)} />
+      )}
+
+      {!chargement && !erreur && (
+        <>
       {vue === 'projet' && (
       <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto flex-shrink-0">
         {ETAPES_PROJET.filter(
@@ -584,6 +614,8 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
         </div>
         <DragOverlay>{activeDrag && <Card dossier={activeDrag} onOpen={() => {}} isDragging />}</DragOverlay>
       </DndContext>
+        </>
+      )}
 
       {aDeplacer && (
         <div

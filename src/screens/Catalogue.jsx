@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import EtatErreur from '../components/EtatErreur'
 
 const normalize = (s) =>
   (s ?? '')
@@ -14,6 +15,7 @@ export default function Catalogue({ onBack }) {
   const [produits, setProduits] = useState([])
   const [loading, setLoading] = useState(true)
   const [erreur, setErreur] = useState(null)
+  const [tentative, setTentative] = useState(0)
   const [query, setQuery] = useState('')
   const [ouvert, setOuvert] = useState(null)
 
@@ -28,6 +30,8 @@ export default function Catalogue({ onBack }) {
   // peuvent alors se chevaucher ou laisser passer une ligne entre les deux.
   useEffect(() => {
     let actif = true
+    setLoading(true)
+    setErreur(null)
 
     const recupererTousLesProduits = async () => {
       const TAILLE_PAGE = 1000
@@ -66,7 +70,7 @@ export default function Catalogue({ onBack }) {
     return () => {
       actif = false
     }
-  }, [])
+  }, [tentative])
 
   const resultats = useMemo(() => {
     const termes = normalize(query).split(/\s+/).filter(Boolean)
@@ -170,7 +174,7 @@ export default function Catalogue({ onBack }) {
         {loading && <p className="text-texte-faible text-sm">Chargement…</p>}
 
         {!loading && erreur && (
-          <p className="text-erreur text-sm mt-8 text-center">{erreur}</p>
+          <EtatErreur message={erreur} onReessayer={() => setTentative((t) => t + 1)} />
         )}
 
         {!loading && !erreur && produits.length === 0 && (

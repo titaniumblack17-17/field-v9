@@ -63,9 +63,10 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
       .select('*')
       .eq(colonne, valeur)
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (actif) setListe(data ?? [])
+      .then(({ data, error }) => {
+        if (actif && !error) setListe(data ?? [])
       })
+      .catch(() => {})
 
     const canal = supabase
       .channel(`fichiers-${colonne}-${valeur}`)

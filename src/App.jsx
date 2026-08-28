@@ -1,13 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { Suspense, useEffect, useRef, useState } from 'react'
+// Clients reste chargé d'un bloc : c'est le tout premier écran, autant ne
+// pas ajouter un aller-retour réseau avant même de le voir apparaître. Les
+// autres écrans ne se chargent qu'une fois qu'on y navigue — auparavant,
+// tout partait dans un seul paquet, même pour n'ouvrir que le Brief.
 import ClientList from './screens/ClientList'
-import ClientDetail from './screens/ClientDetail'
-import ClientForm from './screens/ClientForm'
-import Capture from './screens/Capture'
-import DossierForm from './screens/DossierForm'
-import DossierDetail from './screens/DossierDetail'
-import Pipeline from './screens/Pipeline'
-import BriefSoir from './screens/BriefSoir'
-import Catalogue from './screens/Catalogue'
+const ClientDetail = React.lazy(() => import('./screens/ClientDetail'))
+const ClientForm = React.lazy(() => import('./screens/ClientForm'))
+const Capture = React.lazy(() => import('./screens/Capture'))
+const DossierForm = React.lazy(() => import('./screens/DossierForm'))
+const DossierDetail = React.lazy(() => import('./screens/DossierDetail'))
+const Pipeline = React.lazy(() => import('./screens/Pipeline'))
+const BriefSoir = React.lazy(() => import('./screens/BriefSoir'))
+const Catalogue = React.lazy(() => import('./screens/Catalogue'))
 import useConfirm from './hooks/useConfirm'
 
 // Balayage depuis le bord gauche pour revenir. Le geste natif d'iOS est
@@ -199,9 +203,19 @@ export default function App() {
     )
   }
 
+  // Pensé pour un téléphone, l'app s'étirait bord à bord sur un grand écran
+  // Mac — des lignes de champs et de listes larges de plus d'un mètre,
+  // illisibles. Le Pipeline fait exception : son kanban défile
+  // horizontalement et a besoin de toute la largeur disponible.
+  const largeurLibre = view.name === 'pipeline'
+
+  const attente = <p className="text-texte-faible text-sm p-4">Chargement…</p>
+
   return (
     <>
-      {écran}
+      <Suspense fallback={attente}>
+        {largeurLibre ? écran : <div className="max-w-2xl mx-auto">{écran}</div>}
+      </Suspense>
       {boîteConfirmation}
     </>
   )

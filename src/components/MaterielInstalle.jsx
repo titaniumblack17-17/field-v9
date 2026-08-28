@@ -21,9 +21,10 @@ export default function MaterielInstalle({ clientId }) {
       .select('*')
       .eq('client_id', clientId)
       .order('created_at', { ascending: true })
-      .then(({ data }) => {
-        if (actif) setListe(data ?? [])
+      .then(({ data, error }) => {
+        if (actif && !error) setListe(data ?? [])
       })
+      .catch(() => {})
 
     const canal = supabase
       .channel(`materiel-${clientId}`)

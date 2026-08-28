@@ -24,7 +24,10 @@ export default function ChoixClient({ titre = 'Relier à un client', onChoisir, 
       .from('clients')
       .select('id, prenom_praticien, nom_praticien, nom_cabinet, ville')
       .order('nom_praticien')
-      .then(({ data }) => setClients(data ?? []))
+      .then(({ data, error }) => {
+        if (!error) setClients(data ?? [])
+      })
+      .catch(() => {})
   }, [])
 
   const resultats = useMemo(() => {

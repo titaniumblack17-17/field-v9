@@ -82,9 +82,10 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
       .is('client_id', null)
       .order('created_at', { ascending: false })
       .limit(20)
-      .then(({ data }) => {
-        if (active) setUnclassified(data ?? [])
+      .then(({ data, error }) => {
+        if (active && !error) setUnclassified(data ?? [])
       })
+      .catch(() => {})
 
     const channel = supabase
       .channel('captures-unclassified')

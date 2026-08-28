@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { nomClient } from '../lib/client'
+import EtatErreur from '../components/EtatErreur'
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
@@ -24,18 +25,36 @@ const normalize = (s) =>
 export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, onBrief, onCatalogue }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
+  const [erreur, setErreur] = useState(null)
+  const [tentative, setTentative] = useState(0)
   const [query, setQuery] = useState('')
 
   useEffect(() => {
     let active = true
+    setLoading(true)
+    setErreur(null)
 
     supabase
       .from('clients')
       .select('*')
       .order('nom_praticien', { ascending: true })
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (!active) return
+        if (error) {
+          // Signal coupé en visite, timeout : sans ça l'écran restait bloqué
+          // sur « Chargement… » indéfiniment, seul écran d'entrée de l'app.
+          setErreur('Impossible de charger les clients.')
+          setLoading(false)
+          return
+        }
+        setClients(data ?? [])
+        setLoading(false)
+      })
+      .catch(() => {
+        // fetch() lui-même peut lever (coupure réseau franche), pas
+        // seulement renvoyer un champ error — les deux sont couverts.
         if (active) {
-          setClients(data ?? [])
+          setErreur('Impossible de charger les clients.')
           setLoading(false)
         }
       })
@@ -69,7 +88,7 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
       active = false
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [tentative])
 
   // Un même nom de praticien porté par plusieurs fiches : on affiche l'adresse
   // en plus du cabinet/ville pour lever l'ambiguïté.
@@ -181,7 +200,11 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
       <main className="px-4 pb-8">
         {loading && <p className="text-texte-faible text-sm">Chargement…</p>}
 
-        {!loading && clients.length === 0 && (
+        {!loading && erreur && (
+          <EtatErreur message={erreur} onReessayer={() => setTentative((t) => t + 1)} />
+        )}
+
+        {!loading && !erreur && clients.length === 0 && (
           <p className="text-texte-faible text-sm mt-8 text-center">
             Aucun client. Touchez + pour en créer un.
           </p>

@@ -30,7 +30,10 @@ export default function DossierForm({ client, onCreated, onCancel }) {
       .eq('client_id', client.id)
       .eq('type', 'projet')
       .order('created_at', { ascending: false })
-      .then(({ data }) => setProjetsClient(data ?? []))
+      .then(({ data, error }) => {
+        if (!error) setProjetsClient(data ?? [])
+      })
+      .catch(() => {})
   }, [client.id])
 
   useEffect(() => {

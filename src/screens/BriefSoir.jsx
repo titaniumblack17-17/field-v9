@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import usePrompt from '../hooks/usePrompt'
 import { supabase } from '../lib/supabaseClient'
+import EtatErreur from '../components/EtatErreur'
 import JaugeObjectif from '../components/JaugeObjectif'
 import { etatRappel, cloreProchainRappel, reconcilierRappels } from '../lib/rappel'
 import { nomClient } from '../lib/client'
@@ -133,6 +134,8 @@ function Section({ sectionRef, titre, compte, urgent, vide, children }) {
 export default function BriefSoir({ onBack, onOpenDossier }) {
   const [dossiers, setDossiers] = useState([])
   const [chargement, setChargement] = useState(true)
+  const [erreur, setErreur] = useState(null)
+  const [tentative, setTentative] = useState(0)
   const [demanderTexte, boîtePrompt] = usePrompt()
 
   // Huit sections avant la jauge : sans repère, une lecture rapide oblige à
@@ -162,6 +165,8 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
 
   useEffect(() => {
     let actif = true
+    setChargement(true)
+    setErreur(null)
 
     // Réconcilier avant de lire, jamais après : le Brief est le moment où l'on
     // décide quoi faire ce soir. Réclamer un appel déjà passé sur la montre
@@ -172,9 +177,19 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
           .from('dossiers')
           .select('*, clients(id, prenom_praticien, nom_praticien, nom_cabinet, ville)')
       )
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (!actif) return
+        if (error) {
+          setErreur('Impossible de charger le brief.')
+          setChargement(false)
+          return
+        }
+        setDossiers(data ?? [])
+        setChargement(false)
+      })
+      .catch(() => {
         if (actif) {
-          setDossiers(data ?? [])
+          setErreur('Impossible de charger le brief.')
           setChargement(false)
         }
       })
@@ -214,7 +229,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       actif = false
       supabase.removeChannel(canal)
     }
-  }, [])
+  }, [tentative])
 
   const bilan = useMemo(() => {
     const aujourdhui = new Date().toISOString().slice(0, 10)
@@ -348,7 +363,11 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       <main className="px-4 pb-8">
         {chargement && <p className="text-texte-faible text-sm">Point avec Todoist…</p>}
 
-        {!chargement && (
+        {!chargement && erreur && (
+          <EtatErreur message={erreur} onReessayer={() => setTentative((t) => t + 1)} />
+        )}
+
+        {!chargement && !erreur && (
           <>
             <Section
               sectionRef={(el) => (sectionRefs.current.sav = el)}
