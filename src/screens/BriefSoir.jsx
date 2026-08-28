@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import usePrompt from '../hooks/usePrompt'
 import { supabase } from '../lib/supabaseClient'
 import JaugeObjectif from '../components/JaugeObjectif'
@@ -29,13 +29,14 @@ const exerciceDe = (dossier, anneeCourante) => {
 }
 
 // Signé : la commande est passée, la vente est faite. Ce qui suit relève de la
-// logistique, pas de la prospection.
-const ETAPES_SIGNEES = ['commande', 'reunion_chantier', 'installation', 'finition', 'financement']
+// logistique, pas de la prospection. « Terminé » en fait partie : classer un
+// dossier ne doit pas le faire disparaître de l'objectif de l'année.
+const ETAPES_SIGNEES = ['commande', 'reunion_chantier', 'installation', 'finition', 'financement', 'termine']
 
-// Facturé : l'installation est terminée. Aucune étape ne s'appelle « facturé »
-// dans le pipeline — c'est la finition qui en tient lieu. À changer ici si la
-// facturation intervient plus tôt.
-const ETAPES_FACTUREES = ['finition']
+// Facturé : l'installation est terminée. Aucune étape ne s'appelait « facturé »
+// avant « Terminé » — la finition en tenait lieu, et continue de compter une
+// fois le dossier classé.
+const ETAPES_FACTUREES = ['finition', 'termine']
 
 const euros = (n) =>
   n == null ? '—' : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n) + ' €'
@@ -103,12 +104,26 @@ function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTi
   )
 }
 
-function Section({ titre, compte, vide, children }) {
+function Section({ sectionRef, titre, compte, urgent, vide, children }) {
+  // Une section qui réclame une décision ce soir (SAV bloquant, devis
+  // oublié, retard) se voit avant même de lire le chiffre : titre en clair
+  // plutôt qu'en petites capitales, compteur sur pastille colorée plutôt
+  // que gris neutre. Le reste garde la sobriété d'une liste de suivi.
+  const actif = urgent && compte > 0
   return (
-    <section className="mt-5">
+    <section ref={sectionRef} className="mt-6 scroll-mt-32">
       <div className="flex items-baseline gap-2 px-1 mb-2">
-        <h2 className="text-xs text-texte-faible uppercase tracking-wider">{titre}</h2>
-        {compte > 0 && <span className="text-xs text-texte-faible">{compte}</span>}
+        <h2 className={actif ? 'text-sm font-semibold text-texte' : 'text-xs text-texte-faible uppercase tracking-wider'}>
+          {titre}
+        </h2>
+        {compte > 0 &&
+          (actif ? (
+            <span className="text-xs font-semibold text-alerte bg-alerte/10 rounded-full px-2 py-0.5">
+              {compte}
+            </span>
+          ) : (
+            <span className="text-xs text-texte-faible">{compte}</span>
+          ))}
       </div>
       {compte === 0 ? <p className="text-texte-faible text-sm px-1">{vide}</p> : <ul className="space-y-2">{children}</ul>}
     </section>
@@ -119,6 +134,14 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   const [dossiers, setDossiers] = useState([])
   const [chargement, setChargement] = useState(true)
   const [demanderTexte, boîtePrompt] = usePrompt()
+
+  // Huit sections avant la jauge : sans repère, une lecture rapide oblige à
+  // tout traverser pour savoir si quelque chose presse. Les pastilles
+  // ci-dessous donnent la réponse d'un coup d'œil et sautent directement
+  // à la section concernée.
+  const sectionRefs = useRef({})
+  const allerASection = (cle) =>
+    sectionRefs.current[cle]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   // Retrait immédiat plutôt qu'attendre une relecture : on vient de le faire,
   // le voir rester dans « À rappeler » ferait douter que ça ait pris.
@@ -281,14 +304,46 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   const couvertureFaible =
     bilan.signesSansMontant > 0 || (bilan.totalActifs > 0 && bilan.chiffres < bilan.totalActifs / 2)
 
+  // Une pastille par section peuplée, colorée quand elle attend une décision
+  // ce soir plutôt qu'un simple suivi. L'ordre reprend celui des sections :
+  // sauter à une pastille retrouve toujours la même section plus bas.
+  const pastilles = [
+    { cle: 'sav', titre: 'SAV', compte: bilan.savOuverts.length, urgent: bilan.savOuverts.some((d) => d.statut !== 'en_attente') },
+    { cle: 'devis', titre: 'Devis oubliés', compte: bilan.devisSansReponse.length, urgent: bilan.devisSansReponse.length > 0 },
+    { cle: 'rappeler', titre: 'À rappeler', compte: bilan.aRappeler.length, urgent: bilan.aRappeler.length > 0 },
+    { cle: 'avenir', titre: 'À venir', compte: bilan.aVenir.length, urgent: false },
+    { cle: 'plans', titre: 'Plans', compte: bilan.plansAProduire.length, urgent: false },
+    { cle: 'reglements', titre: 'Règlements', compte: bilan.reglements.length, urgent: bilan.reglements.some((d) => d.statut === 'reglement_demande') },
+    { cle: 'chiffrer', titre: 'À chiffrer', compte: bilan.sansMontant.length, urgent: false },
+  ].filter((p) => p.compte > 0)
+
   return (
     <div className="min-h-screen bg-fond">
-      <header className="sticky top-0 z-10 bg-fond/90 backdrop-blur px-4 pt-6 pb-4 flex items-center gap-3">
-        <button onClick={onBack} className="text-accent text-sm font-medium h-11 -ml-2 pl-2 pr-1 flex items-center">
-          ← Clients
-        </button>
-        <h1 className="text-lg font-semibold text-texte">Brief soir</h1>
-      </header>
+      <div className="sticky top-0 z-10 bg-fond/90 backdrop-blur">
+        <header className="px-4 pt-6 pb-3 flex items-center gap-3">
+          <button onClick={onBack} className="text-accent text-sm font-medium h-11 -ml-2 pl-2 pr-1 flex items-center">
+            ← Clients
+          </button>
+          <h1 className="text-lg font-semibold text-texte">Brief soir</h1>
+        </header>
+
+        {!chargement && pastilles.length > 0 && (
+          <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto">
+            {pastilles.map((p) => (
+              <button
+                key={p.cle}
+                onClick={() => allerASection(p.cle)}
+                className={`flex-shrink-0 h-9 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 ${
+                  p.urgent ? 'bg-alerte/10 text-alerte' : 'bg-carte text-texte-doux'
+                }`}
+              >
+                {p.titre}
+                <span className={p.urgent ? 'text-alerte/70' : 'text-texte-faible'}>{p.compte}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <main className="px-4 pb-8">
         {chargement && <p className="text-texte-faible text-sm">Point avec Todoist…</p>}
@@ -296,8 +351,10 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
         {!chargement && (
           <>
             <Section
+              sectionRef={(el) => (sectionRefs.current.sav = el)}
               titre="SAV ouverts"
               compte={bilan.savOuverts.length}
+              urgent={bilan.savOuverts.some((d) => d.statut !== 'en_attente')}
               vide="Aucun SAV en cours."
             >
               {bilan.savOuverts.map((d) => (
@@ -317,8 +374,10 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
             </Section>
 
             <Section
+              sectionRef={(el) => (sectionRefs.current.devis = el)}
               titre="Devis sans réponse"
               compte={bilan.devisSansReponse.length}
+              urgent
               vide="Aucun devis oublié."
             >
               {bilan.devisSansReponse.map((d) => (
@@ -333,8 +392,10 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
             </Section>
 
             <Section
+              sectionRef={(el) => (sectionRefs.current.rappeler = el)}
               titre="À rappeler"
               compte={bilan.aRappeler.length}
+              urgent
               vide="Aucun rappel en retard. "
             >
               {bilan.aRappeler.map((d) => (
@@ -351,7 +412,12 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               ))}
             </Section>
 
-            <Section titre="Rappels à venir" compte={bilan.aVenir.length} vide="Rien de programmé.">
+            <Section
+              sectionRef={(el) => (sectionRefs.current.avenir = el)}
+              titre="Rappels à venir"
+              compte={bilan.aVenir.length}
+              vide="Rien de programmé."
+            >
               {bilan.aVenir.map((d) => (
                 <Ligne
                   key={d.id}
@@ -366,6 +432,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
             </Section>
 
             <Section
+              sectionRef={(el) => (sectionRefs.current.plans = el)}
               titre="Plans à produire"
               compte={bilan.plansAProduire.length}
               vide="Aucun plan en attente."
@@ -385,8 +452,10 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
             </Section>
 
             <Section
+              sectionRef={(el) => (sectionRefs.current.reglements = el)}
               titre="Règlements de plans à encaisser"
               compte={bilan.reglements.length}
+              urgent={bilan.reglements.some((d) => d.statut === 'reglement_demande')}
               vide="Aucun plan en attente de règlement."
             >
               {bilan.reglements.map((d) => (
@@ -442,6 +511,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
             )}
 
             <Section
+              sectionRef={(el) => (sectionRefs.current.chiffrer = el)}
               titre="À chiffrer"
               compte={bilan.sansMontant.length}
               vide="Tous les dossiers actifs sont chiffrés."
