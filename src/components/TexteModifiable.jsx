@@ -122,7 +122,12 @@ export default function TexteModifiable({
         ×
       </button>
       <button
-        onClick={enregistrer}
+        // Pas `onClick={enregistrer}` : le clic passe l'événement en premier
+        // argument, qu'enregistrer prendrait maintenant pour une valeur à
+        // sauver (nécessaire pour l'enregistrement direct des dates/heures) —
+        // et tenter d'enregistrer un événement React plante la sauvegarde
+        // (« Converting circular structure to JSON »), avec le texte perdu.
+        onClick={() => enregistrer()}
         disabled={enCours}
         aria-label="Enregistrer"
         className="h-11 w-8 flex-shrink-0 text-accent disabled:opacity-40"
