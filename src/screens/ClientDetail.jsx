@@ -676,7 +676,11 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                         >
                           {s.badge}
                         </span>
-                        {d.commercial && (
+                        {/* Réservé aux dossiers Plan : un Projet porte
+                            commercial=BDS une fois son plan validé (pour les
+                            totaux), mais l'afficher ici dirait à tort que la
+                            vente appartient à quelqu'un d'autre que Bruce. */}
+                        {d.type === 'plan' && d.commercial && (
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-carte-douce text-texte-doux">
                             {d.commercial}
                           </span>
