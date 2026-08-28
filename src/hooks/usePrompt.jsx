@@ -39,14 +39,20 @@ export default function usePrompt() {
         className="bg-fond rounded-2xl w-full sm:max-w-sm p-5 shadow-lg"
       >
         {état.titre && <h2 className="text-texte font-medium mb-2">{état.titre}</h2>}
-        <p className="text-texte-doux text-sm whitespace-pre-line mb-3">{état.message}</p>
+        {état.message && (
+          <p className="text-texte-doux text-sm whitespace-pre-line mb-3">{état.message}</p>
+        )}
         <textarea
           autoFocus
           value={valeur}
-          onChange={(e) => setValeur(e.target.value)}
+          onChange={(e) => {
+            setValeur(e.target.value)
+            e.target.style.height = 'auto'
+            e.target.style.height = `${e.target.scrollHeight}px`
+          }}
           placeholder={état.placeholder}
           rows={3}
-          className="w-full bg-carte rounded-xl px-3 py-2 text-texte outline-none placeholder:text-texte-fantome resize-none"
+          className="w-full bg-carte rounded-xl px-3 py-2 text-texte outline-none placeholder:text-texte-fantome resize-none overflow-hidden"
         />
         <div className="mt-4 flex gap-3">
           <button

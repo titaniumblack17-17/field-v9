@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { nomClient } from '../lib/client'
 import { resumeDossier } from '../lib/resume'
@@ -10,6 +10,7 @@ import NoteTexte from '../components/NoteTexte'
 import TexteModifiable from '../components/TexteModifiable'
 import { retirerRappelsTodoist } from '../lib/rappel'
 import useConfirm from '../hooks/useConfirm'
+import usePrompt from '../hooks/usePrompt'
 import {
   TYPE_LABELS,
   TYPE_OPTIONS,
@@ -46,7 +47,6 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [notes, setNotes] = useState([])
-  const [newNote, setNewNote] = useState('')
   const [addingNote, setAddingNote] = useState(false)
   const [suppression, setSuppression] = useState(false)
   // Compte rendu du dernier envoi vers Todoist : { etat } ou { erreur }.
@@ -55,8 +55,8 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   const [toutesNotes, setToutesNotes] = useState(false)
   const [noteEnEdition, setNoteEnEdition] = useState(null)
   const [confirmer, boîteConfirmation] = useConfirm()
+  const [demanderTexte, boîtePrompt] = usePrompt()
   const [resumeCopie, setResumeCopie] = useState(false)
-  const noteTextareaRef = useRef(null)
 
   // Partager un dossier avec un collègue aujourd'hui, faute de compte
   // partagé dans Field V9, ça passe par un texte propre à coller dans un
@@ -69,15 +69,6 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
     } else {
       setError('Impossible de copier — sélectionnez et copiez le texte manuellement.')
     }
-  }
-
-  // Une note tapée sur plusieurs lignes doit rester entièrement visible
-  // pendant la saisie — une hauteur fixe à 1 ligne obligeait à faire défiler
-  // dans le champ pour relire ce qu'on venait d'écrire.
-  const ajusterHauteurNote = (el) => {
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
   }
 
   const supprimerNote = async (note) => {
@@ -318,11 +309,14 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   }, [dossier.id])
 
   const addNote = async () => {
-    if (!newNote.trim()) return
+    const texte = await demanderTexte('', {
+      titre: 'Ajouter une note',
+      confirmLabel: 'Ajouter',
+      placeholder: 'Objet, échange, ce qui a été dit…',
+    })
+    if (!texte || !texte.trim()) return
     setAddingNote(true)
-    await supabase.from('dossier_notes').insert({ dossier_id: dossier.id, texte: newNote.trim() })
-    setNewNote('')
-    ajusterHauteurNote(noteTextareaRef.current)
+    await supabase.from('dossier_notes').insert({ dossier_id: dossier.id, texte: texte.trim() })
     setAddingNote(false)
   }
 
@@ -563,40 +557,23 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
             <p className="text-xs text-texte-faible">
               Notes{notes.length > 0 ? ` · ${notes.length}` : ''}
             </p>
-            {notes.length > APERCU_NOTES && (
+            <div className="flex items-center gap-3">
+              {notes.length > APERCU_NOTES && (
+                <button
+                  onClick={() => setToutesNotes((v) => !v)}
+                  className="text-accent text-xs font-medium"
+                >
+                  {toutesNotes ? 'Réduire' : `Afficher les ${notes.length} notes`}
+                </button>
+              )}
               <button
-                onClick={() => setToutesNotes((v) => !v)}
-                className="text-accent text-xs font-medium"
+                onClick={addNote}
+                disabled={addingNote}
+                className="text-accent text-xs font-medium disabled:opacity-40"
               >
-                {toutesNotes ? 'Réduire' : `Afficher les ${notes.length} notes`}
+                + Ajouter
               </button>
-            )}
-          </div>
-          <div className="bg-carte rounded-xl shadow-sm p-3 flex gap-2 mb-2">
-            <textarea
-              ref={noteTextareaRef}
-              value={newNote}
-              onChange={(e) => {
-                setNewNote(e.target.value)
-                ajusterHauteurNote(e.target)
-              }}
-              placeholder="Ajouter une note…"
-              rows={1}
-              className="flex-1 text-texte outline-none bg-transparent resize-none overflow-hidden"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  addNote()
-                }
-              }}
-            />
-            <button
-              onClick={addNote}
-              disabled={addingNote || !newNote.trim()}
-              className="text-accent text-sm font-medium disabled:opacity-40"
-            >
-              Ajouter
-            </button>
+            </div>
           </div>
           {notes.length > 0 && (
             <ul className="space-y-2">
@@ -678,6 +655,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
       )}
 
       {boîteConfirmation}
+      {boîtePrompt}
     </div>
   )
 }
