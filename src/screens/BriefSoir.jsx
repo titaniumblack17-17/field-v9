@@ -151,7 +151,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   const rappelFait = async (dossier) => {
     // Le commentaire se demande au moment du geste : c'est là qu'on sait ce
     // qui s'est dit, pas au prochain passage sur la fiche.
-    const commentaire = await demanderTexte('Que retenez-vous de cet appel ?', {
+    const commentaire = await demanderTexte('Qu\'est-ce qu\'il faut en retenir ?', {
       titre: dossier.rappel_note || dossier.titre || 'Rappel',
       confirmLabel: 'Valider',
     })

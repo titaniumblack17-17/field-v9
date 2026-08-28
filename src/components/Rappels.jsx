@@ -124,7 +124,7 @@ export default function Rappels({ dossierId, statut }) {
   const clore = async (rappel) => {
     // Le commentaire est demandé au moment du geste : c'est là qu'on sait ce
     // qui s'est dit, pas au prochain passage sur la fiche.
-    const commentaire = await demanderTexte('Que retenez-vous de cet appel ?', {
+    const commentaire = await demanderTexte('Qu\'est-ce qu\'il faut en retenir ?', {
       titre: `Rappel du ${leJour(rappel.date)}${rappel.note ? ` — ${rappel.note}` : ''}`,
       confirmLabel: 'Valider',
     })
