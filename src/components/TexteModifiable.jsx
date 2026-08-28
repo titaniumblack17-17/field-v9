@@ -51,8 +51,9 @@ export default function TexteModifiable({
     }
   }, [edition, multiligne])
 
-  const enregistrer = async () => {
-    const propre = typeof brouillon === 'string' ? brouillon.trim() : brouillon
+  const enregistrer = async (valeurBrute) => {
+    const brut = valeurBrute !== undefined ? valeurBrute : brouillon
+    const propre = typeof brut === 'string' ? brut.trim() : brut
     if (propre === (valeur ?? '')) {
       setEdition(false)
       return
@@ -94,8 +95,17 @@ export default function TexteModifiable({
         rows={multiligne ? 3 : undefined}
         value={brouillon}
         onChange={(e) => {
-          setBrouillon(e.target.value)
+          const v = e.target.value
+          setBrouillon(v)
           if (multiligne) ajusterHauteur(e.target)
+          // Date et heure : le sélecteur natif ne déclenche onChange que sur une
+          // valeur complète et valide (jamais une saisie à moitié faite), donc le
+          // risque que le double appui « ✓ / × » devait couvrir n'existe pas ici.
+          // Sur téléphone, les deux boutons sont côte à côte et minuscules — un
+          // doigt qui touche le × par erreur annulait silencieusement le
+          // changement de date, sans aucune différence visible avec un
+          // enregistrement réussi. On enregistre donc tout de suite.
+          if (!multiligne && (type === 'date' || type === 'time')) enregistrer(v)
         }}
         placeholder={placeholder}
         onKeyDown={(e) => {
