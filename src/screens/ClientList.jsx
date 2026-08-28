@@ -227,7 +227,11 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
             const ambigu = client.nom_praticien && homonymes[normalize(client.nom_praticien)] > 1
             // Le cabinet ne se répète pas en dessous s'il sert déjà de nom
             // principal (centre sans praticien nommé).
-            const sousTitre = [client.nom_praticien && client.nom_cabinet, client.ville]
+            const sousTitre = [
+              client.nom_praticien && client.nom_cabinet,
+              client.specialites?.length && client.specialites.join(', '),
+              client.ville,
+            ]
               .filter(Boolean)
               .join(' · ')
             return (

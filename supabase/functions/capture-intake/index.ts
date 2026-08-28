@@ -30,6 +30,28 @@ const trouverExistant = (clients: any[], nom: string, prenom: string | null) => 
   })
 }
 
+// Tâche de fond : la fiche fraîchement créée est complétée depuis le web
+// (spécialité, adresse, associés…) APRÈS avoir répondu à Bruce, pour ne
+// jamais faire attendre une capture — une recherche web prend plusieurs
+// secondes, une dictée en voiture entre deux rendez-vous ne peut pas
+// patienter. Un échec ici ne doit jamais faire échouer la capture elle-même,
+// qui a déjà répondu.
+const completerDepuisLeWeb = async (clientId: string) => {
+  try {
+    await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/client-web-lookup`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      },
+      body: JSON.stringify({ client_id: clientId }),
+    })
+  } catch {
+    // silencieux : voir commentaire ci-dessus
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
@@ -359,6 +381,7 @@ peut-être fausse sans avertissement.
 
     client_id = newClient.id
     cree = true
+    EdgeRuntime.waitUntil(completerDepuisLeWeb(client_id))
   } else {
     const validIds = new Set((clients ?? []).map((c: any) => c.id))
     client_id = existant?.id ?? (validIds.has(extracted.client_id) ? extracted.client_id : null)

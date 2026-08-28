@@ -21,3 +21,19 @@ export const SOURCE_DETAIL_PLACEHOLDER = {
   evenement: 'Quel événement ?',
   prospection: 'Précision (facultatif)',
 }
+
+// Liste fermée — un praticien peut en cumuler plusieurs (ex. Omnipratique +
+// Implantologie). Gardée identique à celle utilisée côté edge function
+// (client-web-lookup) : une valeur hors liste n'aurait nulle part où
+// s'afficher.
+export const SPECIALITES = [
+  'Omnipratique',
+  'Orthodontie',
+  'Implantologie',
+  'Parodontologie',
+  'Endodontie',
+  'Chirurgie orale',
+  'Pédodontie',
+  'Prothèse dentaire',
+  'Esthétique dentaire',
+]

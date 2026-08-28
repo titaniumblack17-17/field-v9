@@ -5,7 +5,9 @@ import { resumeClient } from '../lib/resume'
 import { supabase } from '../lib/supabaseClient'
 import PersonListField from '../components/PersonListField'
 import ChampChoix from '../components/ChampChoix'
-import { SOURCE_OPTIONS, SOURCE_DETAIL_PLACEHOLDER } from '../constants/clients'
+import ChampMultiChoix from '../components/ChampMultiChoix'
+import RechercheWeb from '../components/RechercheWeb'
+import { SOURCE_OPTIONS, SOURCE_DETAIL_PLACEHOLDER, SPECIALITES } from '../constants/clients'
 import MaterielInstalle from '../components/MaterielInstalle'
 import PiecesJointes from '../components/PiecesJointes'
 import NoteTexte from '../components/NoteTexte'
@@ -218,7 +220,13 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     const gens =
       signaturePeople(associes) !== signaturePeople(client.associes) ||
       signaturePeople(assistantes) !== signaturePeople(client.assistantes)
-    return champs || gens
+    // Comparaison par ensemble, pas par ordre : cocher deux cases dans un
+    // ordre différent de celui déjà enregistré ne doit pas se lire comme un
+    // changement s'il s'agit au fond des mêmes spécialités.
+    const specialites =
+      [...(values.specialites ?? [])].sort().join(',') !==
+      [...(client.specialites ?? [])].sort().join(',')
+    return champs || gens || specialites
   }, [values, associes, assistantes, client])
 
   useEffect(() => {
@@ -241,6 +249,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     )
     update.associes = cleanPeople(associes)
     update.assistantes = cleanPeople(assistantes)
+    update.specialites = values.specialites ?? []
     update.source_type = values.source_type || null
     update.source_detail = (values.source_detail ?? '').trim() || null
 
@@ -631,6 +640,13 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
               />
             </div>
           ))}
+          <ChampMultiChoix
+            id="specialites"
+            label="Spécialité(s)"
+            value={values.specialites ?? []}
+            options={SPECIALITES.map((s) => [s, s])}
+            onChange={(v) => setValues((x) => ({ ...x, specialites: v }))}
+          />
           <PersonListField label="Associé(s)" people={associes} onChange={setAssocies} />
           <PersonListField label="Assistante(s)" people={assistantes} onChange={setAssistantes} />
           <ChampChoix
@@ -656,6 +672,20 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
             </div>
           )}
         </div>
+
+        <RechercheWeb
+          client={client}
+          onComplete={async () => {
+            // La recherche a écrit directement en base (voir client-web-lookup) :
+            // on relit la fiche pour refléter ce qui vient d'être trouvé, sans
+            // attendre un rechargement de page.
+            const { data } = await supabase.from('clients').select('*').eq('id', client.id).single()
+            if (!data) return
+            Object.assign(client, data)
+            setValues({ ...data })
+            setAssocies(emptyPeople(data.associes))
+          }}
+        />
 
         {error && <p className="text-erreur text-sm mt-3">{error}</p>}
 
