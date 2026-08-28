@@ -2,6 +2,14 @@
 import { readFileSync } from 'node:fs'
 import 'dotenv/config'
 import { createClient } from '@supabase/supabase-js'
+import {
+  parserVCards,
+  clefTelephone,
+  estNumeroFR,
+  extraireContact,
+  formaterTelephone,
+  normaliser,
+} from './lib/vcard.mjs'
 
 // Contacts.app (macOS) → Fichier → Exporter → Exporter vCard, sur la sélection
 // ou tout le carnet. Ce script comble les champs vides des fiches Field —
@@ -26,137 +34,6 @@ if (!VITE_SUPABASE_URL || !VITE_SUPABASE_ANON_KEY) {
 }
 
 const supabase = createClient(VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
-
-// --- Lecture vCard ---
-// Une ligne qui commence par une espace ou une tabulation est la suite de la
-// précédente (RFC 6350, "line folding") — un standard qu'Apple applique sur
-// les valeurs longues (ex. une adresse complète).
-const deplierLignes = (texte) =>
-  texte.split(/\r\n|\r|\n/).reduce((lignes, ligne) => {
-    if (/^[ \t]/.test(ligne) && lignes.length) {
-      lignes[lignes.length - 1] += ligne.slice(1)
-    } else {
-      lignes.push(ligne)
-    }
-    return lignes
-  }, [])
-
-const parserLigne = (ligne) => {
-  const deuxPoints = ligne.indexOf(':')
-  if (deuxPoints === -1) return null
-  const avant = ligne.slice(0, deuxPoints)
-  const valeur = ligne.slice(deuxPoints + 1)
-  const [nomBrut, ...params] = avant.split(';')
-  const nom = nomBrut.toUpperCase()
-  const types = params
-    .filter((p) => /^type=/i.test(p))
-    .flatMap((p) => p.slice(5).split(','))
-    .map((t) => t.toUpperCase())
-  return { nom, types, valeur }
-}
-
-const parserVCards = (texte) => {
-  const lignes = deplierLignes(texte)
-  const cartes = []
-  let courante = null
-  for (const ligneBrute of lignes) {
-    const ligne = ligneBrute.trim()
-    if (/^BEGIN:VCARD$/i.test(ligne)) {
-      courante = []
-      continue
-    }
-    if (/^END:VCARD$/i.test(ligne)) {
-      if (courante) cartes.push(courante)
-      courante = null
-      continue
-    }
-    if (!courante) continue
-    const champ = parserLigne(ligne)
-    if (champ) courante.push(champ)
-  }
-  return cartes
-}
-
-const chiffres = (v) => (v ?? '').replace(/\D/g, '')
-
-// Un contact peut porter plusieurs TEL/EMAIL avec des TYPE différents — on
-// devine portable/cabinet par l'étiquette Apple, avec un repli raisonnable
-// si aucune étiquette ne tranche (le premier numéro devient le portable,
-// le second le fixe).
-const extraireContact = (champs) => {
-  const val = (nom) => champs.find((c) => c.nom === nom)?.valeur?.trim() || null
-
-  const tousTels = champs.filter((c) => c.nom === 'TEL')
-  const portable =
-    tousTels.find((c) => c.types.some((t) => ['CELL', 'IPHONE', 'MOBILE'].includes(t))) ?? tousTels[0]
-  const fixe =
-    tousTels.find((c) => c !== portable && c.types.includes('WORK')) ??
-    tousTels.find((c) => c !== portable)
-
-  const tousEmails = champs.filter((c) => c.nom === 'EMAIL')
-  const emailPerso = tousEmails.find((c) => !c.types.includes('WORK')) ?? tousEmails[0]
-  const emailPro = tousEmails.find((c) => c !== emailPerso && c.types.includes('WORK'))
-
-  // ADR: boîte postale;complément;rue;ville;région;code postal;pays
-  const adr = champs.find((c) => c.nom === 'ADR')
-  let adresse = null
-  let ville = null
-  let codePostal = null
-  if (adr) {
-    const parties = adr.valeur.split(';')
-    adresse = [parties[2], parties[1]].filter(Boolean).join(' ').trim() || null
-    ville = parties[3]?.trim() || null
-    codePostal = parties[5]?.trim() || null
-  }
-
-  // N: Nom;Prénom;deuxième prénom;particule;suffixe — repli sur FN (nom
-  // complet affiché) si N est absent, en supposant "Prénom Nom".
-  const n = val('N')
-  let nomFamille = null
-  let prenom = null
-  if (n) {
-    const [nf, pr] = n.split(';')
-    nomFamille = nf?.trim() || null
-    prenom = pr?.trim() || null
-  }
-  if (!nomFamille) {
-    const fn = val('FN')
-    if (fn) {
-      const mots = fn.trim().split(/\s+/)
-      nomFamille = mots.length > 1 ? mots.slice(1).join(' ') : mots[0]
-      prenom = mots.length > 1 ? mots[0] : null
-    }
-  }
-
-  return {
-    nomFamille,
-    prenom,
-    telephonePortable: portable ? chiffresEnNumero(portable.valeur) : null,
-    telephoneCabinet: fixe ? chiffresEnNumero(fixe.valeur) : null,
-    email: emailPerso?.valeur || null,
-    email_cabinet: emailPro?.valeur || null,
-    adresse,
-    ville,
-    code_postal: codePostal,
-  }
-}
-
-// Un numéro non-français (pas 10 chiffres) est extrait tel quel plutôt que
-// rejeté : contrairement à la dictée, une entrée de carnet d'adresses n'a
-// pas de raison d'être mal transcrite, et rejeter par principe perdrait des
-// numéros valides à l'étranger.
-const chiffresEnNumero = (v) => {
-  const digits = chiffres(v)
-  return digits.length >= 8 ? v.trim() : null
-}
-
-const normaliser = (v) =>
-  (v ?? '')
-    .toString()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim()
 
 const { data: clients, error: erreurClients } = await supabase
   .from('clients')
@@ -195,8 +72,19 @@ const COLONNE = {
   code_postal: 'code_postal',
 }
 
+// Un nom de famille seul (sans prénom sur la fiche Field) rapproche parfois
+// plusieurs contacts du carnet sans lien entre eux — de la famille, un
+// ancien numéro, une fiche en double. Regrouper les candidats PAR CLIENT ET
+// PAR CHAMP avant d'écrire permet de s'en apercevoir : si toutes les
+// correspondances s'accordent sur une valeur, elle est sûre ; si elles se
+// contredisent, mieux vaut ne rien écrire qu'un numéro pris au hasard.
+const candidatsParClient = new Map() // id -> { nom, champs: { colonne -> Map(clef -> valeurOriginale) } }
 let nbRapproches = 0
-const misesAJour = []
+
+const clefDe = (colonne, valeur) =>
+  colonne === 'telephone_portable' || colonne === 'telephone_cabinet'
+    ? clefTelephone(valeur)
+    : normaliser(valeur)
 
 for (const champsVCard of cartes) {
   const contact = extraireContact(champsVCard)
@@ -215,24 +103,95 @@ for (const champsVCard of cartes) {
   if (!correspond) continue
   nbRapproches++
 
-  const update = {}
+  let entree = candidatsParClient.get(correspond.id)
+  if (!entree) {
+    entree = {
+      nom: `${correspond.prenom_praticien ?? ''} ${correspond.nom_praticien}`.trim(),
+      champs: {},
+      existant: correspond,
+    }
+    candidatsParClient.set(correspond.id, entree)
+  }
+
   for (const champ of CHAMPS) {
     const valeur = contact[champ]
     const colonne = COLONNE[champ]
-    if (valeur && !correspond[colonne]) update[colonne] = valeur
-  }
-
-  if (Object.keys(update).length) {
-    misesAJour.push({
-      id: correspond.id,
-      nom: `${correspond.prenom_praticien ?? ''} ${correspond.nom_praticien}`.trim(),
-      update,
-    })
+    if (!valeur || correspond[colonne]) continue // déjà rempli sur la fiche : jamais écrasé
+    if (!entree.champs[colonne]) entree.champs[colonne] = new Map()
+    const clef = clefDe(colonne, valeur)
+    if (!entree.champs[colonne].has(clef)) {
+      entree.champs[colonne].set(
+        clef,
+        colonne.startsWith('telephone') ? formaterTelephone(valeur) : valeur
+      )
+    }
   }
 }
 
+// Un numéro/email proposé pour un champ qui EXISTE DÉJÀ, à l'identique,
+// sur le champ jumeau de la même fiche (portable/cabinet, email/pro) sent
+// le doublon ou le mauvais classement plutôt qu'une vraie information
+// manquante — on ne l'écrit pas sans un coup d'œil.
+const PAIRES = {
+  telephone_portable: 'telephone_cabinet',
+  telephone_cabinet: 'telephone_portable',
+  email: 'email_cabinet',
+  email_cabinet: 'email',
+}
+const dejaSurChampJumeau = (colonne, valeur, existant) => {
+  const jumelle = PAIRES[colonne]
+  if (!jumelle || !existant[jumelle]) return false
+  const clef = colonne.startsWith('telephone') ? clefTelephone : normaliser
+  return clef(valeur) === clef(existant[jumelle])
+}
+
+const misesAJour = []
+const ambigus = []
+const suspects = []
+
+for (const [id, { nom, champs, existant }] of candidatsParClient) {
+  const update = {}
+  const conflits = []
+  const raisonsSuspectes = []
+  for (const [colonne, candidats] of Object.entries(champs)) {
+    if (candidats.size === 1) {
+      const valeur = [...candidats.values()][0]
+      if (colonne.startsWith('telephone') && !estNumeroFR(valeur)) {
+        raisonsSuspectes.push(`${colonne} : ${valeur} (numéro non français — rapprochement possiblement erroné)`)
+      } else if (dejaSurChampJumeau(colonne, valeur, existant)) {
+        raisonsSuspectes.push(
+          `${colonne} : ${valeur} (identique au ${PAIRES[colonne]} déjà sur la fiche — doublon ou mauvais champ probable)`
+        )
+      } else {
+        update[colonne] = valeur
+      }
+    } else {
+      conflits.push(`${colonne} : ${[...candidats.values()].join(' / ')}`)
+    }
+  }
+  // Un numéro non français, ou un homonyme prouvé par ailleurs (un champ en
+  // conflit pour ce même nom — preuve que plusieurs personnes distinctes du
+  // carnet portent ce nom), fait douter de tout le rapprochement pour cette
+  // fiche, pas seulement du champ en cause : on retient alors TOUS les
+  // champs proposés plutôt que d'appliquer les autres à moitié en se fiant
+  // à une correspondance douteuse.
+  if (raisonsSuspectes.length) {
+    suspects.push({ nom, raisons: raisonsSuspectes })
+  } else if (conflits.length && Object.keys(update).length) {
+    suspects.push({
+      nom,
+      raisons: Object.entries(update).map(
+        ([k, v]) => `${k} : ${v} (homonyme confirmé par ailleurs sur ce nom — rapprochement jugé incertain)`
+      ),
+    })
+  } else if (Object.keys(update).length) {
+    misesAJour.push({ id, nom, update })
+  }
+  if (conflits.length) ambigus.push({ nom, conflits })
+}
+
 console.log(
-  `${nbRapproches} contact${nbRapproches > 1 ? 's' : ''} rapproché${nbRapproches > 1 ? 's' : ''} d'une fiche existante, ${misesAJour.length} avec au moins un champ à compléter.\n`
+  `${nbRapproches} contact${nbRapproches > 1 ? 's' : ''} du carnet rapproché${nbRapproches > 1 ? 's' : ''} à ${candidatsParClient.size} fiche${candidatsParClient.size > 1 ? 's' : ''} Field, ${misesAJour.length} avec au moins un champ à compléter sans ambiguïté.\n`
 )
 
 for (const { nom, update } of misesAJour) {
@@ -240,8 +199,28 @@ for (const { nom, update } of misesAJour) {
   for (const [k, v] of Object.entries(update)) console.log(`  ${k} → ${v}`)
 }
 
+if (ambigus.length) {
+  console.log(
+    `\n⚠ ${ambigus.length} fiche${ambigus.length > 1 ? 's' : ''} avec un champ ambigu (plusieurs valeurs différentes trouvées pour le même nom dans le carnet) — non complété${ambigus.length > 1 ? 's' : ''} automatiquement, à vérifier à la main :\n`
+  )
+  for (const { nom, conflits } of ambigus) {
+    console.log(`${nom} :`)
+    for (const c of conflits) console.log(`  ${c}`)
+  }
+}
+
+if (suspects.length) {
+  console.log(
+    `\n⚠ ${suspects.length} fiche${suspects.length > 1 ? 's' : ''} avec un numéro suspect (rapprochement homonyme possiblement erroné) — non complété${suspects.length > 1 ? 's' : ''} automatiquement, à vérifier à la main :\n`
+  )
+  for (const { nom, raisons } of suspects) {
+    console.log(`${nom} :`)
+    for (const r of raisons) console.log(`  ${r}`)
+  }
+}
+
 if (!misesAJour.length) {
-  console.log('Rien à compléter.')
+  console.log('\nRien à compléter sans ambiguïté.')
   process.exit(0)
 }
 
