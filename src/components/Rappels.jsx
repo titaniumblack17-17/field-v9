@@ -202,6 +202,31 @@ export default function Rappels({ dossierId, statut }) {
     }
   }
 
+  // Même fenêtre que pour clore un rappel ou ajouter une note de dossier —
+  // pas l'édition en ligne avec ses ✓/× minuscules, source de deux bugs
+  // récents (mauvais bouton touché, événement de clic sauvé par erreur).
+  const modifierObjet = async (rappel) => {
+    const texte = await demanderTexte('', {
+      titre: 'Objet du rappel',
+      confirmLabel: 'Enregistrer',
+      placeholder: 'Relancer sur le devis, confirmer la date…',
+      valeurInitiale: rappel.note ?? '',
+    })
+    if (texte === null) return
+    await modifier(rappel, { note: texte.trim() || null })
+  }
+
+  const modifierCommentaire = async (rappel) => {
+    const texte = await demanderTexte('', {
+      titre: 'Commentaire',
+      confirmLabel: 'Enregistrer',
+      placeholder: 'Ce que vous en retenez',
+      valeurInitiale: rappel.commentaire ?? '',
+    })
+    if (texte === null) return
+    await modifier(rappel, { commentaire: texte.trim() || null })
+  }
+
   const supprimer = async (rappel) => {
     if (
       !(await confirmer(`Supprimer le rappel du ${leJour(rappel.date)} sans le marquer fait ?`, {
@@ -311,13 +336,12 @@ export default function Rappels({ dossierId, statut }) {
                     onEnregistrer={(v) => modifier(r, { heure: v })}
                   />
                 </div>
-                <TexteModifiable
-                  valeur={r.note}
-                  placeholder="Objet du rappel"
-                  vide="Ajouter un objet"
-                  className="text-texte"
-                  onEnregistrer={(v) => modifier(r, { note: v })}
-                />
+                <button
+                  onClick={() => modifierObjet(r)}
+                  className={`text-left w-full ${r.note ? 'text-texte' : 'text-texte-fantome'}`}
+                >
+                  {r.note || 'Ajouter un objet'}
+                </button>
               </div>
               <button
                 onClick={() => supprimer(r)}
@@ -356,14 +380,12 @@ export default function Rappels({ dossierId, statut }) {
                   </p>
                   {r.note && <p className="text-sm text-texte-doux">{r.note}</p>}
                   <div className="mt-1">
-                    <TexteModifiable
-                      valeur={r.commentaire}
-                      placeholder="Ce que vous en retenez"
-                      vide="Ajouter un commentaire"
-                      multiligne
-                      className="text-sm text-texte"
-                      onEnregistrer={(v) => modifier(r, { commentaire: v })}
-                    />
+                    <button
+                      onClick={() => modifierCommentaire(r)}
+                      className={`text-left w-full text-sm ${r.commentaire ? 'text-texte' : 'text-texte-fantome'}`}
+                    >
+                      {r.commentaire || 'Ajouter un commentaire'}
+                    </button>
                   </div>
                 </li>
               ))}
