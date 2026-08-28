@@ -38,6 +38,7 @@ const CHAMPS = [
   'remuneration_type',
   'commercial',
   'bloque_par',
+  'sous_garantie',
 ]
 
 export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenClient }) {
@@ -196,10 +197,17 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
     const update = {
       titre: (values.titre ?? '').trim() || null,
       statut: values.statut,
-      montant_estime: values.montant_estime !== '' && values.montant_estime != null
-        ? Number(values.montant_estime)
-        : null,
+      // Pris sous garantie : rien à chiffrer, quelle que soit la valeur
+      // affichée avant que le champ ne se grise.
+      montant_estime:
+        values.type === 'sav' && values.sous_garantie
+          ? null
+          : values.montant_estime !== '' && values.montant_estime != null
+            ? Number(values.montant_estime)
+            : null,
       date_installation: values.date_installation || null,
+      // Une garantie ne concerne que le SAV.
+      sous_garantie: values.type === 'sav' ? !!values.sous_garantie : false,
       type: values.type,
       // Le plan intégré n'a de sens que sur une vente.
       plan_statut: values.type === 'projet' ? values.plan_statut || null : null,
@@ -496,23 +504,41 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
             </div>
           )}
 
+          {values.type === 'sav' && (
+            <div className="px-4 py-3 flex items-center justify-between">
+              <label className="text-texte text-sm" htmlFor="sous_garantie">
+                Prise sous garantie
+              </label>
+              <input
+                id="sous_garantie"
+                type="checkbox"
+                checked={!!values.sous_garantie}
+                onChange={(e) =>
+                  setValues((x) => ({ ...x, sous_garantie: e.target.checked }))
+                }
+                className="w-5 h-5 accent-accent"
+              />
+            </div>
+          )}
+
           <div className="px-4 py-3">
             <label className="text-xs text-texte-faible" htmlFor="montant">
-              Montant estimé (€)
+              {values.type === 'sav' ? 'Devis de réparation (€)' : 'Montant estimé (€)'}
             </label>
             <input
               id="montant"
               type="number"
-              value={values.montant_estime ?? ''}
+              disabled={values.type === 'sav' && values.sous_garantie}
+              value={values.type === 'sav' && values.sous_garantie ? '' : values.montant_estime ?? ''}
               onChange={setField('montant_estime')}
-              placeholder="—"
-              className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome"
+              placeholder={values.type === 'sav' && values.sous_garantie ? 'Sous garantie' : '—'}
+              className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome disabled:opacity-50"
             />
           </div>
 
           <div className="px-4 py-3">
             <label className="text-xs text-texte-faible" htmlFor="date_installation">
-              Date d'installation prévue
+              {values.type === 'sav' ? "Date d'intervention prévue" : "Date d'installation prévue"}
             </label>
             <input
               id="date_installation"
