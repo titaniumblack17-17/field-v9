@@ -8,6 +8,7 @@ import {
 } from '../lib/rappel'
 import TexteModifiable from './TexteModifiable'
 import useConfirm from '../hooks/useConfirm'
+import usePrompt from '../hooks/usePrompt'
 
 const aujourdhui = () => new Date().toISOString().slice(0, 10)
 
@@ -47,6 +48,7 @@ export default function Rappels({ dossierId, statut }) {
   const [historique, setHistorique] = useState(false)
   const [erreur, setErreur] = useState(null)
   const [confirmer, boîteConfirmation] = useConfirm()
+  const [demanderTexte, boîtePrompt] = usePrompt()
 
   useEffect(() => {
     let actif = true
@@ -107,10 +109,10 @@ export default function Rappels({ dossierId, statut }) {
   const clore = async (rappel) => {
     // Le commentaire est demandé au moment du geste : c'est là qu'on sait ce
     // qui s'est dit, pas au prochain passage sur la fiche.
-    const commentaire = window.prompt(
-      `Rappel du ${leJour(rappel.date)}${rappel.note ? ` — ${rappel.note}` : ''}\n\nQue retenez-vous de cet appel ?`,
-      ''
-    )
+    const commentaire = await demanderTexte('Que retenez-vous de cet appel ?', {
+      titre: `Rappel du ${leJour(rappel.date)}${rappel.note ? ` — ${rappel.note}` : ''}`,
+      confirmLabel: 'Valider',
+    })
     if (commentaire === null) return
     setEnCours(rappel.id)
     const r = await cloreRappel(rappel.id, commentaire)
@@ -303,6 +305,7 @@ export default function Rappels({ dossierId, statut }) {
       )}
 
       {boîteConfirmation}
+      {boîtePrompt}
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import usePrompt from '../hooks/usePrompt'
 import { supabase } from '../lib/supabaseClient'
 import JaugeObjectif from '../components/JaugeObjectif'
 import { etatRappel, cloreProchainRappel, reconcilierRappels } from '../lib/rappel'
@@ -117,16 +118,17 @@ function Section({ titre, compte, vide, children }) {
 export default function BriefSoir({ onBack, onOpenDossier }) {
   const [dossiers, setDossiers] = useState([])
   const [chargement, setChargement] = useState(true)
+  const [demanderTexte, boîtePrompt] = usePrompt()
 
   // Retrait immédiat plutôt qu'attendre une relecture : on vient de le faire,
   // le voir rester dans « À rappeler » ferait douter que ça ait pris.
   const rappelFait = async (dossier) => {
     // Le commentaire se demande au moment du geste : c'est là qu'on sait ce
     // qui s'est dit, pas au prochain passage sur la fiche.
-    const commentaire = window.prompt(
-      `${dossier.rappel_note || dossier.titre || 'Rappel'}\n\nQue retenez-vous de cet appel ?`,
-      ''
-    )
+    const commentaire = await demanderTexte('Que retenez-vous de cet appel ?', {
+      titre: dossier.rappel_note || dossier.titre || 'Rappel',
+      confirmLabel: 'Valider',
+    })
     if (commentaire === null) return
     const r = await cloreProchainRappel(dossier.id, commentaire)
     if (r?.erreur) return
@@ -456,6 +458,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
           </>
         )}
       </main>
+      {boîtePrompt}
     </div>
   )
 }
