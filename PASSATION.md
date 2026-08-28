@@ -69,6 +69,13 @@ les 17 autres marques restent à faire. Réimport manuel via
   désignation, instruction, prix conseillé et prix d'offre + sa période,
   fichier source et date d'import ; réimport = remplacement complet de la
   marque, pas d'historique de versions
+- `carnet_contacts` — carnet d'adresses Mac (export vCard de Contacts.app)
+  importé une fois pour toutes via `scripts/peupler-carnet.mjs` (remplace
+  tout le contenu à chaque réimport) ; `capture-intake` s'en sert pour
+  compléter automatiquement les fiches créées par dictée. Comblement
+  ponctuel des fiches déjà existantes via `scripts/importer-contacts-mac.mjs`
+  (aperçu par défaut, `--appliquer` pour écrire) — logique de parsing
+  vCard partagée dans `scripts/lib/vcard.mjs`
 - Dépôt `documents` (privé, 25 Mo, PDF et images), liens signés 60 s
 
 **Déclencheurs**
@@ -80,7 +87,7 @@ les 17 autres marques restent à faire. Réimport manuel via
 
 | Nom | Rôle | verify_jwt |
 |---|---|---|
-| `capture-intake` | analyse une dictée, crée ou complète un client | false (iOS Shortcuts) |
+| `capture-intake` | analyse une dictée, crée ou complète un client (comble aussi depuis `carnet_contacts`) | false (iOS Shortcuts) |
 | `todoist-rappel` | `{rappelId}` synchronise · `{action:'reconcilier'}` rapatrie | true |
 | `devis-montant` | `{fichierId}` lit le total TTC d'un devis PDF | true |
 
