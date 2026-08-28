@@ -8,6 +8,7 @@ import DossierDetail from './screens/DossierDetail'
 import Pipeline from './screens/Pipeline'
 import BriefSoir from './screens/BriefSoir'
 import Catalogue from './screens/Catalogue'
+import useConfirm from './hooks/useConfirm'
 
 // Balayage depuis le bord gauche pour revenir. Le geste natif d'iOS est
 // capricieux sur une application à écran unique, et le défilement horizontal
@@ -61,19 +62,24 @@ export default function App() {
   // Le swipe est un geste réflexe : sans garde-fou, quitter une fiche modifiée
   // mais non enregistrée perdrait la saisie sans un mot.
   const modifieRef = useRef(false)
+  const [confirmer, boîteConfirmation] = useConfirm()
 
-  const confirmerAbandon = () => {
+  // window.confirm ne s'affiche jamais dans une PWA en plein écran ajoutée à
+  // l'écran d'accueil : le garde-fou semblait alors ne rien faire, alors
+  // qu'il bloquait silencieusement toute sortie de fiche modifiée.
+  const confirmerAbandon = async () => {
     if (!modifieRef.current) return true
-    const quitter = window.confirm(
-      'Vous avez des modifications non enregistrées. Quitter cette fiche sans les enregistrer ?'
+    const quitter = await confirmer(
+      'Vous avez des modifications non enregistrées. Quitter cette fiche sans les enregistrer ?',
+      { titre: 'Quitter sans enregistrer ?', confirmLabel: 'Quitter' }
     )
     if (quitter) modifieRef.current = false
     return quitter
   }
 
   useEffect(() => {
-    const onPop = () => {
-      if (!confirmerAbandon()) {
+    const onPop = async () => {
+      if (!(await confirmerAbandon())) {
         // On était déjà revenu d'un cran : on ré-empile pour rester sur place.
         window.history.pushState(null, '')
         return
@@ -88,8 +94,8 @@ export default function App() {
     modifieRef.current = d
   }
 
-  const push = (v) => {
-    if (!confirmerAbandon()) return
+  const push = async (v) => {
+    if (!(await confirmerAbandon())) return
     window.history.pushState(null, '')
     setStack((s) => [...s, v])
   }
@@ -116,8 +122,13 @@ export default function App() {
   // horizontalement, et le tableau défile lui-même de gauche à droite.
   useSwipeRetour(profond && view.name !== 'pipeline', back)
 
+  // Assigné plutôt que retourné directement pour pouvoir accrocher la boîte
+  // de confirmation (quitter sans enregistrer) à toutes les vues sans la
+  // répéter à chaque branche.
+  let écran
+
   if (view.name === 'detail') {
-    return (
+    écran = (
       <ClientDetail
         client={view.client}
         onBack={back}
@@ -126,62 +137,48 @@ export default function App() {
         onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
       />
     )
-  }
-
-  if (view.name === 'create') {
-    return (
+  } else if (view.name === 'create') {
+    écran = (
       <ClientForm
         onCancel={back}
         onCreated={(client) => replace({ name: 'detail', client })}
       />
     )
-  }
-
-  if (view.name === 'capture') {
-    return (
+  } else if (view.name === 'capture') {
+    écran = (
       <Capture
         onBack={back}
         onOpenClient={(client) => replace({ name: 'detail', client })}
         onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
       />
     )
-  }
-
-  if (view.name === 'brief') {
-    return (
+  } else if (view.name === 'brief') {
+    écran = (
       <BriefSoir
         onBack={back}
         onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
       />
     )
-  }
-
-  if (view.name === 'pipeline') {
-    return (
+  } else if (view.name === 'pipeline') {
+    écran = (
       <Pipeline
         onBack={back}
         onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
         onCreate={() => push({ name: 'create' })}
       />
     )
-  }
-
-  if (view.name === 'catalogue') {
-    return <Catalogue onBack={back} />
-  }
-
-  if (view.name === 'dossier-create') {
-    return (
+  } else if (view.name === 'catalogue') {
+    écran = <Catalogue onBack={back} />
+  } else if (view.name === 'dossier-create') {
+    écran = (
       <DossierForm
         client={view.client}
         onCancel={back}
         onCreated={(dossier) => replace({ name: 'dossier-detail', dossier })}
       />
     )
-  }
-
-  if (view.name === 'dossier-detail') {
-    return (
+  } else if (view.name === 'dossier-detail') {
+    écran = (
       <DossierDetail
         dossier={view.dossier}
         onBack={back}
@@ -189,16 +186,23 @@ export default function App() {
         onOpenClient={(client) => push({ name: 'detail', client })}
       />
     )
+  } else {
+    écran = (
+      <ClientList
+        onSelect={(client) => push({ name: 'detail', client })}
+        onCreate={() => push({ name: 'create' })}
+        onCapture={() => push({ name: 'capture' })}
+        onPipeline={() => push({ name: 'pipeline' })}
+        onBrief={() => push({ name: 'brief' })}
+        onCatalogue={() => push({ name: 'catalogue' })}
+      />
+    )
   }
 
   return (
-    <ClientList
-      onSelect={(client) => push({ name: 'detail', client })}
-      onCreate={() => push({ name: 'create' })}
-      onCapture={() => push({ name: 'capture' })}
-      onPipeline={() => push({ name: 'pipeline' })}
-      onBrief={() => push({ name: 'brief' })}
-      onCatalogue={() => push({ name: 'catalogue' })}
-    />
+    <>
+      {écran}
+      {boîteConfirmation}
+    </>
   )
 }
