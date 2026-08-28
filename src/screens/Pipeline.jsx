@@ -620,6 +620,14 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
                 onSelect={selectionnerEtape}
               />
             ))}
+
+          {/* Sans cette marge, une colonne proche de la fin (Terminé, Perdu)
+              ne peut pas être alignée sur le bord gauche — il n'y a plus
+              rien après elle à faire défiler pour l'y amener. Le
+              défilement s'arrêtait alors quelques colonnes trop tôt, et le
+              repère « colonne la plus proche du bord » désignait à tort
+              une voisine plutôt que celle vraiment demandée. */}
+          <div className="flex-shrink-0" style={{ width: '100vw' }} aria-hidden="true" />
         </div>
         <DragOverlay>{activeDrag && <Card dossier={activeDrag} onOpen={() => {}} isDragging />}</DragOverlay>
       </DndContext>
