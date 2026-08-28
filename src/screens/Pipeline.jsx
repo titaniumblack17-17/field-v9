@@ -473,32 +473,39 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
         ))}
         {byEtape.termine.length > 0 && (
           <button
+            ref={(el) => { pillRefs.current.termine = el }}
             onClick={() => {
               setMontrerTermines((v) => !v)
               if (!montrerTermines) setTimeout(() => selectionnerEtape('termine'), 100)
             }}
+            // Le bleu suit la colonne réellement à l'écran (etapeVue), pas le
+            // simple fait d'avoir déplié la colonne — sinon, en revenant sur
+            // une autre étape après avoir consulté celle-ci, les deux
+            // pastilles restaient bleues à la fois, comme si deux colonnes
+            // étaient actives en même temps.
             className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 ${
-              montrerTermines ? 'bg-accent text-white' : 'bg-carte text-texte-faible'
+              etapeVue === 'termine' ? 'bg-accent text-white' : 'bg-carte text-texte-faible'
             }`}
           >
             Terminés
-            <span className={montrerTermines ? 'text-white/70' : 'text-texte-fantome'}>
+            <span className={etapeVue === 'termine' ? 'text-white/70' : 'text-texte-fantome'}>
               {byEtape.termine.length}
             </span>
           </button>
         )}
         {byEtape.perdu.length > 0 && (
           <button
+            ref={(el) => { pillRefs.current.perdu = el }}
             onClick={() => {
               setMontrerPerdus((v) => !v)
               if (!montrerPerdus) setTimeout(() => selectionnerEtape('perdu'), 100)
             }}
             className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 ${
-              montrerPerdus ? 'bg-accent text-white' : 'bg-carte text-texte-faible'
+              etapeVue === 'perdu' ? 'bg-accent text-white' : 'bg-carte text-texte-faible'
             }`}
           >
             Perdus
-            <span className={montrerPerdus ? 'text-white/70' : 'text-texte-fantome'}>
+            <span className={etapeVue === 'perdu' ? 'text-white/70' : 'text-texte-fantome'}>
               {byEtape.perdu.length}
             </span>
           </button>
