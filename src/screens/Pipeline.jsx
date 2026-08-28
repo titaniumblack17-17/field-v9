@@ -474,15 +474,17 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
         {byEtape.termine.length > 0 && (
           <button
             ref={(el) => { pillRefs.current.termine = el }}
+            // Toujours révéler puis y aller — jamais un bascule. Un appui
+            // sur cette pastille doit se comporter exactement comme sur
+            // n'importe quelle autre : y aller, point. En toggle, un second
+            // appui (colonne déjà révélée depuis plus tôt dans la session)
+            // la masquait sans naviguer nulle part, et le réarrangement des
+            // colonnes qui en résultait laissait le repère de défilement
+            // sur une tout autre étape — l'appui semblait mener au hasard.
             onClick={() => {
-              setMontrerTermines((v) => !v)
-              if (!montrerTermines) setTimeout(() => selectionnerEtape('termine'), 100)
+              setMontrerTermines(true)
+              setTimeout(() => selectionnerEtape('termine'), 100)
             }}
-            // Le bleu suit la colonne réellement à l'écran (etapeVue), pas le
-            // simple fait d'avoir déplié la colonne — sinon, en revenant sur
-            // une autre étape après avoir consulté celle-ci, les deux
-            // pastilles restaient bleues à la fois, comme si deux colonnes
-            // étaient actives en même temps.
             className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 ${
               etapeVue === 'termine' ? 'bg-accent text-white' : 'bg-carte text-texte-faible'
             }`}
@@ -497,8 +499,8 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
           <button
             ref={(el) => { pillRefs.current.perdu = el }}
             onClick={() => {
-              setMontrerPerdus((v) => !v)
-              if (!montrerPerdus) setTimeout(() => selectionnerEtape('perdu'), 100)
+              setMontrerPerdus(true)
+              setTimeout(() => selectionnerEtape('perdu'), 100)
             }}
             className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 ${
               etapeVue === 'perdu' ? 'bg-accent text-white' : 'bg-carte text-texte-faible'
