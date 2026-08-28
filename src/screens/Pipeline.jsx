@@ -21,6 +21,7 @@ import {
   COMMERCIAUX_LABELS,
   PLAN_SANS_COMMERCIAL,
   joursDevisSansReponse,
+  styleDossier,
 } from '../constants/dossiers'
 
 function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
@@ -32,7 +33,19 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
     id: dossier.id,
     disabled: dossier.emprunte,
   })
-  const style = transform ? { transform: `translate(${transform.x}px,${transform.y}px)`, zIndex: 50 } : {}
+  // Un plan partagé avec un autre commercial se distingue au premier coup
+  // d'œil — même violet que son badge dans la fiche — pour ne pas le
+  // confondre avec un plan facturé normalement ou fait pour soi.
+  const partage = dossier.type === 'plan' && dossier.remuneration_type === 'partage'
+  const s = partage ? styleDossier(dossier) : null
+  const style = {
+    ...(transform ? { transform: `translate(${transform.x}px,${transform.y}px)`, zIndex: 50 } : {}),
+    // Poids et couleur en style inline plutôt qu'en classe Tailwind : la
+    // classe `border` (4 côtés) et une classe `border-l-[3px]` ciblent la
+    // même propriété CSS avec la même spécificité, l'ordre de génération de
+    // Tailwind n'étant pas garanti entre les deux.
+    ...(partage ? { borderLeftColor: s.bordure, borderLeftWidth: 3 } : {}),
+  }
   const client = dossier.clients
 
   return (
@@ -103,7 +116,10 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
       {/* Pour qui est ce plan se voit sans ouvrir la fiche : Bruce trie ses
           plans en premier lieu par commercial destinataire, pas par étape. */}
       {dossier.type === 'plan' && dossier.commercial && (
-        <p className="text-[10px] font-medium text-texte-doux mt-1 truncate">
+        <p
+          className={`text-[10px] font-medium mt-1 truncate ${partage ? '' : 'text-texte-doux'}`}
+          style={partage ? { color: s.texte } : undefined}
+        >
           👤 {COMMERCIAUX_LABELS[dossier.commercial] ?? dossier.commercial}
         </p>
       )}
