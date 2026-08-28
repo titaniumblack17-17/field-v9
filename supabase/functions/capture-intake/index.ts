@@ -179,7 +179,7 @@ peut-être fausse sans avertissement.
   }
 
   // Champs dictés, utilisables aussi bien pour créer que pour compléter.
-  const champs = {
+  const champs: Record<string, string | null> = {
     prenom_praticien: extracted.prenom_praticien?.trim() || null,
     nom_cabinet: extracted.nom_cabinet?.trim() || null,
     adresse: extracted.adresse?.trim() || null,
@@ -256,17 +256,92 @@ peut-être fausse sans avertissement.
     }
   }
 
-  let client_id: string | null = null
-  let cree = false
-  let enrichi = false
-
   const nomDicte = extracted.nom_praticien?.trim()
+
+  // Carnet d'adresses Mac (vCard importé une fois pour toutes dans
+  // carnet_contacts — voir scripts/peupler-carnet.mjs) : complète les champs
+  // que la dictée n'a pas fournis, sans jamais écraser ce qu'elle a donné —
+  // priorité systématique à ce que Bruce a dit. Même règle de rapprochement
+  // que trouverExistant (prénom concordant ou absent) et mêmes garde-fous que
+  // l'import ponctuel des fiches existantes (importer-contacts-mac.mjs) : un
+  // champ n'est retenu que si TOUTES les entrées du carnet pour ce nom
+  // s'accordent, un numéro non français n'est jamais proposé (signe fiable
+  // d'un homonyme sans rapport), et une valeur identique au champ jumeau
+  // (portable/cabinet, email/pro) n'est pas dupliquée.
+  if (nomDicte) {
+    const nCarnet = normaliser(nomDicte)
+    const pCarnet = normaliser(champs.prenom_praticien)
+    const { data: correspondances } = await supabase
+      .from("carnet_contacts")
+      .select(
+        "prenom_normalise, telephone_portable, telephone_cabinet, email, email_cabinet, adresse, ville, code_postal"
+      )
+      .eq("nom_normalise", nCarnet)
+
+    const pertinentes = (correspondances ?? []).filter((c: any) => {
+      const cp = c.prenom_normalise
+      return !cp || !pCarnet || cp === pCarnet
+    })
+
+    if (pertinentes.length) {
+      const COLONNES_CARNET = [
+        "telephone_portable",
+        "telephone_cabinet",
+        "email",
+        "email_cabinet",
+        "adresse",
+        "ville",
+        "code_postal",
+      ] as const
+      const PAIRES_CARNET: Record<string, string> = {
+        telephone_portable: "telephone_cabinet",
+        telephone_cabinet: "telephone_portable",
+        email: "email_cabinet",
+        email_cabinet: "email",
+      }
+      const estNumeroFRCarnet = (v: string) => {
+        let d = v.replace(/\D/g, "")
+        if (d.startsWith("33") && d.length === 11) d = "0" + d.slice(2)
+        if (d.startsWith("0033") && d.length === 13) d = "0" + d.slice(4)
+        return /^0\d{9}$/.test(d)
+      }
+      const clefComparaison = (colonne: string, v: string) =>
+        colonne.startsWith("telephone") ? v.replace(/\D/g, "") : normaliser(v)
+
+      for (const colonne of COLONNES_CARNET) {
+        if (champs[colonne]) continue // la dictée a déjà donné ce champ : le carnet ne le remplace jamais
+
+        const candidats = new Map<string, string>()
+        for (const c of pertinentes) {
+          const v = (c as any)[colonne]
+          if (!v) continue
+          const clef = clefComparaison(colonne, v)
+          if (!candidats.has(clef)) candidats.set(clef, v)
+        }
+        if (candidats.size !== 1) continue // absent du carnet, ou plusieurs homonymes en désaccord
+
+        const valeur = [...candidats.values()][0]
+        if (colonne.startsWith("telephone") && !estNumeroFRCarnet(valeur)) continue
+
+        const jumelle = PAIRES_CARNET[colonne]
+        if (jumelle && champs[jumelle] && clefComparaison(colonne, valeur) === clefComparaison(jumelle, champs[jumelle]!)) {
+          continue
+        }
+
+        champs[colonne] = valeur
+      }
+    }
+  }
 
   // Filet déterministe : même si le modèle redemande une création, on ne crée
   // pas un second exemplaire d'un praticien déjà enregistré.
   const existant = nomDicte
     ? trouverExistant(clients ?? [], nomDicte, champs.prenom_praticien)
     : null
+
+  let client_id: string | null = null
+  let cree = false
+  let enrichi = false
 
   if (extracted.action === "creer_client" && nomDicte && !existant) {
     const { data: newClient, error: createError } = await supabase
@@ -297,7 +372,7 @@ peut-être fausse sans avertissement.
       if (Object.keys(aCombler).length) {
         const { data: fiche } = await supabase
           .from("clients")
-          .select("prenom_praticien, nom_cabinet, adresse, code_postal, ville, telephone_portable, telephone_cabinet, email")
+          .select("prenom_praticien, nom_cabinet, adresse, code_postal, ville, telephone_portable, telephone_cabinet, email, email_cabinet")
           .eq("id", client_id)
           .single()
 
