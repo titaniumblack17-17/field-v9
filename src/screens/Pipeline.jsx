@@ -190,6 +190,9 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   // Un dossier perdu mérite d'être relu de temps en temps, pas de tenir une
   // colonne dans le champ de vision tous les jours.
   const [montrerPerdus, setMontrerPerdus] = useState(false)
+  // Même logique pour les dossiers soldés : une fois terminés, ils sortent
+  // du champ de vision quotidien sans quitter le tableau.
+  const [montrerTermines, setMontrerTermines] = useState(false)
 
   // Étape actuellement à gauche de l'écran. Suivre le défilement plutôt que le
   // dernier appui : sans ça, un balayage à la main laisserait la barre
@@ -332,9 +335,12 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   // cours : la faire disparaître sous le doigt rendrait le dépôt impossible.
   const etapesVisibles = ETAPES_PROJET.filter(([cle]) => {
     if (cle === 'perdu') return montrerPerdus || activeDrag
+    if (cle === 'termine') return montrerTermines || activeDrag
     return montrerVides || byEtape[cle].length > 0 || activeDrag
   })
-  const nbVides = ETAPES_PROJET.filter(([c]) => c !== 'perdu' && byEtape[c].length === 0).length
+  const nbVides = ETAPES_PROJET.filter(
+    ([c]) => c !== 'perdu' && c !== 'termine' && byEtape[c].length === 0
+  ).length
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -400,7 +406,9 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
 
       {vue === 'projet' && (
       <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto flex-shrink-0">
-        {ETAPES_PROJET.filter(([cle]) => cle !== 'perdu' && byEtape[cle].length > 0).map(([cle, libelle]) => (
+        {ETAPES_PROJET.filter(
+          ([cle]) => cle !== 'perdu' && cle !== 'termine' && byEtape[cle].length > 0
+        ).map(([cle, libelle]) => (
           <button
             key={cle}
             ref={(el) => { pillRefs.current[cle] = el }}
@@ -415,6 +423,22 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
             </span>
           </button>
         ))}
+        {byEtape.termine.length > 0 && (
+          <button
+            onClick={() => {
+              setMontrerTermines((v) => !v)
+              if (!montrerTermines) setTimeout(() => selectionnerEtape('termine'), 100)
+            }}
+            className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 ${
+              montrerTermines ? 'bg-accent text-white' : 'bg-carte text-texte-faible'
+            }`}
+          >
+            Terminés
+            <span className={montrerTermines ? 'text-white/70' : 'text-texte-fantome'}>
+              {byEtape.termine.length}
+            </span>
+          </button>
+        )}
         {byEtape.perdu.length > 0 && (
           <button
             onClick={() => {

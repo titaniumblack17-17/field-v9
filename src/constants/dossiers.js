@@ -42,6 +42,11 @@ export const ETAPES_PROJET = [
   ['installation', 'Installation'],
   ['finition', 'Finition'],
   ['financement', 'Financement'],
+  // Étape terminale « gagnée » : une vente installée et réglée n'a plus rien
+  // à suivre au jour le jour. Symétrique de « Dossier perdu » — même
+  // traitement dans le Pipeline (colonne repliée, comptée à part) pour
+  // qu'un dossier soldé arrête d'occuper le tableau actif sans disparaître.
+  ['termine', 'Terminé'],
   ['perdu', 'Dossier perdu'],
   ['sav', 'SAV'],
 ]
