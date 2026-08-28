@@ -90,10 +90,10 @@ ${texte}
 """
 
 Deux cas possibles pour l'action :
-1. La note demande EXPLICITEMENT de créer une nouvelle fiche client (ex: "crée une fiche pour...", "nouveau client...", "ajoute le docteur...") ET le praticien ne figure PAS déjà dans la liste ci-dessus — dans ce cas action = "creer_client". Extrais TOUTES les informations mentionnées pour remplir la fiche le plus complètement possible (nom, prénom, adresse, code postal, ville, cabinet, téléphone portable, e-mail).
+1. La note demande EXPLICITEMENT de créer une nouvelle fiche client (ex: "crée une fiche pour...", "nouveau client...", "ajoute le docteur...") ET le praticien ne figure PAS déjà dans la liste ci-dessus — dans ce cas action = "creer_client". Extrais TOUTES les informations mentionnées pour remplir la fiche le plus complètement possible (nom, prénom, adresse, code postal, ville, cabinet, téléphone portable, téléphone du cabinet, e-mail).
 2. La note mentionne un client déjà présent dans la liste, ou un événement (appel, rappel, info) sans demander explicitement une création — action = "capture".
 
-IMPORTANT : une dictée vocale peut avoir été coupée avant la fin, et l'utilisateur la refait alors depuis le début. Si le praticien nommé figure déjà dans la liste, ne demande JAMAIS de le créer une seconde fois : renvoie action="capture" avec son client_id. Renseigne quand même les champs extraits (adresse, ville, téléphone, e-mail, cabinet) s'ils sont mentionnés : ils serviront à compléter la fiche existante.
+IMPORTANT : une dictée vocale peut avoir été coupée avant la fin, et l'utilisateur la refait alors depuis le début. Si le praticien nommé figure déjà dans la liste, ne demande JAMAIS de le créer une seconde fois : renvoie action="capture" avec son client_id. Renseigne quand même les champs extraits (adresse, ville, téléphone portable, téléphone du cabinet, e-mail, cabinet) s'ils sont mentionnés : ils serviront à compléter la fiche existante.
 
 DÉTECTION SAV (indépendante de l'action ci-dessus) : la note décrit-elle un équipement en panne, cassé, qui ne fonctionne plus, ou une demande d'intervention/réparation chez un praticien ? Si oui, sav_suggere = true et sav_titre = un résumé très court (moins de 60 caractères) du problème, ex. "Fauteuil ne monte plus", "Autoclave en panne". Une simple relance commerciale, un rendez-vous, une demande de devis ne sont PAS des SAV. Dans le doute, sav_suggere = false — mieux vaut rater une suggestion que la déclencher à tort.
 
@@ -110,7 +110,8 @@ Réponds UNIQUEMENT avec un objet JSON (pas de texte autour, pas de markdown), a
 - adresse: l'adresse (numéro et rue) mentionnée, sinon null
 - code_postal: le code postal mentionné, sinon null
 - ville: la ville mentionnée, sinon null
-- telephone_portable: le numéro de portable mentionné, sinon null
+- telephone_portable: le numéro de portable du praticien mentionné, sinon null
+- telephone_cabinet: le numéro de téléphone DU CABINET mentionné (fixe, secrétariat, standard), sinon null. Reconnais-le à ce qui l'introduit — « numéro du cabinet », « téléphone du cabinet », « standard », « secrétariat », « fixe » — plutôt qu'à sa forme : un dictée peut donner deux numéros dans la même phrase, l'un portable et l'autre cabinet, ne mets jamais le second dans telephone_portable ni l'inverse. Si un seul numéro est mentionné sans préciser lequel, mets-le dans telephone_portable (comportement historique) et ne remplis pas telephone_cabinet.
 - email: l'adresse e-mail mentionnée, sinon null
 
 ATTENTION à la dictée vocale d'un e-mail ou d'un numéro : elle est souvent mal
@@ -118,10 +119,10 @@ transcrite (espace insérée au milieu d'une adresse, prénom accolé juste avan
 l'arobase comme dans "Laura g8@gmail.com", chiffres manquants en fin de
 numéro). N'essaie PAS de deviner la version correcte en fusionnant ou en
 coupant des mots : extrais tel quel ce qui ressemble le plus à l'e-mail ou au
-numéro, et si un doute existe sur son exactitude (numéro de portable de moins
-de 10 chiffres, e-mail où un mot adjacent pourrait en faire partie), signale-le
-via info_manquante plutôt que de laisser une valeur peut-être fausse sans
-avertissement.
+numéro (portable ou cabinet), et si un doute existe sur son exactitude
+(numéro de moins de 10 chiffres, e-mail où un mot adjacent pourrait en faire
+partie), signale-le via info_manquante plutôt que de laisser une valeur
+peut-être fausse sans avertissement.
 
 - resume: un résumé court (une phrase) de ce qui doit être retenu. N'omets
   aucun nom propre ou détail secondaire mentionné (ex: un groupe, un confrère,
@@ -185,6 +186,7 @@ avertissement.
     code_postal: extracted.code_postal?.trim() || null,
     ville: extracted.ville?.trim() || null,
     telephone_portable: extracted.telephone_portable?.trim() || null,
+    telephone_cabinet: extracted.telephone_cabinet?.trim() || null,
     email: extracted.email?.trim() || null,
   }
 
@@ -203,6 +205,46 @@ avertissement.
       validationWarnings.push(
         `portable incomplet ou invalide (${chiffres.length} chiffres) : « ${valeurOriginale} »`
       )
+    }
+  }
+
+  if (champs.telephone_cabinet) {
+    const valeurOriginale = champs.telephone_cabinet
+    const chiffres = valeurOriginale.replace(/\D/g, "")
+    if (chiffres.length !== 10) {
+      champs.telephone_cabinet = null
+      validationWarnings.push(
+        `téléphone cabinet incomplet ou invalide (${chiffres.length} chiffres) : « ${valeurOriginale} »`
+      )
+    }
+  }
+
+  // Filet déterministe indépendant du modèle : plutôt que de compter sur
+  // lui pour repérer CHAQUE numéro et le ranger dans le bon champ (un
+  // numéro de cabinet dicté et pourtant jamais retrouvé dans la fiche en
+  // est la preuve), on cherche nous-mêmes dans le texte brut toute séquence
+  // qui ressemble à un numéro français. Un numéro qu'il a extrait mais mal
+  // rangé, ou qu'il a purement et simplement manqué, n'est alors jamais
+  // perdu en silence — il atterrit dans le champ encore vide, ou se signale
+  // via info_manquante s'il n'y a plus de place.
+  const numerosDansLeTexte = [
+    ...new Set(
+      (texte.match(/0[\s.-]?[1-9](?:[\s.-]?\d{2}){4}/g) ?? []).map((m) => m.replace(/\D/g, ""))
+    ),
+  ]
+  const dejaCaptures = new Set(
+    [champs.telephone_portable, champs.telephone_cabinet]
+      .filter((v): v is string => v !== null)
+      .map((n) => n.replace(/\D/g, ""))
+  )
+  const numerosOublies = numerosDansLeTexte.filter((n) => !dejaCaptures.has(n))
+  for (const n of numerosOublies) {
+    if (!champs.telephone_cabinet) {
+      champs.telephone_cabinet = n
+    } else if (!champs.telephone_portable) {
+      champs.telephone_portable = n
+    } else {
+      validationWarnings.push(`numéro supplémentaire repéré dans le texte, non rangé : « ${n} »`)
     }
   }
 
@@ -255,7 +297,7 @@ avertissement.
       if (Object.keys(aCombler).length) {
         const { data: fiche } = await supabase
           .from("clients")
-          .select("prenom_praticien, nom_cabinet, adresse, code_postal, ville, telephone_portable, email")
+          .select("prenom_praticien, nom_cabinet, adresse, code_postal, ville, telephone_portable, telephone_cabinet, email")
           .eq("id", client_id)
           .single()
 
