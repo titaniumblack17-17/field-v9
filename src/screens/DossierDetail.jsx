@@ -203,15 +203,28 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
       // Le plan intégré n'a de sens que sur une vente.
       plan_statut: values.type === 'projet' ? values.plan_statut || null : null,
       // Un plan pour lui-même (BDS) n'est jamais facturé, quelle que soit la
-      // valeur affichée avant que le champ ne se grise.
+      // valeur affichée avant que le champ ne se grise. Le plan intégré à un
+      // projet suit la même règle une fois validé : c'est le même travail,
+      // fait par la même personne, pour son propre client — l'enregistrer
+      // pour de vrai évite qu'il manque à un total « plans faits par
+      // commercial » simplement parce qu'il vit dans un Projet plutôt que
+      // dans un dossier Plan à part. Avant validation (à faire / en cours),
+      // rien n'est encore fait pour personne.
       remuneration_type:
         values.type === 'plan'
           ? values.commercial === 'BDS'
             ? 'integre'
             : values.remuneration_type || null
-          : null,
-      // Un projet ou un SAV n'est fait pour personne d'autre que Bruce.
-      commercial: values.type === 'plan' ? values.commercial || null : null,
+          : values.type === 'projet' && values.plan_statut === 'fait'
+            ? 'integre'
+            : null,
+      // Un SAV n'est fait pour personne d'autre que Bruce.
+      commercial:
+        values.type === 'plan'
+          ? values.commercial || null
+          : values.type === 'projet' && values.plan_statut === 'fait'
+            ? 'BDS'
+            : null,
       // Ce qui bloque n'a de sens que sur un SAV en attente.
       bloque_par:
         values.type === 'sav' && values.statut === 'en_attente'
@@ -351,7 +364,12 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
           >
             {s.badge}
           </span>
-          {values.commercial && (
+          {/* Réservé aux dossiers Plan : sur un Projet, commercial=BDS est
+              enregistré une fois le plan validé (pour les totaux), mais ce
+              n'est pas une information à afficher ici — le badge dirait
+              « BDS » sur la vente elle-même, comme si elle appartenait à
+              quelqu'un d'autre que Bruce. */}
+          {values.type === 'plan' && values.commercial && (
             <span
               title={COMMERCIAUX_LABELS[values.commercial] ?? values.commercial}
               className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-carte-douce text-texte-doux"
