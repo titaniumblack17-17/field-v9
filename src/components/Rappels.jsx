@@ -301,14 +301,14 @@ export default function Rappels({ dossierId, statut }) {
                     onEnregistrer={(v) => v && modifier(r, { date: v })}
                   />
                   {/* Le texte de l'heure se lit déjà dans la date à gauche
-                      (« à 09 h 00 ») — ce bouton ne sert qu'à la poser ou la
-                      changer, en tapant plutôt qu'en faisant défiler la
-                      molette native. */}
+                      (« à 09 h 00 »), mais le bouton garde un libellé visible
+                      même dans ce cas : un bouton à texte vide ne se repère
+                      pas du tout comme cliquable. */}
                   <button
                     onClick={() => modifierHeure(r)}
                     className="text-xs text-texte-faible underline decoration-dotted underline-offset-2 flex-shrink-0"
                   >
-                    {r.heure ? '' : '+ heure'}
+                    {r.heure ? 'modifier' : '+ heure'}
                   </button>
                 </div>
                 <button
