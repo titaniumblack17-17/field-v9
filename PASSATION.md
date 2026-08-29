@@ -53,7 +53,10 @@ si la case « devis complémentaire » est cochée.
 
 **Catalogue** — recherche de produits par nom, code ou modèle. Prix conseillé
 et offre en cours côte à côte. Pilote sur la marque Planmeca (2629 produits) ;
-les 17 autres marques restent à faire. Réimport manuel via
+les autres marques du portefeuille (27 au total, voir « Qui et pourquoi »)
+restent à faire — mais toutes n'ont pas un fichier tarif structuré comme
+Planmeca, donc le nombre de marques réellement important-ables au même
+format n'est pas encore déterminé. Réimport manuel via
 `node scripts/importer-catalogue-planmeca.mjs <chemin du fichier tarif>`.
 
 ## Schéma
@@ -124,7 +127,9 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
    variantes chiffrées (Grunberg 4 études, Mimoune 3, Alakian 2 fois) et le
    modèle refuse de choisir. Montants à saisir à la main.
 4. **Reste de la spec** : phase 3 (pilote catalogue Planmeca) est faite.
-   Restent les 17 autres marques du catalogue et la génération de devis
+   Restent les autres marques du catalogue (nombre exact à déterminer —
+   27 marques au total dans le portefeuille, mais toutes n'ont pas de
+   fichier tarif structuré comme Planmeca) et la génération de devis
    (phase 4). Les fichiers tarifs source vivent dans
    `~/Library/Mobile Documents/com~apple~CloudDocs/Bailleul (IcD)/Configurateur/<MARQUE>/<ANNÉE>/`.
    macOS refuse souvent la lecture directe de ce chemin iCloud depuis le
