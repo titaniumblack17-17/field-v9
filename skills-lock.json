@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "skills": {
+    "context-engineering-collection": {
+      "source": "muratcankoylan/agent-skills-for-context-engineering",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "1a2dbf15cf46137bae376d83c933068c72ddb96d5275e38cdf384b35793502e8"
+    },
+    "email-prospection": {
+      "source": "./plugins/sales-dentaire",
+      "sourceType": "local",
+      "computedHash": "ab248e90dadd7805e82fae37538fc338821bd54d6930afbfaae23d333e735811"
+    },
+    "opportunites-a-risque": {
+      "source": "./plugins/sales-dentaire",
+      "sourceType": "local",
+      "computedHash": "b985e75f57e9fab4ef4573fbf9ab61da9061bfb8f12e5b52f6a412d6bdcb9dba"
+    },
+    "prospect-research": {
+      "source": "./plugins/sales-dentaire",
+      "sourceType": "local",
+      "computedHash": "2ca13bcfc57e5dacba39f6d4e919b43b08c589b7a14ab9ffc5c2f04ca86402e5"
+    },
+    "relance-pipeline": {
+      "source": "./plugins/sales-dentaire",
+      "sourceType": "local",
+      "computedHash": "63996a1ab1e1584e8cdbe29625ef69c4a97b9159fd10a3cbbd2f62782e2b60a3"
+    }
+  }
+}
