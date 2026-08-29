@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -232,7 +232,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   const ignorerDefilement = useRef(false)
   const minuteurDefilement = useRef(null)
 
-  const suivreDefilement = (force = false) => {
+  const suivreDefilement = useCallback((force = false) => {
     const zone = zoneRef.current
     if (!zone) return
     const bord = zone.getBoundingClientRect().left
@@ -247,16 +247,22 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
       setEtapeVue(proche)
       pillRefs.current[proche]?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' })
     }
-  }
+  }, [etapeVue])
 
   // Aucune étape n'est marquée tant qu'on n'a pas défilé, ni juste après un
   // changement de kanban : on désigne donc la première dès que les colonnes
   // du kanban choisi sont posées.
+  // suivreDefilement volontairement absente des dépendances : elle change
+  // d'identité à chaque etapeVue (via useCallback), l'ajouter ici referait
+  // tourner cet effet à chaque clic sur une pastille et écraserait la
+  // sélection explicite avant la fin du défilement — seuls un changement de
+  // kanban ou l'arrivée des dossiers doivent redéclencher le recalage
+  // automatique.
   useEffect(() => {
     if (dossiers.length) suivreDefilement(true)
   }, [dossiers.length, vue])
 
-  const allerA = (cle) => {
+  const allerA = useCallback((cle) => {
     ignorerDefilement.current = true
     if (minuteurDefilement.current) clearTimeout(minuteurDefilement.current)
     minuteurDefilement.current = setTimeout(() => {
@@ -267,23 +273,23 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
       inline: 'start',
       block: 'nearest',
     })
-  }
+  }, [])
 
   // Choisir une colonne au toucher, sans attendre que le défilement la
   // détecte : la mise en évidence doit réagir tout de suite, le recentrage
   // suit ensuite.
-  const selectionnerEtape = (cle) => {
+  const selectionnerEtape = useCallback((cle) => {
     setEtapeVue(cle)
     allerA(cle)
-  }
+  }, [allerA])
 
-  const changerEtape = async (dossier, etape) => {
+  const changerEtape = useCallback(async (dossier, etape) => {
     setADeplacer(null)
     if (dossier.statut === etape) return
     setDossiers((current) => current.map((d) => (d.id === dossier.id ? { ...d, statut: etape } : d)))
     await supabase.from('dossiers').update({ statut: etape }).eq('id', dossier.id)
     await assurerRappelDeRelance(dossier.id, etape)
-  }
+  }, [])
 
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -346,66 +352,80 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     }
   }, [tentative])
 
-  const byEtape = {}
-  ETAPES_PROJET.forEach(([id]) => {
-    byEtape[id] = []
-  })
-  const bySavEtape = {}
-  STATUTS_SAV.forEach(([id]) => {
-    bySavEtape[id] = []
-  })
-  const byPlanEtape = {}
-  STATUTS_PLAN.forEach(([id]) => {
-    byPlanEtape[id] = []
-  })
-  // Un statut sans colonne correspondante (valeur par défaut de la base,
-  // import futur, étape retirée du code) atterrit dans « À classer » plutôt
-  // que de disparaître du tableau sans un mot. SAV et Plan ont chacun leur
-  // propre vocabulaire de statuts : « À classer » n'existe pas pour eux, un
-  // dossier au statut inconnu rejoint donc la première colonne de son propre
-  // type plutôt que d'être perdu silencieusement.
-  dossiers.forEach((d) => {
-    if (d.type === 'sav') {
-      const colonne = bySavEtape[d.statut] ? d.statut : STATUTS_SAV[0][0]
-      bySavEtape[colonne].push(d)
-    } else if (d.type === 'plan') {
-      const colonne = byPlanEtape[d.statut] ? d.statut : STATUTS_PLAN[0][0]
-      byPlanEtape[colonne].push(d)
-    } else {
-      const colonne = byEtape[d.statut] ? d.statut : 'a_classer'
-      byEtape[colonne].push(d)
-      // Un plan encore dû ou en cours sur sa propre vente doit se voir dans
-      // Plan aussi, sans qu'un dossier Plan séparé n'existe : Bruce veut tout
-      // son travail de plan au même endroit, facturé ou non. Une fois « fait »
-      // il n'y a plus rien à suivre côté Plan (pas de facturation à solder).
-      if (d.plan_statut === 'a_faire' || d.plan_statut === 'en_cours') {
-        const colPlan = d.plan_statut === 'a_faire' ? 'a_planifier' : 'en_cours'
-        byPlanEtape[colPlan].push({ ...d, emprunte: true })
+  // Refait à chaque changement de `dossiers` seulement — sans ça, ce triple
+  // regroupement (parcourt tous les dossiers, en pousse certains dans deux
+  // colonnes à la fois pour les plans empruntés) tournait à chaque rendu, y
+  // compris ceux déclenchés par un simple survol ou bascule d'affichage sans
+  // rapport avec la liste elle-même.
+  const { byEtape, bySavEtape, byPlanEtape } = useMemo(() => {
+    const byEtape = {}
+    ETAPES_PROJET.forEach(([id]) => {
+      byEtape[id] = []
+    })
+    const bySavEtape = {}
+    STATUTS_SAV.forEach(([id]) => {
+      bySavEtape[id] = []
+    })
+    const byPlanEtape = {}
+    STATUTS_PLAN.forEach(([id]) => {
+      byPlanEtape[id] = []
+    })
+    // Un statut sans colonne correspondante (valeur par défaut de la base,
+    // import futur, étape retirée du code) atterrit dans « À classer » plutôt
+    // que de disparaître du tableau sans un mot. SAV et Plan ont chacun leur
+    // propre vocabulaire de statuts : « À classer » n'existe pas pour eux, un
+    // dossier au statut inconnu rejoint donc la première colonne de son propre
+    // type plutôt que d'être perdu silencieusement.
+    dossiers.forEach((d) => {
+      if (d.type === 'sav') {
+        const colonne = bySavEtape[d.statut] ? d.statut : STATUTS_SAV[0][0]
+        bySavEtape[colonne].push(d)
+      } else if (d.type === 'plan') {
+        const colonne = byPlanEtape[d.statut] ? d.statut : STATUTS_PLAN[0][0]
+        byPlanEtape[colonne].push(d)
+      } else {
+        const colonne = byEtape[d.statut] ? d.statut : 'a_classer'
+        byEtape[colonne].push(d)
+        // Un plan encore dû ou en cours sur sa propre vente doit se voir dans
+        // Plan aussi, sans qu'un dossier Plan séparé n'existe : Bruce veut tout
+        // son travail de plan au même endroit, facturé ou non. Une fois « fait »
+        // il n'y a plus rien à suivre côté Plan (pas de facturation à solder).
+        if (d.plan_statut === 'a_faire' || d.plan_statut === 'en_cours') {
+          const colPlan = d.plan_statut === 'a_faire' ? 'a_planifier' : 'en_cours'
+          byPlanEtape[colPlan].push({ ...d, emprunte: true })
+        }
       }
-    }
-  })
+    })
+    return { byEtape, bySavEtape, byPlanEtape }
+  }, [dossiers])
 
   // Une étape vide reste affichée si elle est la destination d'un glissé en
   // cours : la faire disparaître sous le doigt rendrait le dépôt impossible.
-  const etapesVisibles = ETAPES_PROJET.filter(([cle]) => {
-    if (cle === 'perdu') return montrerPerdus || activeDrag
-    if (cle === 'termine') return montrerTermines || activeDrag
-    return montrerVides || byEtape[cle].length > 0 || activeDrag
-  })
-  const nbVides = ETAPES_PROJET.filter(
-    ([c]) => c !== 'perdu' && c !== 'termine' && byEtape[c].length === 0
-  ).length
+  const etapesVisibles = useMemo(
+    () =>
+      ETAPES_PROJET.filter(([cle]) => {
+        if (cle === 'perdu') return montrerPerdus || activeDrag
+        if (cle === 'termine') return montrerTermines || activeDrag
+        return montrerVides || byEtape[cle].length > 0 || activeDrag
+      }),
+    [byEtape, montrerPerdus, montrerTermines, montrerVides, activeDrag]
+  )
+  const nbVides = useMemo(
+    () =>
+      ETAPES_PROJET.filter(([c]) => c !== 'perdu' && c !== 'termine' && byEtape[c].length === 0).length,
+    [byEtape]
+  )
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
   )
 
-  const handleDragStart = ({ active }) => {
+  const handleDragStart = useCallback(({ active }) => {
     setActiveDrag(dossiers.find((d) => d.id === active.id) || null)
-  }
+  }, [dossiers])
 
-  const handleDragEnd = async ({ active, over }) => {
+  const handleDragEnd = useCallback(async ({ active, over }) => {
     setActiveDrag(null)
     if (!over) return
     const d = dossiers.find((x) => x.id === active.id)
@@ -423,7 +443,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     setDossiers((current) => current.map((x) => (x.id === d.id ? { ...x, statut } : x)))
     await supabase.from('dossiers').update({ statut }).eq('id', d.id)
     await assurerRappelDeRelance(d.id, statut)
-  }
+  }, [dossiers])
 
   return (
     <div className="flex flex-col h-screen bg-fond">
