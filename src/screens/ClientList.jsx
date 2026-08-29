@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { nomClient } from '../lib/client'
 import EtatErreur from '../components/EtatErreur'
+import { lireAvecCache } from '../lib/cacheLecture'
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
@@ -28,31 +29,36 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
   const [erreur, setErreur] = useState(null)
   const [tentative, setTentative] = useState(0)
   const [query, setQuery] = useState('')
+  // Écran d'entrée de l'app : le premier qu'on voit en ouvrant Field V9 sans
+  // réseau. Retomber sur la dernière liste connue plutôt que sur un message
+  // d'erreur évite d'être bloqué avant même d'avoir pu consulter une fiche
+  // déjà vue.
+  const [depuisCache, setDepuisCache] = useState(false)
 
   useEffect(() => {
     let active = true
     setLoading(true)
     setErreur(null)
 
-    supabase
-      .from('clients')
-      .select('*')
-      .order('nom_praticien', { ascending: true })
-      .then(({ data, error }) => {
+    lireAvecCache('liste-clients', () =>
+      supabase
+        .from('clients')
+        .select('*')
+        .order('nom_praticien', { ascending: true })
+        .then(({ data, error }) => {
+          if (error) throw new Error(error.message)
+          return data ?? []
+        })
+    )
+      .then(({ valeur, depuisCache }) => {
         if (!active) return
-        if (error) {
-          // Signal coupé en visite, timeout : sans ça l'écran restait bloqué
-          // sur « Chargement… » indéfiniment, seul écran d'entrée de l'app.
-          setErreur('Impossible de charger les clients.')
-          setLoading(false)
-          return
-        }
-        setClients(data ?? [])
+        setClients(valeur)
+        setDepuisCache(depuisCache)
         setLoading(false)
       })
       .catch(() => {
-        // fetch() lui-même peut lever (coupure réseau franche), pas
-        // seulement renvoyer un champ error — les deux sont couverts.
+        // Ni réseau ni cache disponible : sans ça l'écran restait bloqué sur
+        // « Chargement… » indéfiniment, seul écran d'entrée de l'app.
         if (active) {
           setErreur('Impossible de charger les clients.')
           setLoading(false)
@@ -198,6 +204,12 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
       </header>
 
       <main className="px-4 pb-8">
+        {!loading && depuisCache && (
+          <p className="text-xs text-alerte mb-2 px-1">
+            ⚠ Version hors ligne — peut ne pas refléter les derniers changements
+          </p>
+        )}
+
         {loading && <p className="text-texte-faible text-sm">Chargement…</p>}
 
         {!loading && erreur && (
