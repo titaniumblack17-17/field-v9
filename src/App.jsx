@@ -13,6 +13,7 @@ const Pipeline = React.lazy(() => import('./screens/Pipeline'))
 const BriefSoir = React.lazy(() => import('./screens/BriefSoir'))
 const Catalogue = React.lazy(() => import('./screens/Catalogue'))
 import useConfirm from './hooks/useConfirm'
+import { tailleFile, ecouterTailleFile, viderFile } from './lib/fileAttente'
 
 // Balayage depuis le bord gauche pour revenir. Le geste natif d'iOS est
 // capricieux sur une application à écran unique, et le défilement horizontal
@@ -76,8 +77,32 @@ function useEnLigne() {
   return enLigne
 }
 
+// L'exécuteur ne sait rien encore à ce stade (Tâche 6 seule) — les Tâches
+// 7-9 ajoutent un cas à ce switch à chaque action câblée sur la file.
+async function executerActionEnFile(action) {
+  switch (action.type) {
+    default:
+      throw new Error(`Type d'action inconnu : ${action.type}`)
+  }
+}
+
+function useFileAttente(enLigne) {
+  const [taille, setTaille] = useState(() => tailleFile())
+
+  useEffect(() => ecouterTailleFile(setTaille), [])
+
+  useEffect(() => {
+    if (enLigne && taille > 0) {
+      viderFile(executerActionEnFile)
+    }
+  }, [enLigne])
+
+  return taille
+}
+
 export default function App() {
   const enLigne = useEnLigne()
+  const tailleFileAttente = useFileAttente(enLigne)
 
   // Pile d'écrans doublée d'entrées dans l'historique du navigateur : le swipe
   // natif iOS et le bouton Retour du navigateur reviennent d'un écran, sans
@@ -238,6 +263,11 @@ export default function App() {
       {!enLigne && (
         <div className="sticky top-0 z-30 bg-erreur text-white text-xs font-medium text-center py-1.5">
           Hors ligne — reconnexion automatique dès que possible
+        </div>
+      )}
+      {tailleFileAttente > 0 && (
+        <div className="sticky top-0 z-30 bg-alerte text-white text-xs font-medium text-center py-1.5">
+          {tailleFileAttente} action{tailleFileAttente > 1 ? 's' : ''} en attente d'envoi
         </div>
       )}
       <Suspense fallback={attente}>
