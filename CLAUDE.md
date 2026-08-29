@@ -1,9 +1,14 @@
 # Field V9
 
 CRM personnel de Bruce Da Silva, commercial indépendant en équipement dentaire
-en Île-de-France (27 marques pour Bailleul et So Dental, objectif annuel 5 M€
-TTC). Utilisé debout, sur iPhone, entre deux cabinets — chaque décision
-d'interface se juge à cette aune : rapide à lire, rapide à taper d'une main.
+en Île-de-France, pour Bailleul et So Dental (objectif annuel 5 M€ TTC).
+Utilisé debout, sur iPhone, entre deux cabinets — chaque décision d'interface
+se juge à cette aune : rapide à lire, rapide à taper d'une main.
+
+Marques représentées : voir
+`plugins/sales-dentaire/skills/email-prospection/references/marques.md` —
+pas de chiffre à recopier ici, le dernier qui s'y était figé (« 18 marques »)
+a fini faux.
 
 **Avant de travailler sur ce dépôt, lire `PASSATION.md`** — schéma complet,
 fonctions edge, chiffres à jour, chantiers ouverts. Ce fichier-ci ne contient

@@ -93,6 +93,7 @@ format n'est pas encore déterminé. Réimport manuel via
 | `capture-intake` | analyse une dictée, crée ou complète un client (comble aussi depuis `carnet_contacts`) | false (iOS Shortcuts) |
 | `todoist-rappel` | `{rappelId}` synchronise · `{action:'reconcilier'}` rapatrie | true |
 | `devis-montant` | `{fichierId}` lit le total TTC d'un devis PDF | true |
+| `client-web-lookup` | `{client_id}` recherche web (spécialités, adresse, associés…), écrit directement les champs vides trouvés avec confiance ; déclenchée en tâche de fond par `capture-intake` à chaque création de client, et sur demande depuis le bouton « Chercher sur le web » de la fiche | true |
 
 Secrets : `FIELD_EDGE_API_KEY` (Anthropic), `TODOIST_TOKEN`.
 
