@@ -1,12 +1,6 @@
 {
   "version": 1,
   "skills": {
-    "context-engineering-collection": {
-      "source": "muratcankoylan/agent-skills-for-context-engineering",
-      "sourceType": "github",
-      "skillPath": "SKILL.md",
-      "computedHash": "1a2dbf15cf46137bae376d83c933068c72ddb96d5275e38cdf384b35793502e8"
-    },
     "email-prospection": {
       "source": "./plugins/sales-dentaire",
       "sourceType": "local",
