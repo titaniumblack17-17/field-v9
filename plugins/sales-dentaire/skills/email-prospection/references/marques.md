@@ -18,6 +18,9 @@ sans trancher le compte :
 - La spec cite **Acteon** comme une des 18 marques du catalogue — absente
   de la liste dictée pour ce skill. Oubli à la dictée, ou marque
   volontairement exclue de la prospection (pas du catalogue) ? À confirmer.
+- Bruce a signalé trois oublis probables supplémentaires à la dictée
+  initiale : **Mectron, Carestream, Vatech** — ajoutées ci-dessous comme
+  Acteon, à confirmer plutôt que tenues pour certaines.
 
 Je n'ai pas pu lire directement `Configurateur/` dans iCloud Drive (accès
 refusé par macOS, piège déjà documenté dans PASSATION.md) — si tu donnes
@@ -30,6 +33,9 @@ le compte exact.
 | Anthos | — | *à compléter* | — |
 | Castellini | — | *à compléter* | — |
 | Acteon | — | *présente dans la spec catalogue, absente de la liste dictée — à confirmer* | — |
+| Mectron | — | *oubli probable signalé par Bruce — à confirmer* | — |
+| Carestream | — | *oubli probable signalé par Bruce — à confirmer* | — |
+| Vatech | — | *oubli probable signalé par Bruce — à confirmer* | — |
 | OMS | — | *à compléter* | — |
 | DCE | — | *à compléter* | — |
 | DCI | — | *à compléter* | — |
