@@ -69,11 +69,22 @@ function useEnLigne() {
   useEffect(() => {
     const surLigne = () => setEnLigne(true)
     const horsLigne = () => setEnLigne(false)
+    // Resynchronise l'état réel à chaque retour au premier plan : sur une PWA
+    // installée (écran d'accueil iOS), quitter l'app pour couper/rétablir le
+    // mode avion la met en arrière-plan, et iOS peut suspendre son exécution
+    // JS pendant la transition — l'événement 'online'/'offline' correspondant
+    // n'est alors jamais délivré, et rien ne le rejoue au retour. Revérifier
+    // navigator.onLine à chaque passage en visible corrige cet écart.
+    const auRetour = () => {
+      if (document.visibilityState === 'visible') setEnLigne(navigator.onLine)
+    }
     window.addEventListener('online', surLigne)
     window.addEventListener('offline', horsLigne)
+    document.addEventListener('visibilitychange', auRetour)
     return () => {
       window.removeEventListener('online', surLigne)
       window.removeEventListener('offline', horsLigne)
+      document.removeEventListener('visibilitychange', auRetour)
     }
   }, [])
   return enLigne
@@ -107,6 +118,24 @@ function useFileAttente(enLigne) {
       viderFile(executerActionEnFile)
     }
   }, [enLigne])
+
+  // Filet de secours indépendant de `enLigne` : si l'événement 'online' ET
+  // l'événement 'offline' ont tous deux été manqués pendant une suspension
+  // (voir useEnLigne ci-dessus), `enLigne` peut ne jamais avoir changé de
+  // valeur dans cette session — l'effet au-dessus ne se redéclenche alors
+  // jamais. On revérifie donc l'état réel directement ici à chaque retour au
+  // premier plan, sans dépendre de l'état React `enLigne` ni de `taille`
+  // (lue en direct dans le stockage plutôt que depuis la fermeture de cet
+  // effet, pour ne jamais rater une action mise en file entre-temps).
+  useEffect(() => {
+    const auRetour = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine && tailleFile() > 0) {
+        viderFile(executerActionEnFile)
+      }
+    }
+    document.addEventListener('visibilitychange', auRetour)
+    return () => document.removeEventListener('visibilitychange', auRetour)
+  }, [])
 
   return taille
 }

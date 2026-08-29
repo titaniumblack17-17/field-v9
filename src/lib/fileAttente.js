@@ -38,25 +38,39 @@ export const ecouterTailleFile = (callback) => {
   return () => ecouteurs.delete(callback)
 }
 
+// Deux déclencheurs indépendants (l'effet sur `enLigne` et le filet de
+// secours sur `visibilitychange`, voir App.jsx) peuvent réagir au même
+// retour de réseau presque simultanément. Sans ce verrou, un second appel
+// démarré avant que le premier n'ait écrit sa progression relirait la même
+// file et rejouerait la même action une deuxième fois.
+let enCours = false
+
 /**
  * Rejoue chaque action en attente, dans l'ordre, via `executer` (fourni par
  * l'appelant — lui seul sait comment envoyer chaque type d'action, voir
  * Tâches 7-9). Une action qui échoue encore reste en file pour la prochaine
  * tentative ; le vidage s'arrête au premier échec pour garder l'ordre
- * d'origine plutôt que de rejouer dans le désordre.
+ * d'origine plutôt que de rejouer dans le désordre. Si un vidage est déjà en
+ * cours, cet appel ne fait rien plutôt que de retraiter la même tête de file.
  */
 export async function viderFile(executer) {
-  const file = lireFile()
-  const restantes = [...file]
-  while (restantes.length) {
-    const action = restantes[0]
-    try {
-      await executer(action)
-      restantes.shift()
-      ecrireFile(restantes)
-    } catch {
-      break
+  if (enCours) return { traitees: 0, restantes: tailleFile() }
+  enCours = true
+  try {
+    const file = lireFile()
+    const restantes = [...file]
+    while (restantes.length) {
+      const action = restantes[0]
+      try {
+        await executer(action)
+        restantes.shift()
+        ecrireFile(restantes)
+      } catch {
+        break
+      }
     }
+    return { traitees: file.length - restantes.length, restantes: restantes.length }
+  } finally {
+    enCours = false
   }
-  return { traitees: file.length - restantes.length, restantes: restantes.length }
 }
