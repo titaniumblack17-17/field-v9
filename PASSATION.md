@@ -5,7 +5,7 @@
 ## Qui et pourquoi
 
 Bruce Da Silva, commercial indépendant en équipement dentaire en Île-de-France.
-18 marques pour Bailleul et So Dental. Objectif annuel 5 M€ TTC.
+27 marques pour Bailleul et So Dental. Objectif annuel 5 M€ TTC.
 Field V9 est son CRM personnel, utilisé debout, sur iPhone, entre deux cabinets.
 
 Il a une double casquette : vendeur (ses propres affaires) et technicien
