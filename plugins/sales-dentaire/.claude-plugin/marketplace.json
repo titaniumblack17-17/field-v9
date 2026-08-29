@@ -1,0 +1,24 @@
+{
+  "name": "sales-dentaire-marketplace",
+  "owner": {
+    "name": "Bruce Da Silva"
+  },
+  "metadata": {
+    "description": "Skills de prospection et suivi commercial pour la vente d'équipement dentaire — Field V9, Île-de-France",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "sales-dentaire",
+      "description": "Prospection, rédaction et suivi commercial pour la vente d'équipement dentaire (18 marques représentées pour Bailleul et So Dental). Quatre skills : recherche et qualification d'un cabinet avant premier contact, rédaction d'e-mails de prospection à froid par marque, génération de relances adaptées à l'étape du pipeline Field V9, et détection des dossiers qui stagnent ou risquent d'être perdus.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/prospect-research",
+        "./skills/email-prospection",
+        "./skills/relance-pipeline",
+        "./skills/opportunites-a-risque"
+      ]
+    }
+  ]
+}
