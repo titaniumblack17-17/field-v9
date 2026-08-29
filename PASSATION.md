@@ -93,36 +93,9 @@ les 17 autres marques restent à faire. Réimport manuel via
 
 Secrets : `FIELD_EDGE_API_KEY` (Anthropic), `TODOIST_TOKEN`.
 
-## Décisions structurantes
-
-- **Todoist n'est pas un CRM, c'est le réveil-matin.** Ses projets « Pipeline
-  actif » et « Plans & remboursements » contenaient un CRM complet en double,
-  importé dans Field le 21/08. On ne recopie vers Todoist que les rappels.
-- **La nomenclature de fichiers de Bruce fait autorité.** `NOM_PRODUIT_RÉFÉRENCE`
-  avec référence à 9 chiffres. Le bouton « Renommer » ne s'affiche pas sur ces
-  noms-là, seulement sur les scans et photos.
-- **L'objectif se referme au 31 décembre.** Un dossier réglé appartient à
-  l'exercice de son règlement, un dossier ouvert à l'exercice courant : ce qui
-  n'est pas réglé bascule seul au 1er janvier.
-- **Un devis remplace, il n'additionne pas**, sauf case cochée.
-- **Rouge pour un retard, orange sous huit jours, bleu au-delà.** Jamais de vert,
-  qui se lirait « réglé ».
-
-## Règles de travail avec Bruce
-
-- **Toujours confirmer une suppression** en nommant ce qui part.
-- **Livrer créer + modifier + supprimer ensemble.** Il a dû réclamer l'édition
-  des rappels ; ne pas attendre la demande.
-- **Vérifier par le chemin qu'il emprunte**, pas en curl. Trois fonctions Edge
-  ont été mortes une journée entière — en-tête CORS `x-client-info` manquant —
-  alors que tous les tests curl passaient.
-- **Listes temps réel : traiter INSERT, UPDATE et DELETE.** L'oubli d'UPDATE a
-  frappé deux fois, et une table nouvelle n'entre pas d'elle-même dans la
-  publication `supabase_realtime`.
-- **Pas de réponse de complaisance.** Il demande des avis francs et les suit
-  quand ils sont argumentés.
-- `npm run build` lance ESLint avant Vite. `no-undef` en erreur : un appel vers
-  une fonction disparue ne peut plus être déployé.
+> Les règles de travail avec Bruce et les décisions structurantes du produit
+> vivent désormais dans `CLAUDE.md` (chargé automatiquement à chaque session),
+> pas ici — pour ne pas les maintenir à deux endroits.
 
 > Deux sessions Claude ont travaillé sur ce dépôt le 22/08. Vérifier
 > `git log` avant de reprendre : la fusion de fiches et la décision SAV
