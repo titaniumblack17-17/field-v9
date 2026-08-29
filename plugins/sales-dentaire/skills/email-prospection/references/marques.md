@@ -9,16 +9,27 @@ marque, au fur et à mesure.
 
 **Point à trancher avec Bruce :** PASSATION.md et CLAUDE.md mentionnent
 « 18 marques » de façon constante, mais la liste dictée compte 23 noms
-distincts une fois le doublon « MHC » retiré. Écart à clarifier — soit
-certaines entrées ci-dessous sont des sous-lignes d'une même marque (comme
-Rossicaws/Dental Art, même usine mais deux marques distinctes — donc pas ce
-cas-là), soit le chiffre « 18 » doit être mis à jour dans la documentation.
+distincts une fois le doublon « MHC » retiré. Écart toujours ouvert — deux
+indices trouvés dans le dépôt (`docs/superpowers/specs/2026-08-25-catalogue-produits-pilote-planmeca-design.md`),
+sans trancher le compte :
+- La convention de nommage réelle laisse tomber « Cefla » — la spec et la
+  table `produits` disent « Anthos » et (attendu) « Castellini », pas
+  « Cefla Anthos »/« Cefla Castellini ». Renommé ci-dessous en conséquence.
+- La spec cite **Acteon** comme une des 18 marques du catalogue — absente
+  de la liste dictée pour ce skill. Oubli à la dictée, ou marque
+  volontairement exclue de la prospection (pas du catalogue) ? À confirmer.
+
+Je n'ai pas pu lire directement `Configurateur/` dans iCloud Drive (accès
+refusé par macOS, piège déjà documenté dans PASSATION.md) — si tu donnes
+l'accès ou listes le dossier toi-même, la liste des sous-dossiers donnerait
+le compte exact.
 
 | Marque | Catégorie de produit | Positionnement | Angle d'approche |
 |---|---|---|---|
 | Planmeca | — | *à compléter* | — |
-| Cefla Anthos | — | *à compléter* | — |
-| Cefla Castellini | — | *à compléter* | — |
+| Anthos | — | *à compléter* | — |
+| Castellini | — | *à compléter* | — |
+| Acteon | — | *présente dans la spec catalogue, absente de la liste dictée — à confirmer* | — |
 | OMS | — | *à compléter* | — |
 | DCE | — | *à compléter* | — |
 | DCI | — | *à compléter* | — |
