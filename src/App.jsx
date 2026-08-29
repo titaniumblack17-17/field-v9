@@ -14,6 +14,7 @@ const BriefSoir = React.lazy(() => import('./screens/BriefSoir'))
 const Catalogue = React.lazy(() => import('./screens/Catalogue'))
 import useConfirm from './hooks/useConfirm'
 import { tailleFile, ecouterTailleFile, viderFile } from './lib/fileAttente'
+import { supabase } from './lib/supabaseClient'
 
 // Balayage depuis le bord gauche pour revenir. Le geste natif d'iOS est
 // capricieux sur une application à écran unique, et le défilement horizontal
@@ -81,6 +82,10 @@ function useEnLigne() {
 // 7-9 ajoutent un cas à ce switch à chaque action câblée sur la file.
 async function executerActionEnFile(action) {
   switch (action.type) {
+    case 'note': {
+      await supabase.from(action.table).insert(action.payload)
+      return
+    }
     default:
       throw new Error(`Type d'action inconnu : ${action.type}`)
   }

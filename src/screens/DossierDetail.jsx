@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { lireAvecCache } from '../lib/cacheLecture'
+import { mettreEnFile } from '../lib/fileAttente'
 import { nomClient } from '../lib/client'
 import { resumeDossier } from '../lib/resume'
 import { copierPressePapier } from '../lib/texte'
@@ -352,7 +353,11 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
     })
     if (!texte || !texte.trim()) return
     setAddingNote(true)
-    await supabase.from('dossier_notes').insert({ dossier_id: dossier.id, texte: texte.trim() })
+    const payload = { dossier_id: dossier.id, texte: texte.trim() }
+    const { error } = await supabase.from('dossier_notes').insert(payload)
+    if (error) {
+      mettreEnFile({ type: 'note', table: 'dossier_notes', payload })
+    }
     setAddingNote(false)
   }
 

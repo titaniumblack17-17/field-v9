@@ -4,6 +4,7 @@ import { lienifier, copierPressePapier } from '../lib/texte'
 import { resumeClient } from '../lib/resume'
 import { supabase } from '../lib/supabaseClient'
 import { lireAvecCache } from '../lib/cacheLecture'
+import { mettreEnFile } from '../lib/fileAttente'
 import PersonListField from '../components/PersonListField'
 import ChampChoix from '../components/ChampChoix'
 import ChampMultiChoix from '../components/ChampMultiChoix'
@@ -90,7 +91,15 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   const ajouterInfo = async () => {
     if (!nouvelleInfo.trim()) return
     setEnvoiInfo(true)
-    await supabase.from('client_notes').insert({ client_id: client.id, texte: nouvelleInfo.trim() })
+    const payload = { client_id: client.id, texte: nouvelleInfo.trim() }
+    const { error } = await supabase.from('client_notes').insert(payload)
+    if (error) {
+      // Échec probable par manque de réseau : la note part en file plutôt
+      // que de se perdre. On ne distingue pas les autres causes d'erreur
+      // (une erreur de schéma échouerait pareil) — hors périmètre de ce mode,
+      // qui vise le cas réseau, le plus fréquent sur le terrain.
+      mettreEnFile({ type: 'note', table: 'client_notes', payload })
+    }
     setNouvelleInfo('')
     setAjoutInfoOuvert(false)
     setEnvoiInfo(false)
