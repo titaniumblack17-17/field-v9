@@ -12,6 +12,7 @@ import {
 } from '@dnd-kit/core'
 import { supabase } from '../lib/supabaseClient'
 import { lireAvecCache } from '../lib/cacheLecture'
+import { mettreEnFile } from '../lib/fileAttente'
 import { etatRappel, assurerRappelDeRelance } from '../lib/rappel'
 import { nomClient } from '../lib/client'
 import EtatErreur from '../components/EtatErreur'
@@ -288,7 +289,11 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     setADeplacer(null)
     if (dossier.statut === etape) return
     setDossiers((current) => current.map((d) => (d.id === dossier.id ? { ...d, statut: etape } : d)))
-    await supabase.from('dossiers').update({ statut: etape }).eq('id', dossier.id)
+    const { error } = await supabase.from('dossiers').update({ statut: etape }).eq('id', dossier.id)
+    if (error) {
+      mettreEnFile({ type: 'etape', dossierId: dossier.id, statut: etape })
+      return
+    }
     await assurerRappelDeRelance(dossier.id, etape)
   }, [])
 
@@ -445,7 +450,11 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     const statut = prefixe ? overId.slice(prefixe.length + 1) : overId
     if (d.statut === statut) return
     setDossiers((current) => current.map((x) => (x.id === d.id ? { ...x, statut } : x)))
-    await supabase.from('dossiers').update({ statut }).eq('id', d.id)
+    const { error } = await supabase.from('dossiers').update({ statut }).eq('id', d.id)
+    if (error) {
+      mettreEnFile({ type: 'etape', dossierId: d.id, statut })
+      return
+    }
     await assurerRappelDeRelance(d.id, statut)
   }, [dossiers])
 

@@ -15,6 +15,7 @@ const Catalogue = React.lazy(() => import('./screens/Catalogue'))
 import useConfirm from './hooks/useConfirm'
 import { tailleFile, ecouterTailleFile, viderFile } from './lib/fileAttente'
 import { supabase } from './lib/supabaseClient'
+import { assurerRappelDeRelance } from './lib/rappel'
 
 // Balayage depuis le bord gauche pour revenir. Le geste natif d'iOS est
 // capricieux sur une application à écran unique, et le défilement horizontal
@@ -84,6 +85,11 @@ async function executerActionEnFile(action) {
   switch (action.type) {
     case 'note': {
       await supabase.from(action.table).insert(action.payload)
+      return
+    }
+    case 'etape': {
+      await supabase.from('dossiers').update({ statut: action.statut }).eq('id', action.dossierId)
+      await assurerRappelDeRelance(action.dossierId, action.statut)
       return
     }
     default:
