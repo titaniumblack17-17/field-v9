@@ -3,6 +3,7 @@ import { nomClient } from '../lib/client'
 import { lienifier, copierPressePapier } from '../lib/texte'
 import { resumeClient } from '../lib/resume'
 import { supabase } from '../lib/supabaseClient'
+import { lireAvecCache } from '../lib/cacheLecture'
 import PersonListField from '../components/PersonListField'
 import ChampChoix from '../components/ChampChoix'
 import ChampMultiChoix from '../components/ChampMultiChoix'
@@ -365,28 +366,32 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
   const [erreurDossiers, setErreurDossiers] = useState(null)
   const [tentativeDossiers, setTentativeDossiers] = useState(0)
+  const [dossiersDepuisCache, setDossiersDepuisCache] = useState(false)
 
   useEffect(() => {
     let active = true
     setErreurDossiers(null)
 
-    supabase
-      .from('dossiers')
-      .select('*')
-      .eq('client_id', client.id)
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
+    lireAvecCache(`dossiers-client-${client.id}`, () =>
+      supabase
+        .from('dossiers')
+        .select('*')
+        .eq('client_id', client.id)
+        .order('created_at', { ascending: false })
+        .then(({ data, error }) => {
+          if (error) throw new Error(error.message)
+          return data ?? []
+        })
+    )
+      .then(({ valeur, depuisCache }) => {
         if (!active) return
-        if (error) {
-          // Une affaire en cours qui semble absente parce que la liste n'a
-          // pas pu charger, c'est le pire des deux mondes : ça ressemble à
-          // un client sans rien à suivre.
-          setErreurDossiers('Impossible de charger les dossiers.')
-          return
-        }
-        setDossiers(data ?? [])
+        setDossiers(valeur)
+        setDossiersDepuisCache(depuisCache)
       })
       .catch(() => {
+        // Une affaire en cours qui semble absente parce que la liste n'a
+        // pas pu charger, c'est le pire des deux mondes : ça ressemble à
+        // un client sans rien à suivre.
         if (active) setErreurDossiers('Impossible de charger les dossiers.')
       })
 
@@ -703,6 +708,11 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
             </button>
           }
         >
+          {dossiersDepuisCache && (
+            <p className="text-xs text-alerte px-1 mb-2">
+              ⚠ Version hors ligne — peut ne pas refléter les derniers changements
+            </p>
+          )}
           {erreurDossiers ? (
             <p className="text-erreur text-sm px-1">
               {erreurDossiers}{' '}

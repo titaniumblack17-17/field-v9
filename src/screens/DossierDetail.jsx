@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { lireAvecCache } from '../lib/cacheLecture'
 import { nomClient } from '../lib/client'
 import { resumeDossier } from '../lib/resume'
 import { copierPressePapier } from '../lib/texte'
@@ -47,6 +48,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [notes, setNotes] = useState([])
+  const [notesDepuisCache, setNotesDepuisCache] = useState(false)
   const [addingNote, setAddingNote] = useState(false)
   const [suppression, setSuppression] = useState(false)
   // Compte rendu du dernier envoi vers Todoist : { etat } ou { erreur }.
@@ -293,13 +295,21 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   useEffect(() => {
     let active = true
 
-    supabase
-      .from('dossier_notes')
-      .select('*')
-      .eq('dossier_id', dossier.id)
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (active && !error) setNotes(data ?? [])
+    lireAvecCache(`notes-dossier-${dossier.id}`, () =>
+      supabase
+        .from('dossier_notes')
+        .select('*')
+        .eq('dossier_id', dossier.id)
+        .order('created_at', { ascending: false })
+        .then(({ data, error }) => {
+          if (error) throw new Error(error.message)
+          return data ?? []
+        })
+    )
+      .then(({ valeur, depuisCache }) => {
+        if (!active) return
+        setNotes(valeur)
+        setNotesDepuisCache(depuisCache)
       })
       .catch(() => {})
 
@@ -606,6 +616,11 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
               </button>
             </div>
           </div>
+          {notesDepuisCache && (
+            <p className="text-xs text-alerte px-1 mb-2">
+              ⚠ Version hors ligne — peut ne pas refléter les derniers changements
+            </p>
+          )}
           {notes.length > 0 && (
             <ul className="space-y-2">
               {(toutesNotes ? notes : notes.slice(0, APERCU_NOTES)).map((n) => (

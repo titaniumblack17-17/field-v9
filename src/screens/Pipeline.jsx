@@ -11,6 +11,7 @@ import {
   useDraggable,
 } from '@dnd-kit/core'
 import { supabase } from '../lib/supabaseClient'
+import { lireAvecCache } from '../lib/cacheLecture'
 import { etatRappel, assurerRappelDeRelance } from '../lib/rappel'
 import { nomClient } from '../lib/client'
 import EtatErreur from '../components/EtatErreur'
@@ -294,31 +295,34 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [tentative, setTentative] = useState(0)
+  const [pipelineDepuisCache, setPipelineDepuisCache] = useState(false)
 
   useEffect(() => {
     let active = true
     setChargement(true)
     setErreur(null)
 
-    supabase
-      .from('dossiers')
-      .select('*, clients(id, prenom_praticien, nom_praticien, nom_cabinet, ville)')
-      .in('type', ['projet', 'sav', 'plan'])
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
+    lireAvecCache('pipeline-dossiers', () =>
+      supabase
+        .from('dossiers')
+        .select('*, clients(id, prenom_praticien, nom_praticien, nom_cabinet, ville)')
+        .in('type', ['projet', 'sav', 'plan'])
+        .order('created_at', { ascending: false })
+        .then(({ data, error }) => {
+          if (error) throw new Error(error.message)
+          return data ?? []
+        })
+    )
+      .then(({ valeur, depuisCache }) => {
         if (!active) return
-        if (error) {
-          // Sans ça, un chargement raté affichait un pipeline à zéro dossier
-          // partout — indiscernable d'un vrai pipeline vide.
-          setErreur('Impossible de charger le pipeline.')
-          setChargement(false)
-          return
-        }
-        setDossiers(data ?? [])
+        setDossiers(valeur)
+        setPipelineDepuisCache(depuisCache)
         setChargement(false)
       })
       .catch(() => {
         if (active) {
+          // Sans ça, un chargement raté affichait un pipeline à zéro dossier
+          // partout — indiscernable d'un vrai pipeline vide.
           setErreur('Impossible de charger le pipeline.')
           setChargement(false)
         }
@@ -480,6 +484,12 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
       </header>
 
       {chargement && <p className="text-texte-faible text-sm px-4">Chargement…</p>}
+
+      {!chargement && !erreur && pipelineDepuisCache && (
+        <p className="text-xs text-alerte px-4 mb-2">
+          ⚠ Version hors ligne — peut ne pas refléter les derniers changements
+        </p>
+      )}
 
       {!chargement && erreur && (
         <EtatErreur message={erreur} onReessayer={() => setTentative((t) => t + 1)} />
