@@ -1,6 +1,20 @@
 import React, { useEffect, useState } from 'react'
 import { journaliser, lireJournal, viderJournal, ecouterJournal } from '../lib/diagnosticReseau'
 
+// N'affiche jamais un champ par son nom en dur : un ancien bug de ce panneau
+// (session du 30/08/2026) affichait toujours onLine/visible ambiants et
+// ignorait silencieusement resultat/duree_ms des sondes — donnant
+// l'illusion qu'une sonde avait réussi sans jamais le montrer vraiment.
+// Cette fonction affiche tous les champs présents sur l'entrée, quels
+// qu'ils soient, pour qu'un futur champ ajouté (viderFile, une erreur…)
+// apparaisse automatiquement sans avoir à retoucher l'affichage.
+const CHAMPS_BASE = new Set(['n', 'evenement', 'horodatage'])
+const champsExtra = (e) =>
+  Object.entries(e)
+    .filter(([cle]) => !CHAMPS_BASE.has(cle))
+    .map(([cle, val]) => `${cle}=${String(val)}`)
+    .join(' ')
+
 const INTERVALLE_SONDAGE_MS = 3000
 // Un battement à chaque sondage noierait le journal sur un test de plusieurs
 // minutes — un battement toutes les 5 sondes (~15s) suffit à repérer un trou
@@ -62,14 +76,7 @@ export default function DiagnosticReseau() {
   const dernieres = journal.slice(-12).reverse()
 
   const copier = async () => {
-    const texte = journal
-      .map(
-        (e) =>
-          `${e.n}. ${e.horodatage} — ${e.evenement}` +
-          (e.ancien !== undefined ? ` (${e.ancien}→${e.nouveau})` : '') +
-          ` — onLine=${e.enLigne} visible=${e.visibilite}`
-      )
-      .join('\n')
+    const texte = journal.map((e) => `${e.n}. ${e.horodatage} — ${e.evenement} — ${champsExtra(e)}`).join('\n')
     try {
       await navigator.clipboard.writeText(texte)
       alert('Journal copié — colle-le dans le message.')
@@ -92,9 +99,7 @@ export default function DiagnosticReseau() {
       {dernieres.length === 0 && <div className="opacity-60">Aucune entrée pour l'instant.</div>}
       {dernieres.map((e) => (
         <div key={e.n}>
-          {e.n}. {e.horodatage.slice(11, 23)} — {e.evenement}
-          {e.ancien !== undefined ? ` (${String(e.ancien)}→${String(e.nouveau)})` : ''} — onLine=
-          {String(e.enLigne)} vis={e.visibilite}
+          {e.n}. {e.horodatage.slice(11, 23)} — {e.evenement} — {champsExtra(e)}
         </div>
       ))}
     </div>

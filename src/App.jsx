@@ -128,7 +128,11 @@ function useFileAttente(enLigne) {
 
   useEffect(() => {
     if (enLigne && taille > 0) {
+      const diag = diagnosticActif()
+      if (diag) journaliser('useFileAttente:vidage-debut-effetEnLigne')
       viderFile(executerActionEnFile)
+        .then((resultat) => diag && journaliser('useFileAttente:vidage-fin-effetEnLigne', resultat))
+        .catch((erreur) => diag && journaliser('useFileAttente:vidage-erreur-effetEnLigne', { erreur: String(erreur) }))
     }
   }, [enLigne])
 
@@ -148,9 +152,25 @@ function useFileAttente(enLigne) {
       const diag = diagnosticActif()
       if (diag) journaliser('useFileAttente:sonde-debut')
       const debut = performance.now()
-      const reel = await verifierConnexionReelle()
+      let reel
+      try {
+        reel = await verifierConnexionReelle()
+      } catch (erreur) {
+        // verifierConnexionReelle ne devrait jamais lever (elle capte déjà
+        // ses propres échecs réseau) — ce filet n'est là que pour ne jamais
+        // masquer un cas imprévu pendant l'investigation en cours.
+        if (diag) journaliser('useFileAttente:sonde-erreur', { erreur: String(erreur) })
+        return
+      }
       if (diag) journaliser('useFileAttente:sonde-fin', { resultat: reel, duree_ms: Math.round(performance.now() - debut) })
-      if (reel) viderFile(executerActionEnFile)
+      if (!reel) return
+      if (diag) journaliser('useFileAttente:vidage-debut')
+      try {
+        const resultatVidage = await viderFile(executerActionEnFile)
+        if (diag) journaliser('useFileAttente:vidage-fin', resultatVidage)
+      } catch (erreur) {
+        if (diag) journaliser('useFileAttente:vidage-erreur', { erreur: String(erreur) })
+      }
     }
     document.addEventListener('visibilitychange', auRetour)
     return () => document.removeEventListener('visibilitychange', auRetour)
