@@ -1,7 +1,7 @@
 {
-  "name": "Field V9",
-  "short_name": "Field V9",
-  "start_url": "/",
+  "name": "Field V9 DEBUG",
+  "short_name": "FV9 debug",
+  "start_url": "/?debug=reseau",
   "display": "standalone",
   "background_color": "#F5F4F0",
   "theme_color": "#378ADD",
