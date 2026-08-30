@@ -208,6 +208,10 @@ function Column({ etape, dossiers, colRef, onOpen, onMove, dropId, actif, onSele
 let vueMemorisee = 'projet'
 let etapeVueMemorisee = null
 
+// Fenêtre pendant laquelle un déplacement par glisser-déposer reste
+// annulable avant que l'écriture réelle ne parte (voir armerDeplacement).
+const DUREE_ANNULATION_MS = 5000
+
 export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   const [dossiers, setDossiers] = useState([])
   // Les deux pipelines n'ont ni le même vocabulaire d'étapes ni le même
@@ -216,6 +220,15 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   const [vue, setVue] = useState(() => vueMemorisee)
   const [activeDrag, setActiveDrag] = useState(null)
   const [aDeplacer, setADeplacer] = useState(null)
+  // Un glisser-déposer touché par erreur (pouce qui frôle une carte en
+  // faisant défiler ou en naviguant) ne doit jamais écrire en base sans
+  // qu'on ait eu l'occasion de s'en rendre compte — contrairement au bouton
+  // « Déplacer », qui exige déjà deux appuis délibérés et reste instantané.
+  // La carte bouge tout de suite à l'écran, mais l'écriture réelle attend
+  // DUREE_ANNULATION_MS derrière un bandeau « Annuler ».
+  const [deplacementEnAttente, setDeplacementEnAttente] = useState(null)
+  const enAttenteRef = useRef(null)
+  const minuteurConfirmation = useRef(null)
   const colRefs = useRef({})
   // Treize étapes peuplées font sept écrans de balayage sur un iPhone. Les
   // étapes vides s'effacent, et la barre ci-dessous permet d'atteindre
@@ -474,6 +487,90 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     setActiveDrag(dossiers.find((d) => d.id === active.id) || null)
   }, [dossiers])
 
+  const libelleEtape = useCallback((type, statut) => {
+    const liste = type === 'sav' ? STATUTS_SAV : type === 'plan' ? STATUTS_PLAN : ETAPES_PROJET
+    return liste.find(([valeur]) => valeur === statut)?.[1] ?? statut
+  }, [])
+
+  // Écriture réelle, différée derrière la fenêtre d'annulation — même
+  // logique de repli hors-ligne que changerEtape : une panne réseau à ce
+  // moment-là met l'action en file plutôt que de la perdre silencieusement.
+  const executerDeplacement = useCallback(async (dossierId, statut) => {
+    const { error } = await supabase.from('dossiers').update({ statut }).eq('id', dossierId)
+    if (error) {
+      mettreEnFile({ type: 'etape', dossierId, statut })
+      return
+    }
+    await assurerRappelDeRelance(dossierId, statut)
+  }, [])
+
+  const confirmerDeplacement = useCallback(() => {
+    const attente = enAttenteRef.current
+    enAttenteRef.current = null
+    minuteurConfirmation.current = null
+    setDeplacementEnAttente(null)
+    if (attente) executerDeplacement(attente.dossierId, attente.statutCible)
+  }, [executerDeplacement])
+
+  const annulerDeplacement = useCallback(() => {
+    const attente = enAttenteRef.current
+    if (minuteurConfirmation.current) {
+      clearTimeout(minuteurConfirmation.current)
+      minuteurConfirmation.current = null
+    }
+    enAttenteRef.current = null
+    setDeplacementEnAttente(null)
+    if (attente) {
+      setDossiers((current) =>
+        current.map((x) => (x.id === attente.dossierId ? { ...x, statut: attente.statutOrigine } : x))
+      )
+    }
+  }, [])
+
+  // Arme la fenêtre d'annulation pour ce dossier. Un second glissement du
+  // même dossier pendant la fenêtre remplace la demande précédente plutôt
+  // que de s'empiler — et s'il revient à son statut de départ (bougé deux
+  // fois, revenu à la case initiale), on annule purement et simplement :
+  // aucune requête réseau n'est jamais envoyée.
+  const armerDeplacement = useCallback((dossier, statutCible) => {
+    if (minuteurConfirmation.current) clearTimeout(minuteurConfirmation.current)
+
+    const enChaine = enAttenteRef.current?.dossierId === dossier.id
+    const statutOrigine = enChaine ? enAttenteRef.current.statutOrigine : dossier.statut
+
+    if (statutCible === statutOrigine) {
+      enAttenteRef.current = null
+      minuteurConfirmation.current = null
+      setDeplacementEnAttente(null)
+      setDossiers((current) => current.map((x) => (x.id === dossier.id ? { ...x, statut: statutOrigine } : x)))
+      return
+    }
+
+    const attente = {
+      dossierId: dossier.id,
+      statutOrigine,
+      statutCible,
+      libelle: libelleEtape(dossier.type, statutCible),
+    }
+    enAttenteRef.current = attente
+    setDeplacementEnAttente(attente)
+    minuteurConfirmation.current = setTimeout(confirmerDeplacement, DUREE_ANNULATION_MS)
+  }, [libelleEtape, confirmerDeplacement])
+
+  // Quitter l'écran pendant la fenêtre d'annulation confirme le déplacement
+  // au lieu de le perdre : Pipeline est démonté à chaque navigation vers une
+  // fiche (voir vueMemorisee plus haut), un minuteur en attente n'aurait
+  // sinon jamais l'occasion de se déclencher.
+  useEffect(() => {
+    return () => {
+      if (minuteurConfirmation.current) {
+        clearTimeout(minuteurConfirmation.current)
+        const attente = enAttenteRef.current
+        if (attente) executerDeplacement(attente.dossierId, attente.statutCible)
+      }
+    }
+  }, [executerDeplacement])
+
   const handleDragEnd = useCallback(async ({ active, over }) => {
     setActiveDrag(null)
     if (!over) return
@@ -490,13 +587,8 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     const statut = prefixe ? overId.slice(prefixe.length + 1) : overId
     if (d.statut === statut) return
     setDossiers((current) => current.map((x) => (x.id === d.id ? { ...x, statut } : x)))
-    const { error } = await supabase.from('dossiers').update({ statut }).eq('id', d.id)
-    if (error) {
-      mettreEnFile({ type: 'etape', dossierId: d.id, statut })
-      return
-    }
-    await assurerRappelDeRelance(d.id, statut)
-  }, [dossiers])
+    armerDeplacement(d, statut)
+  }, [dossiers, armerDeplacement])
 
   return (
     <div className="flex flex-col h-screen bg-fond">
@@ -779,6 +871,17 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
               Annuler
             </button>
           </div>
+        </div>
+      )}
+
+      {deplacementEnAttente && (
+        <div className="fixed bottom-4 left-4 right-4 z-40 bg-carte border border-accent rounded-carte shadow-drag px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-texte">
+            Déplacé vers <span className="font-bold">{deplacementEnAttente.libelle}</span>
+          </p>
+          <button onClick={annulerDeplacement} className="text-accent text-sm font-bold flex-shrink-0">
+            Annuler
+          </button>
         </div>
       )}
     </div>
