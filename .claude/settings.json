@@ -1,7 +1,10 @@
 {
   "permissions": {
     "deny": [
-      "Read(./graphify-out/**)"
+      "Read(./graphify-out/graph.json)",
+      "Read(./graphify-out/manifest.json)",
+      "Read(./graphify-out/cache/**)",
+      "Read(./graphify-out/*/graph.json)"
     ]
   },
   "hooks": {
