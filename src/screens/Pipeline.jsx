@@ -62,7 +62,12 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
       // fiches restent nettes, celles des colonnes voisines à peine visibles
       // s'effacent — sans ça, impossible de dire d'un coup d'œil dans quelle
       // étape on est vraiment quand deux colonnes se partagent l'écran.
-      className={`bg-carte rounded-carte border select-none cursor-pointer transition-all p-2.5 ${
+      // touch-none (touch-action: none) est indispensable ici, pas cosmétique :
+      // sans lui, PointerSensor n'a aucun moyen d'empêcher Safari iOS de
+      // traiter le geste comme un défilement de colonne — les deux anciens
+      // sélecteurs CSS censés le poser ([data-dnd-kit-draggable], .draggable)
+      // ne correspondaient à rien dans le DOM réel, retirés d'index.css.
+      className={`bg-carte rounded-carte border select-none touch-none cursor-pointer transition-all p-2.5 ${
         isDragging
           ? 'border-accent shadow-drag scale-105 rotate-1 opacity-95'
           : dansColonneActive

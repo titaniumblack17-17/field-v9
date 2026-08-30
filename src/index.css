@@ -50,11 +50,3 @@ body {
 /* Force le rendu sombre des contrôles natifs (sélecteurs de date, listes
    déroulantes), qui sinon restent blancs au milieu d'une fiche sombre. */
 input, select, textarea { color-scheme: inherit; }
-
-/* Touch drag support */
-[data-dnd-kit-draggable] {
-  touch-action: none;
-}
-.draggable {
-  touch-action: none;
-}
