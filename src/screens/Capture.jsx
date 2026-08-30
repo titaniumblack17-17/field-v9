@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import ChoixClient from '../components/ChoixClient'
 import { SuggestionSav, SuggestionProjet, SuggestionPlan } from '../components/SuggestionCapture'
 import { creerDossierDepuisSuggestion, ignorerSuggestion } from '../lib/suggestions'
+import { mettreEnFile } from '../lib/fileAttente'
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/capture-intake`
 
@@ -123,12 +124,35 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
     setError(null)
     setLastResult(null)
 
+    const payload = { texte: texte.trim(), source: 'clavier' }
+
+    // La requête réseau elle-même est isolée dans son propre essai : fetch()
+    // ne rejette QUE sur un échec réseau réel (pas de réponse du tout — DNS,
+    // coupure, timeout) — jamais sur un statut HTTP d'erreur, qui résout
+    // normalement avec `ok: false`. Cette frontière est donc le bon endroit
+    // pour distinguer les deux cas, pas un catch générique après coup.
+    let res
     try {
-      const res = await fetch(FUNCTION_URL, {
+      res = await fetch(FUNCTION_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ texte: texte.trim(), source: 'clavier' }),
+        body: JSON.stringify(payload),
       })
+    } catch {
+      // Échec réseau réel : la dictée ne doit jamais se perdre — elle part
+      // en file, le texte est vidé côté UI pour que Bruce puisse enchaîner
+      // sur la suivante sans avoir l'impression que rien ne s'est passé —
+      // la mention « en attente » (bandeau global) confirme la prise en
+      // compte. Retenter plus tard a du sens ici : c'est le réseau qui a
+      // manqué, pas la requête qui était mauvaise.
+      mettreEnFile({ type: 'capture', payload })
+      setTexte('')
+      setLastResult(null)
+      setSending(false)
+      return
+    }
+
+    try {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Erreur inconnue')
       setLastResult(data)
@@ -146,6 +170,10 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
         setClientTouche(null)
       }
     } catch (err) {
+      // La fonction a répondu mais a refusé la requête (validation, erreur
+      // métier) : retenter la même requête plus tard donnerait le même
+      // refus, donc pas de mise en file — on réaffiche l'erreur comme
+      // avant, texte conservé pour que Bruce puisse le corriger.
       setError(err.message)
     } finally {
       setSending(false)

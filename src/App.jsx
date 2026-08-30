@@ -116,6 +116,16 @@ async function executerActionEnFile(action) {
       await assurerRappelDeRelance(action.dossierId, action.statut)
       return
     }
+    case 'capture': {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/capture-intake`
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(action.payload),
+      })
+      if (!res.ok) throw new Error('échec capture-intake')
+      return
+    }
     default:
       throw new Error(`Type d'action inconnu : ${action.type}`)
   }
