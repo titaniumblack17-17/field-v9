@@ -11,6 +11,15 @@ const CLE = 'fv9:diag-reseau'
 const MAX_ENTREES = 150
 const ecouteurs = new Set()
 
+// Source unique de vérité pour savoir si le diagnostic est actif — appelée
+// à la fois par le panneau (pour se monter) et par useEnLigne/useFileAttente
+// dans App.jsx (pour journaliser leurs propres appels à la sonde réseau,
+// sans quoi le journal montre que l'événement du navigateur s'est déclenché
+// mais pas ce que notre propre code en a fait). Lecture directe de l'URL à
+// chaque appel plutôt qu'un drapeau mis en cache : appelée seulement sur des
+// événements ponctuels (pas à chaque rendu), le coût est négligeable.
+export const diagnosticActif = () => new URLSearchParams(window.location.search).get('debug') === 'reseau'
+
 const lire = () => {
   try {
     return JSON.parse(localStorage.getItem(CLE) ?? '[]')

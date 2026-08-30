@@ -17,6 +17,7 @@ import { tailleFile, ecouterTailleFile, viderFile } from './lib/fileAttente'
 import { supabase } from './lib/supabaseClient'
 import { assurerRappelDeRelance } from './lib/rappel'
 import { verifierConnexionReelle } from './lib/reseau'
+import { diagnosticActif, journaliser } from './lib/diagnosticReseau'
 import DiagnosticReseau from './components/DiagnosticReseau'
 
 // Balayage depuis le bord gauche pour revenir. Le geste natif d'iOS est
@@ -79,7 +80,16 @@ function useEnLigne() {
     // Bruce. Seule une requête réseau réelle dit la vérité.
     const auRetour = async () => {
       if (document.visibilityState !== 'visible') return
-      setEnLigne(await verifierConnexionReelle())
+      // Journalisation ciblée (voir diagnosticReseau.js) : distingue
+      // « l'événement visibilitychange est arrivé » (déjà visible dans le
+      // panneau) de « notre gestionnaire s'est exécuté et a appelé la
+      // sonde » — les deux ne sont pas forcément la même chose.
+      const diag = diagnosticActif()
+      if (diag) journaliser('useEnLigne:sonde-debut')
+      const debut = performance.now()
+      const reel = await verifierConnexionReelle()
+      if (diag) journaliser('useEnLigne:sonde-fin', { resultat: reel, duree_ms: Math.round(performance.now() - debut) })
+      setEnLigne(reel)
     }
     window.addEventListener('online', surLigne)
     window.addEventListener('offline', horsLigne)
@@ -135,7 +145,12 @@ function useFileAttente(enLigne) {
   useEffect(() => {
     const auRetour = async () => {
       if (document.visibilityState !== 'visible' || tailleFile() === 0) return
-      if (await verifierConnexionReelle()) viderFile(executerActionEnFile)
+      const diag = diagnosticActif()
+      if (diag) journaliser('useFileAttente:sonde-debut')
+      const debut = performance.now()
+      const reel = await verifierConnexionReelle()
+      if (diag) journaliser('useFileAttente:sonde-fin', { resultat: reel, duree_ms: Math.round(performance.now() - debut) })
+      if (reel) viderFile(executerActionEnFile)
     }
     document.addEventListener('visibilitychange', auRetour)
     return () => document.removeEventListener('visibilitychange', auRetour)
@@ -152,9 +167,7 @@ export default function App() {
   // usage normal, ne se monte que derrière ?debug=reseau dans l'URL. Lu une
   // seule fois : ce diagnostic ne suit pas une navigation en cours de
   // session, seulement l'URL d'ouverture de l'app.
-  const [diagReseauActif] = useState(
-    () => new URLSearchParams(window.location.search).get('debug') === 'reseau'
-  )
+  const [diagReseauActif] = useState(diagnosticActif)
 
   // Pile d'écrans doublée d'entrées dans l'historique du navigateur : le swipe
   // natif iOS et le bouton Retour du navigateur reviennent d'un écran, sans
