@@ -16,6 +16,7 @@ import useConfirm from './hooks/useConfirm'
 import { tailleFile, ecouterTailleFile, viderFile } from './lib/fileAttente'
 import { supabase } from './lib/supabaseClient'
 import { assurerRappelDeRelance } from './lib/rappel'
+import { verifierConnexionReelle } from './lib/reseau'
 import DiagnosticReseau from './components/DiagnosticReseau'
 
 // Balayage depuis le bord gauche pour revenir. Le geste natif d'iOS est
@@ -70,14 +71,15 @@ function useEnLigne() {
   useEffect(() => {
     const surLigne = () => setEnLigne(true)
     const horsLigne = () => setEnLigne(false)
-    // Resynchronise l'état réel à chaque retour au premier plan : sur une PWA
-    // installée (écran d'accueil iOS), quitter l'app pour couper/rétablir le
-    // mode avion la met en arrière-plan, et iOS peut suspendre son exécution
-    // JS pendant la transition — l'événement 'online'/'offline' correspondant
-    // n'est alors jamais délivré, et rien ne le rejoue au retour. Revérifier
-    // navigator.onLine à chaque passage en visible corrige cet écart.
-    const auRetour = () => {
-      if (document.visibilityState === 'visible') setEnLigne(navigator.onLine)
+    // Resynchronise l'état réel à chaque retour au premier plan. Ne relit
+    // plus navigator.onLine : bug WebKit documenté et toujours ouvert
+    // (bugs.webkit.org #171277, #225645) — la propriété reste bloquée sur sa
+    // dernière valeur connue pendant une coupure réelle en PWA installée
+    // iOS (mode avion via le Centre de contrôle), confirmé sur le device de
+    // Bruce. Seule une requête réseau réelle dit la vérité.
+    const auRetour = async () => {
+      if (document.visibilityState !== 'visible') return
+      setEnLigne(await verifierConnexionReelle())
     }
     window.addEventListener('online', surLigne)
     window.addEventListener('offline', horsLigne)
@@ -125,14 +127,15 @@ function useFileAttente(enLigne) {
   // (voir useEnLigne ci-dessus), `enLigne` peut ne jamais avoir changé de
   // valeur dans cette session — l'effet au-dessus ne se redéclenche alors
   // jamais. On revérifie donc l'état réel directement ici à chaque retour au
-  // premier plan, sans dépendre de l'état React `enLigne` ni de `taille`
-  // (lue en direct dans le stockage plutôt que depuis la fermeture de cet
-  // effet, pour ne jamais rater une action mise en file entre-temps).
+  // premier plan, via une requête réseau réelle plutôt que navigator.onLine
+  // (bloqué sur sa dernière valeur connue dans ce contexte — voir
+  // useEnLigne). `taille` lue en direct dans le stockage plutôt que depuis
+  // la fermeture de cet effet, pour ne jamais rater une action mise en file
+  // entre-temps.
   useEffect(() => {
-    const auRetour = () => {
-      if (document.visibilityState === 'visible' && navigator.onLine && tailleFile() > 0) {
-        viderFile(executerActionEnFile)
-      }
+    const auRetour = async () => {
+      if (document.visibilityState !== 'visible' || tailleFile() === 0) return
+      if (await verifierConnexionReelle()) viderFile(executerActionEnFile)
     }
     document.addEventListener('visibilitychange', auRetour)
     return () => document.removeEventListener('visibilitychange', auRetour)
