@@ -16,6 +16,7 @@ import useConfirm from './hooks/useConfirm'
 import { tailleFile, ecouterTailleFile, viderFile } from './lib/fileAttente'
 import { supabase } from './lib/supabaseClient'
 import { assurerRappelDeRelance } from './lib/rappel'
+import DiagnosticReseau from './components/DiagnosticReseau'
 
 // Balayage depuis le bord gauche pour revenir. Le geste natif d'iOS est
 // capricieux sur une application à écran unique, et le défilement horizontal
@@ -143,6 +144,14 @@ function useFileAttente(enLigne) {
 export default function App() {
   const enLigne = useEnLigne()
   const tailleFileAttente = useFileAttente(enLigne)
+
+  // Panneau de diagnostic temporaire (voir DiagnosticReseau.jsx) — inerte en
+  // usage normal, ne se monte que derrière ?debug=reseau dans l'URL. Lu une
+  // seule fois : ce diagnostic ne suit pas une navigation en cours de
+  // session, seulement l'URL d'ouverture de l'app.
+  const [diagReseauActif] = useState(
+    () => new URLSearchParams(window.location.search).get('debug') === 'reseau'
+  )
 
   // Pile d'écrans doublée d'entrées dans l'historique du navigateur : le swipe
   // natif iOS et le bouton Retour du navigateur reviennent d'un écran, sans
@@ -314,6 +323,7 @@ export default function App() {
         {largeurLibre ? écran : <div className="max-w-2xl mx-auto">{écran}</div>}
       </Suspense>
       {boîteConfirmation}
+      {diagReseauActif && <DiagnosticReseau />}
     </>
   )
 }
