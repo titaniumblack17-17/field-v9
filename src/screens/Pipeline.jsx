@@ -198,12 +198,22 @@ function Column({ etape, dossiers, colRef, onOpen, onMove, dropId, actif, onSele
   )
 }
 
+// Mémorise la vue et la colonne actives d'une visite à l'autre : App.jsx ne
+// garde qu'un seul écran monté à la fois, donc Pipeline est démonté puis
+// remonté à neuf à chaque aller-retour vers une fiche — sans cette mémoire,
+// son propre useState repartait de zéro et l'effet de montage désignait
+// toujours la première colonne, quelle que soit celle quittée. Variables de
+// module plutôt que remontées dans App.jsx : aucun des sites qui lisent ou
+// écrivent vue/etapeVue plus bas dans ce fichier n'a besoin de changer.
+let vueMemorisee = 'projet'
+let etapeVueMemorisee = null
+
 export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   const [dossiers, setDossiers] = useState([])
   // Les deux pipelines n'ont ni le même vocabulaire d'étapes ni le même
   // volume : les montrer bout à bout obligeait à faire défiler loin pour
   // atteindre le SAV. Un seul kanban à l'écran à la fois, choisi ici.
-  const [vue, setVue] = useState('projet')
+  const [vue, setVue] = useState(() => vueMemorisee)
   const [activeDrag, setActiveDrag] = useState(null)
   const [aDeplacer, setADeplacer] = useState(null)
   const colRefs = useRef({})
@@ -221,7 +231,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   // Étape actuellement à gauche de l'écran. Suivre le défilement plutôt que le
   // dernier appui : sans ça, un balayage à la main laisserait la barre
   // désigner une étape qu'on a quittée.
-  const [etapeVue, setEtapeVue] = useState(null)
+  const [etapeVue, setEtapeVue] = useState(() => etapeVueMemorisee)
   const zoneRef = useRef(null)
   const pillRefs = useRef({})
 
@@ -238,6 +248,11 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   // le choix explicite. On l'ignore le temps que ça se stabilise.
   const ignorerDefilement = useRef(false)
   const minuteurDefilement = useRef(null)
+  // Vrai jusqu'au premier passage de l'effet de montage ci-dessous : sert à
+  // ne restaurer la colonne mémorisée qu'une fois par montage, pas à chaque
+  // changement de kanban en cours de session (où repartir sur la première
+  // colonne reste le bon comportement).
+  const auMontage = useRef(true)
 
   const suivreDefilement = useCallback((force = false) => {
     const zone = zoneRef.current
@@ -256,19 +271,6 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     }
   }, [etapeVue])
 
-  // Aucune étape n'est marquée tant qu'on n'a pas défilé, ni juste après un
-  // changement de kanban : on désigne donc la première dès que les colonnes
-  // du kanban choisi sont posées.
-  // suivreDefilement volontairement absente des dépendances : elle change
-  // d'identité à chaque etapeVue (via useCallback), l'ajouter ici referait
-  // tourner cet effet à chaque clic sur une pastille et écraserait la
-  // sélection explicite avant la fin du défilement — seuls un changement de
-  // kanban ou l'arrivée des dossiers doivent redéclencher le recalage
-  // automatique.
-  useEffect(() => {
-    if (dossiers.length) suivreDefilement(true)
-  }, [dossiers.length, vue])
-
   const allerA = useCallback((cle) => {
     ignorerDefilement.current = true
     if (minuteurDefilement.current) clearTimeout(minuteurDefilement.current)
@@ -281,6 +283,39 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
       block: 'nearest',
     })
   }, [])
+
+  // Aucune étape n'est marquée tant qu'on n'a pas défilé, ni juste après un
+  // changement de kanban : on désigne donc la première dès que les colonnes
+  // du kanban choisi sont posées — sauf au tout premier montage, où une
+  // colonne mémorisée d'une visite précédente (voir vueMemorisee ci-dessus)
+  // prime sur ce comportement par défaut.
+  // suivreDefilement volontairement absente des dépendances : elle change
+  // d'identité à chaque etapeVue (via useCallback), l'ajouter ici referait
+  // tourner cet effet à chaque clic sur une pastille et écraserait la
+  // sélection explicite avant la fin du défilement — seuls un changement de
+  // kanban ou l'arrivée des dossiers doivent redéclencher le recalage
+  // automatique.
+  useEffect(() => {
+    if (!dossiers.length) return
+    if (auMontage.current) {
+      auMontage.current = false
+      if (etapeVue) {
+        allerA(etapeVue)
+        return
+      }
+    }
+    suivreDefilement(true)
+  }, [dossiers.length, vue])
+
+  // Garde la mémoire à jour à chaque changement, qu'il vienne d'un clic, du
+  // défilement ou de la restauration ci-dessus — pour que le prochain
+  // montage reparte du dernier état vu, pas seulement du tout premier.
+  useEffect(() => {
+    vueMemorisee = vue
+  }, [vue])
+  useEffect(() => {
+    etapeVueMemorisee = etapeVue
+  }, [etapeVue])
 
   // Choisir une colonne au toucher, sans attendre que le défilement la
   // détecte : la mise en évidence doit réagir tout de suite, le recentrage
