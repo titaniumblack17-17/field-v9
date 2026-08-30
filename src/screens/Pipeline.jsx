@@ -261,6 +261,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   // le choix explicite. On l'ignore le temps que ça se stabilise.
   const ignorerDefilement = useRef(false)
   const minuteurDefilement = useRef(null)
+  const nettoyageEcouteursDefilement = useRef(null)
   // Vrai jusqu'au premier passage de l'effet de montage ci-dessous : sert à
   // ne restaurer la colonne mémorisée qu'une fois par montage, pas à chaque
   // changement de kanban en cours de session (où repartir sur la première
@@ -284,17 +285,47 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     }
   }, [etapeVue])
 
+  // Un délai fixe ne peut pas garantir qu'il couvre toute la durée réelle
+  // d'un scrollIntoView({behavior:'smooth'}) — un trajet plus long (ex.
+  // Prospect -> Devis à faire) prend plus de temps qu'un trajet court, et un
+  // délai calibré sur le court laisse échapper un événement de scroll en
+  // pleine animation, qui écrase alors la sélection avant qu'elle ne soit
+  // stabilisée. scrollend (natif, supporté sur Safari récent) dit avec
+  // certitude quand le défilement s'est vraiment arrêté ; un filet de
+  // secours par inactivité (se réarme à chaque scroll) couvre les
+  // navigateurs qui ne le supportent pas encore, sans deviner de durée.
   const allerA = useCallback((cle) => {
     ignorerDefilement.current = true
     if (minuteurDefilement.current) clearTimeout(minuteurDefilement.current)
-    minuteurDefilement.current = setTimeout(() => {
+    nettoyageEcouteursDefilement.current?.()
+
+    const zone = zoneRef.current
+    const reprogrammerSecours = () => {
+      if (minuteurDefilement.current) clearTimeout(minuteurDefilement.current)
+      minuteurDefilement.current = setTimeout(finir, 150)
+    }
+    const finir = () => {
       ignorerDefilement.current = false
-    }, 700)
+      minuteurDefilement.current = null
+      zone?.removeEventListener('scrollend', finir)
+      zone?.removeEventListener('scroll', reprogrammerSecours)
+      nettoyageEcouteursDefilement.current = null
+    }
+    nettoyageEcouteursDefilement.current = finir
+
+    zone?.addEventListener('scrollend', finir, { once: true })
+    zone?.addEventListener('scroll', reprogrammerSecours, { passive: true })
+    reprogrammerSecours()
+
     colRefs.current[cle]?.scrollIntoView({
       behavior: 'smooth',
       inline: 'start',
       block: 'nearest',
     })
+  }, [])
+
+  useEffect(() => {
+    return () => nettoyageEcouteursDefilement.current?.()
   }, [])
 
   // Aucune étape n'est marquée tant qu'on n'a pas défilé, ni juste après un
