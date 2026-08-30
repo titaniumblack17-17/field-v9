@@ -17,8 +17,16 @@ export default {
         separateur: teinte('separateur'),
         bordure: teinte('bordure'),
         accent: teinte('accent'),
+        // Valeur fixe (pas une variable CSS) : ce token porte déjà son
+        // opacité, contrairement aux autres qui la reçoivent via les
+        // modificateurs Tailwind (bg-accent/15).
+        'accent-doux': 'rgba(139, 146, 255, 0.14)',
         alerte: teinte('alerte'),
         erreur: teinte('erreur'),
+      },
+      borderRadius: {
+        carte: '16px',
+        imbrique: '12px',
       },
       fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
     },

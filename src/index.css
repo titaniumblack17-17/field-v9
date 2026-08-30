@@ -1,45 +1,35 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* Palette en canaux RVB séparés : ce format permet aux modificateurs
-   d'opacité de Tailwind (bg-fond/90) de continuer à fonctionner. */
+   d'opacité de Tailwind (bg-fond/90) de continuer à fonctionner.
+   Un seul thème, toujours sombre — l'app ne suit plus l'apparence système. */
 :root {
-  --fond: 245 244 240;
-  --carte: 255 255 255;
-  --carte-douce: 243 244 246;
-  --texte: 17 24 39;
-  --texte-doux: 107 114 128;
-  --texte-faible: 156 163 175;
-  --texte-fantome: 209 213 219;
-  --separateur: 243 244 246;
-  --bordure: 229 231 235;
-  --accent: 55 138 221;
-  --alerte: 217 119 6;
-  --erreur: 239 68 68;
-  color-scheme: light;
-}
-
-/* Suit le réglage d'apparence de l'appareil, sans bascule dans l'app :
-   l'iPhone passe en sombre, Field aussi. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --fond: 22 22 26;
-    --carte: 35 35 40;
-    --carte-douce: 46 46 53;
-    --texte: 242 242 240;
-    --texte-doux: 163 163 172;
-    --texte-faible: 124 124 134;
-    --texte-fantome: 85 85 94;
-    --separateur: 47 47 54;
-    --bordure: 58 58 66;
-    /* Bleu éclairci : le #378ADD d'origine manque de contraste sur fond sombre. */
-    --accent: 107 169 232;
-    --alerte: 240 169 59;
-    --erreur: 248 113 113;
-    color-scheme: dark;
-  }
+  --fond: 18 19 22;
+  --carte: 27 29 34;
+  /* Dérivé de --carte par le même écart proportionnel que l'ancienne
+     palette (+11 +11 +13) — pas de valeur donnée pour ce token, à valider
+     visuellement (pastilles, boutons secondaires). */
+  --carte-douce: 38 40 47;
+  --texte: 237 237 239;
+  --texte-doux: 139 139 147;
+  /* texte-faible et texte-fantome pointent temporairement vers la même
+     valeur que texte-doux : l'échelle à 3 niveaux fusionne en un seul, mais
+     retirer ces noms de classe maintenant casserait tout écran pas encore
+     migré. Les deux noms sont retirés une fois la passe écran par écran
+     terminée sur tous les écrans (voir docs/design). */
+  --texte-faible: 139 139 147;
+  --texte-fantome: 139 139 147;
+  /* Pas de valeur donnée pour separateur — aligné sur bordure, même rôle
+     structurel (division subtile), à valider visuellement. */
+  --separateur: 42 44 51;
+  --bordure: 42 44 51;
+  --accent: 139 146 255;
+  --alerte: 240 169 59;
+  --erreur: 248 113 113;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -55,7 +45,7 @@ body {
 .scrollbar-none::-webkit-scrollbar { display: none; }
 .scrollbar-none { scrollbar-width: none; }
 ::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-thumb { background: rgb(var(--texte-fantome)); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: rgb(var(--texte-doux)); border-radius: 2px; }
 
 /* Force le rendu sombre des contrôles natifs (sélecteurs de date, listes
    déroulantes), qui sinon restent blancs au milieu d'une fiche sombre. */
