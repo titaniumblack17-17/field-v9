@@ -16,6 +16,7 @@ import NoteTexte from '../components/NoteTexte'
 import TexteModifiable from '../components/TexteModifiable'
 import ChoixClient from '../components/ChoixClient'
 import Rubrique from '../components/Rubrique'
+import AccesCabinet from '../components/AccesCabinet'
 import useConfirm from '../hooks/useConfirm'
 import { SuggestionSav, SuggestionProjet, SuggestionPlan } from '../components/SuggestionCapture'
 import { creerDossierDepuisSuggestion, ignorerSuggestion } from '../lib/suggestions'
@@ -37,18 +38,29 @@ const libelleStatut = (d) => {
   return ETAPES_PROJET.find(([k]) => k === d.statut)?.[1] ?? d.statut
 }
 
-const FIELDS = [
+// Trois groupes plutôt qu'une liste plate : l'identité reste toujours
+// visible, l'adresse (rarement consultée une fois saisie) se replie, le
+// contact direct (portable/téléphone/e-mail du praticien) reste toujours
+// visible — c'est ce qu'on rappelle en visite, jamais ce qu'on replierait.
+const IDENTITE_FIELDS = [
   ['prenom_praticien', 'Prénom du praticien'],
   ['nom_praticien', 'Nom du praticien'],
   ['nom_cabinet', 'Cabinet'],
+]
+const ADRESSE_FIELDS = [
   ['adresse', 'Adresse'],
   ['code_postal', 'Code postal'],
   ['ville', 'Ville'],
+  ['email_cabinet', 'E-mail (cabinet)'],
+]
+const CONTACT_FIELDS = [
   ['telephone_portable', 'Portable (praticien)'],
   ['telephone_cabinet', 'Téléphone cabinet'],
   ['email', 'E-mail (praticien)'],
-  ['email_cabinet', 'E-mail (cabinet)'],
 ]
+// Concaténation conservée pour dirty()/save(), qui parcourent tous les
+// champs du formulaire sans distinguer leur groupe d'affichage.
+const FIELDS = [...IDENTITE_FIELDS, ...ADRESSE_FIELDS, ...CONTACT_FIELDS]
 
 const emptyPeople = (list) => (list?.length ? list : [{ prenom: '', nom: '', telephone: '' }])
 
@@ -197,6 +209,23 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   }
 
   const setField = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }))
+
+  // Un seul rendu pour les trois groupes de champs (identité, adresse,
+  // contact) : même style partout, un seul endroit à corriger si ça change.
+  const renderChamp = ([key, label]) => (
+    <div key={key} className="px-4 py-3">
+      <label className="text-xs text-texte-doux" htmlFor={key}>
+        {label}
+      </label>
+      <input
+        id={key}
+        value={values[key] ?? ''}
+        onChange={setField(key)}
+        placeholder="—"
+        className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome"
+      />
+    </div>
+  )
 
   // Une suggestion en attente ne doit jamais rester cachée derrière le
   // « Afficher toutes les entrées » : sinon on retombe dans le trou qu'on
@@ -617,7 +646,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       <header className="sticky top-0 z-10 bg-fond/90 backdrop-blur px-4 pt-6 pb-2 flex items-center gap-3">
         <button
           onClick={onBack}
-          className="text-accent text-sm font-medium h-11 -ml-2 pl-2 pr-1 flex items-center flex-shrink-0"
+          className="text-accent text-sm font-semibold h-11 -ml-2 pl-2 pr-1 flex items-center flex-shrink-0"
         >
           ← Clients
         </button>
@@ -628,32 +657,49 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
       <main className={`px-4 pt-2 ${dirty ? 'pb-28' : 'pb-8'}`}>
         <div className="flex items-center justify-between gap-2 mb-4">
-          <h1 className="text-2xl font-semibold text-texte">
+          <h1 className="text-2xl font-bold text-texte">
             {nomClient(client) ?? 'Client'}
           </h1>
           <button
             onClick={copierResume}
-            className="text-accent text-sm font-medium flex-shrink-0 h-11 px-2 -mr-2"
+            className="text-accent text-sm font-semibold flex-shrink-0 h-11 px-2 -mr-2"
           >
             {resumeCopie ? '✓ Copié' : 'Copier le résumé'}
           </button>
         </div>
 
-        <div className="bg-carte rounded-xl shadow-sm divide-y divide-separateur">
-          {FIELDS.map(([key, label]) => (
-            <div key={key} className="px-4 py-3">
-              <label className="text-xs text-texte-faible" htmlFor={key}>
-                {label}
-              </label>
-              <input
-                id={key}
-                value={values[key] ?? ''}
-                onChange={setField(key)}
-                placeholder="—"
-                className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome"
-              />
-            </div>
-          ))}
+        <div className="bg-carte rounded-carte shadow-sm divide-y divide-separateur">
+          {IDENTITE_FIELDS.map(renderChamp)}
+        </div>
+
+        {/* Consultée une fois à la création, rarement ensuite — repliée par
+            défaut, contrairement au contact direct juste en dessous. */}
+        <Rubrique titre="Adresse">
+          <div className="bg-carte rounded-carte shadow-sm divide-y divide-separateur">
+            {ADRESSE_FIELDS.map(renderChamp)}
+            <AccesCabinet
+              client={values}
+              onEnregistre={(data) => {
+                Object.assign(client, data)
+                setValues((v) => ({ ...v, digicode: data.digicode, etage: data.etage, ascenseur: data.ascenseur }))
+              }}
+            />
+          </div>
+        </Rubrique>
+
+        {/* Ce qu'on rappelle en visite : jamais replié. */}
+        <div className="bg-carte rounded-carte shadow-sm divide-y divide-separateur mt-4">
+          {CONTACT_FIELDS.map(renderChamp)}
+        </div>
+
+        <Rubrique titre="Associé(s) et assistante(s)">
+          <div className="bg-carte rounded-carte shadow-sm divide-y divide-separateur">
+            <PersonListField label="Associé(s)" people={associes} onChange={setAssocies} />
+            <PersonListField label="Assistante(s)" people={assistantes} onChange={setAssistantes} />
+          </div>
+        </Rubrique>
+
+        <div className="bg-carte rounded-carte shadow-sm divide-y divide-separateur mt-4">
           <ChampMultiChoix
             id="specialites"
             label="Spécialité(s)"
@@ -661,8 +707,6 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
             options={SPECIALITES.map((s) => [s, s])}
             onChange={(v) => setValues((x) => ({ ...x, specialites: v }))}
           />
-          <PersonListField label="Associé(s)" people={associes} onChange={setAssocies} />
-          <PersonListField label="Assistante(s)" people={assistantes} onChange={setAssistantes} />
           <ChampChoix
             id="source_type"
             label="D'où vient ce contact ?"
@@ -673,7 +717,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           />
           {values.source_type && (
             <div className="px-4 py-3">
-              <label className="text-xs text-texte-faible" htmlFor="source_detail">
+              <label className="text-xs text-texte-doux" htmlFor="source_detail">
                 {SOURCE_DETAIL_PLACEHOLDER[values.source_type]}
               </label>
               <input
@@ -712,7 +756,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           compte={dossiers.length}
           defautOuvert
           action={
-            <button onClick={() => onNewDossier(client)} className="text-accent text-sm font-medium h-11 px-2 -mr-2 inline-flex items-center">
+            <button onClick={() => onNewDossier(client)} className="text-accent text-sm font-semibold h-11 px-2 -mr-2 inline-flex items-center">
               + Nouveau dossier
             </button>
           }
@@ -725,7 +769,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           {erreurDossiers ? (
             <p className="text-erreur text-sm px-1">
               {erreurDossiers}{' '}
-              <button onClick={() => setTentativeDossiers((t) => t + 1)} className="text-accent font-medium">
+              <button onClick={() => setTentativeDossiers((t) => t + 1)} className="text-accent font-semibold">
                 Réessayer
               </button>
             </p>
@@ -740,12 +784,12 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                     <button
                       onClick={() => onOpenDossier(d)}
                       style={{ borderColor: s.bordure }}
-                      className="w-full text-left bg-carte rounded-xl px-4 py-3 shadow-sm border-l-[7px] active:scale-[0.98] transition"
+                      className="w-full text-left bg-carte rounded-carte px-4 py-3 shadow-sm border-l-[7px] active:scale-[0.98] transition"
                     >
                       <div className="flex items-center gap-2 mb-0.5">
                         <span
                           style={{ background: s.fond, color: s.texte }}
-                          className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
                         >
                           {s.badge}
                         </span>
@@ -759,12 +803,12 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                           </span>
                         )}
                         {PLAN_SANS_COMMERCIAL(d) && (
-                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-alerte/15 text-alerte">
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-alerte/15 text-alerte">
                             Commercial ?
                           </span>
                         )}
                       </div>
-                      <p className="font-medium text-texte">{d.titre || TYPE_LABELS[d.type]}</p>
+                      <p className="font-bold text-texte">{d.titre || TYPE_LABELS[d.type]}</p>
                       <p className="text-sm text-texte-doux">
                         {libelleStatut(d)}
                         {d.montant_estime != null ? ` · ${d.montant_estime} €` : ''}
@@ -798,14 +842,14 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           action={
             <button
               onClick={() => setAjoutInfoOuvert((v) => !v)}
-              className="text-accent text-sm font-medium h-11 px-2 -mr-2 inline-flex items-center"
+              className="text-accent text-sm font-semibold h-11 px-2 -mr-2 inline-flex items-center"
             >
               {ajoutInfoOuvert ? 'Fermer' : '+ Ajouter'}
             </button>
           }
         >
           {ajoutInfoOuvert && (
-            <div className="bg-carte rounded-xl shadow-sm p-3 mb-2">
+            <div className="bg-carte rounded-carte shadow-sm p-3 mb-2">
               <textarea
                 value={nouvelleInfo}
                 onChange={(e) => setNouvelleInfo(e.target.value)}
@@ -816,7 +860,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
               <button
                 onClick={ajouterInfo}
                 disabled={envoiInfo || !nouvelleInfo.trim()}
-                className="w-full mt-2 bg-accent text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
+                className="w-full mt-2 bg-accent text-white font-semibold rounded-imbrique py-3 shadow disabled:opacity-50"
               >
                 {envoiInfo ? 'Enregistrement…' : 'Ajouter'}
               </button>
@@ -829,7 +873,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
           <ul className="space-y-2">
             {infosAnnexes.map((info) => (
-              <li key={info.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
+              <li key={info.id} className="bg-carte rounded-carte px-4 py-3 shadow-sm">
                 {infoEnEdition === info.id ? (
                   <TexteModifiable
                     valeur={info.texte}
@@ -857,7 +901,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                   {infoEnEdition !== info.id && (
                     <button
                       onClick={() => setInfoEnEdition(info.id)}
-                      className="text-accent text-xs font-medium h-9 px-1"
+                      className="text-accent text-xs font-semibold h-9 px-1"
                     >
                       Modifier
                     </button>
@@ -883,7 +927,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
               journal.length > 2 && (
                 <button
                   onClick={() => setToutLeJournal((v) => !v)}
-                  className="text-accent text-xs font-medium h-9 px-2 -mr-2 flex items-center"
+                  className="text-accent text-xs font-semibold h-9 px-2 -mr-2 flex items-center"
                 >
                   {toutLeJournal ? 'Réduire' : `Afficher les ${journal.length} entrées`}
                 </button>
@@ -892,7 +936,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           >
             <ul className="space-y-2">
               {journalVisible.map((c) => (
-                <li key={c.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
+                <li key={c.id} className="bg-carte rounded-carte px-4 py-3 shadow-sm">
                   {captureEnEdition === c.id ? (
                     <TexteModifiable
                       valeur={c.resume || c.texte}
@@ -933,7 +977,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                     {captureEnEdition !== c.id && (
                       <button
                         onClick={() => setCaptureEnEdition(c.id)}
-                        className="text-accent text-xs font-medium h-9 px-1"
+                        className="text-accent text-xs font-semibold h-9 px-1"
                       >
                         Modifier
                       </button>
@@ -945,7 +989,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                             ? copierDansDossier(c, dossiers[0])
                             : setCaptureACopier(c)
                         }
-                        className="text-accent text-xs font-medium h-9 px-1"
+                        className="text-accent text-xs font-semibold h-9 px-1"
                       >
                         → Dossier
                       </button>
@@ -1003,14 +1047,14 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           <button
             onClick={() => setAFusionner(true)}
             disabled={fusion}
-            className="w-full text-accent text-sm font-medium py-3 disabled:opacity-50"
+            className="w-full text-accent text-sm font-semibold py-3 disabled:opacity-50"
           >
             {fusion ? 'Fusion…' : 'Fusionner avec une autre fiche'}
           </button>
           <button
             onClick={supprimer}
             disabled={suppression}
-            className="w-full text-erreur text-sm font-medium py-3 disabled:opacity-50"
+            className="w-full text-erreur text-sm font-semibold py-3 disabled:opacity-50"
           >
             {suppression ? 'Suppression…' : 'Supprimer ce client'}
           </button>
@@ -1032,16 +1076,16 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           onClick={() => setCaptureACopier(null)}
         >
           <div
-            className="bg-carte w-full rounded-t-2xl p-4 max-h-[75vh] overflow-y-auto"
+            className="bg-carte w-full rounded-t-carte p-4 max-h-[75vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-sm font-semibold text-texte mb-3">Copier dans quel dossier ?</p>
+            <p className="text-sm font-bold text-texte mb-3">Copier dans quel dossier ?</p>
             <div className="flex flex-col gap-2">
               {dossiers.map((d) => (
                 <button
                   key={d.id}
                   onClick={() => copierDansDossier(captureACopier, d)}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-bordure text-left text-sm text-texte-doux"
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-imbrique border border-bordure text-left text-sm text-texte-doux"
                 >
                   {d.titre || TYPE_LABELS[d.type]}
                 </button>
@@ -1049,7 +1093,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
             </div>
             <button
               onClick={() => setCaptureACopier(null)}
-              className="w-full mt-3 py-3 rounded-xl bg-carte-douce text-texte-doux text-sm font-medium"
+              className="w-full mt-3 py-3 rounded-imbrique bg-carte-douce text-texte-doux text-sm font-semibold"
             >
               Annuler
             </button>
@@ -1061,14 +1105,14 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
         <div className="fixed bottom-0 inset-x-0 bg-fond/95 backdrop-blur border-t border-bordure px-4 py-3 flex gap-2">
           <button
             onClick={annuler}
-            className="flex-1 bg-carte text-texte-doux font-medium rounded-xl py-3 shadow"
+            className="flex-1 bg-carte text-texte-doux font-semibold rounded-imbrique py-3 shadow"
           >
             Annuler
           </button>
           <button
             onClick={save}
             disabled={saving}
-            className="flex-1 bg-accent text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
+            className="flex-1 bg-accent text-white font-semibold rounded-imbrique py-3 shadow disabled:opacity-50"
           >
             {saving ? 'Enregistrement…' : 'Enregistrer'}
           </button>
