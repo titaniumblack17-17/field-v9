@@ -52,6 +52,11 @@ let enCours = false
  * tentative ; le vidage s'arrête au premier échec pour garder l'ordre
  * d'origine plutôt que de rejouer dans le désordre. Si un vidage est déjà en
  * cours, cet appel ne fait rien plutôt que de retraiter la même tête de file.
+ *
+ * Le résultat porte `erreur` (chaîne lisible « type: message ») quand le
+ * vidage s'est arrêté sur un échec — jusqu'ici cette erreur était juste
+ * avalée (`catch { break }`), rendant indiscernable « la sonde a cru le
+ * réseau bon mais l'action a quand même échoué » de tout autre blocage.
  */
 export async function viderFile(executer) {
   if (enCours) return { traitees: 0, restantes: tailleFile() }
@@ -59,17 +64,23 @@ export async function viderFile(executer) {
   try {
     const file = lireFile()
     const restantes = [...file]
+    let erreur
     while (restantes.length) {
       const action = restantes[0]
       try {
         await executer(action)
         restantes.shift()
         ecrireFile(restantes)
-      } catch {
+      } catch (e) {
+        erreur = `${action.type}: ${e?.message ?? String(e)}`
         break
       }
     }
-    return { traitees: file.length - restantes.length, restantes: restantes.length }
+    return {
+      traitees: file.length - restantes.length,
+      restantes: restantes.length,
+      ...(erreur && { erreur }),
+    }
   } finally {
     enCours = false
   }
