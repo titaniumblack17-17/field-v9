@@ -62,21 +62,21 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
       // fiches restent nettes, celles des colonnes voisines à peine visibles
       // s'effacent — sans ça, impossible de dire d'un coup d'œil dans quelle
       // étape on est vraiment quand deux colonnes se partagent l'écran.
-      className={`bg-carte rounded-xl border select-none cursor-pointer transition-all p-2.5 ${
+      className={`bg-carte rounded-carte border select-none cursor-pointer transition-all p-2.5 ${
         isDragging
-          ? 'shadow-xl rotate-1 opacity-90'
+          ? 'border-accent shadow-drag scale-105 rotate-1 opacity-95'
           : dansColonneActive
             ? 'border-accent/50 shadow-sm ring-1 ring-accent/30'
             : 'border-bordure shadow-sm opacity-40'
       }`}
     >
-      <p className="text-[13px] font-medium text-texte leading-tight mb-0.5">
+      <p className="text-[13px] font-bold text-texte leading-tight mb-0.5">
         {nomClient(client) ?? '—'}
       </p>
-      {dossier.titre && <p className="text-[11px] text-texte-faible mb-1 truncate">{dossier.titre}</p>}
+      {dossier.titre && <p className="text-[11px] text-texte-doux mb-1 truncate">{dossier.titre}</p>}
       {dossier.montant_estime != null && (
         <p className="text-[11px] text-texte-doux">
-          Estimé : <span className="font-medium text-texte">{dossier.montant_estime} €</span>
+          Estimé : <span className="font-semibold text-texte">{dossier.montant_estime} €</span>
         </p>
       )}
       {(() => {
@@ -105,7 +105,7 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
           en cours : il faut décider quoi en faire (relancer, perdu, refaire
           un devis), pas le laisser occuper la colonne indéfiniment. */}
       {joursDevisSansReponse(dossier) != null && (
-        <p className="text-[10px] font-medium text-alerte mt-1">
+        <p className="text-[10px] font-semibold text-alerte mt-1">
           ⚠ Sans réponse depuis {joursDevisSansReponse(dossier)} j
         </p>
       )}
@@ -120,19 +120,19 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
           plans en premier lieu par commercial destinataire, pas par étape. */}
       {dossier.type === 'plan' && dossier.commercial && (
         <p
-          className={`text-[10px] font-medium mt-1 truncate ${partage ? '' : 'text-texte-doux'}`}
+          className={`text-[10px] font-semibold mt-1 truncate ${partage ? '' : 'text-texte-doux'}`}
           style={partage ? { color: s.texte } : undefined}
         >
           👤 {COMMERCIAUX_LABELS[dossier.commercial] ?? dossier.commercial}
         </p>
       )}
       {PLAN_SANS_COMMERCIAL(dossier) && (
-        <p className="text-[10px] font-medium text-alerte mt-1">👤 Commercial ?</p>
+        <p className="text-[10px] font-semibold text-alerte mt-1">👤 Commercial ?</p>
       )}
       {/* Emprunté au Projet : jamais facturé, pas de commercial à préciser —
           la fiche le rappelle pour ne pas le confondre avec un vrai dossier Plan. */}
       {dossier.emprunte && (
-        <p className="text-[10px] font-medium text-texte-doux mt-1">👤 Vous — non facturé</p>
+        <p className="text-[10px] font-semibold text-texte-doux mt-1">👤 Vous — non facturé</p>
       )}
       {/* Le glisser-déposer ne peut pas franchir 14 colonnes sur un écran de
           téléphone : ce bouton ouvre la liste des étapes. */}
@@ -173,16 +173,16 @@ function Column({ etape, dossiers, colRef, onOpen, onMove, dropId, actif, onSele
         className="flex items-center justify-between px-1 pb-2 w-full text-left"
       >
         <span
-          className={`text-xs font-medium uppercase tracking-wider ${actif ? 'text-accent' : 'text-texte-doux'}`}
+          className={`text-xs font-semibold uppercase tracking-wider ${actif ? 'text-accent' : 'text-texte-doux'}`}
         >
           {etape[1]}
         </span>
         {dossiers.length > 0 && (
-          <span className="text-xs text-texte-faible bg-carte-douce px-1.5 py-0.5 rounded-full">{dossiers.length}</span>
+          <span className="text-xs text-texte-doux bg-carte-douce px-1.5 py-0.5 rounded-full">{dossiers.length}</span>
         )}
       </button>
       <div
-        className="flex flex-col gap-2 min-h-16 rounded-xl transition-colors p-1"
+        className="flex flex-col gap-2 min-h-16 rounded-imbrique transition-colors p-1"
         style={{ background: isOver ? 'rgb(var(--accent) / 0.15)' : 'transparent' }}
       >
         {dossiers.map((d) => (
@@ -461,15 +461,15 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   return (
     <div className="flex flex-col h-screen bg-fond">
       <header className="px-4 pt-6 pb-4 flex items-center gap-3 flex-shrink-0">
-        <button onClick={onBack} className="text-accent text-sm font-medium h-11 -ml-2 pl-2 pr-1 flex items-center">
+        <button onClick={onBack} className="text-accent text-sm font-semibold h-11 -ml-2 pl-2 pr-1 flex items-center">
           ← Clients
         </button>
-        <h1 className="text-lg font-semibold text-texte">Pipeline</h1>
+        <h1 className="text-lg font-bold text-texte">Pipeline</h1>
         <select
           value={vue}
           onChange={(e) => setVue(e.target.value)}
           aria-label="Choisir le kanban"
-          className="bg-carte text-texte-doux text-sm font-medium rounded-full h-9 pl-3 pr-2 outline-none border border-bordure"
+          className="bg-carte text-texte-doux text-sm font-semibold rounded-full h-9 pl-3 pr-2 outline-none border border-bordure"
         >
           <option value="projet">Projet · {dossiers.filter((d) => d.type === 'projet').length}</option>
           <option value="sav">SAV · {dossiers.filter((d) => d.type === 'sav').length}</option>
@@ -492,7 +492,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
         )}
       </header>
 
-      {chargement && <p className="text-texte-faible text-sm px-4">Chargement…</p>}
+      {chargement && <p className="text-texte-doux text-sm px-4">Chargement…</p>}
 
       {!chargement && !erreur && pipelineDepuisCache && (
         <p className="text-xs text-alerte px-4 mb-2">
@@ -515,12 +515,12 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
             key={cle}
             ref={(el) => { pillRefs.current[cle] = el }}
             onClick={() => selectionnerEtape(cle)}
-            className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 transition-colors ${
+            className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-semibold shadow-sm flex items-center gap-1.5 transition-colors ${
               etapeVue === cle ? 'bg-accent text-white' : 'bg-carte text-texte-doux'
             }`}
           >
             {libelle}
-            <span className={etapeVue === cle ? 'text-white/70' : 'text-texte-faible'}>
+            <span className={etapeVue === cle ? 'text-white/70' : 'text-texte-doux'}>
               {byEtape[cle].length}
             </span>
           </button>
@@ -539,12 +539,12 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
               setMontrerTermines(true)
               setTimeout(() => selectionnerEtape('termine'), 100)
             }}
-            className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 ${
-              etapeVue === 'termine' ? 'bg-accent text-white' : 'bg-carte text-texte-faible'
+            className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-semibold shadow-sm flex items-center gap-1.5 ${
+              etapeVue === 'termine' ? 'bg-accent text-white' : 'bg-carte text-texte-doux'
             }`}
           >
             Terminés
-            <span className={etapeVue === 'termine' ? 'text-white/70' : 'text-texte-fantome'}>
+            <span className={etapeVue === 'termine' ? 'text-white/70' : 'text-texte-doux'}>
               {byEtape.termine.length}
             </span>
           </button>
@@ -556,12 +556,12 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
               setMontrerPerdus(true)
               setTimeout(() => selectionnerEtape('perdu'), 100)
             }}
-            className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 ${
-              etapeVue === 'perdu' ? 'bg-accent text-white' : 'bg-carte text-texte-faible'
+            className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-semibold shadow-sm flex items-center gap-1.5 ${
+              etapeVue === 'perdu' ? 'bg-accent text-white' : 'bg-carte text-texte-doux'
             }`}
           >
             Perdus
-            <span className={etapeVue === 'perdu' ? 'text-white/70' : 'text-texte-fantome'}>
+            <span className={etapeVue === 'perdu' ? 'text-white/70' : 'text-texte-doux'}>
               {byEtape.perdu.length}
             </span>
           </button>
@@ -569,7 +569,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
         {nbVides > 0 && (
           <button
             onClick={() => setMontrerVides((v) => !v)}
-            className="flex-shrink-0 h-11 px-3 rounded-full bg-carte text-accent text-xs font-medium shadow-sm flex items-center"
+            className="flex-shrink-0 h-11 px-3 rounded-full bg-carte text-accent text-xs font-semibold shadow-sm flex items-center"
           >
             {montrerVides ? 'Masquer les vides' : `+ ${nbVides} vide${nbVides > 1 ? 's' : ''}`}
           </button>
@@ -586,12 +586,12 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
               key={cle}
               ref={(el) => { pillRefs.current[cle] = el }}
               onClick={() => selectionnerEtape(cle)}
-              className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 transition-colors ${
+              className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-semibold shadow-sm flex items-center gap-1.5 transition-colors ${
                 etapeVue === cle ? 'bg-accent text-white' : 'bg-carte text-texte-doux'
               }`}
             >
               {libelle}
-              <span className={etapeVue === cle ? 'text-white/70' : 'text-texte-faible'}>
+              <span className={etapeVue === cle ? 'text-white/70' : 'text-texte-doux'}>
                 {bySavEtape[cle].length}
               </span>
             </button>
@@ -606,12 +606,12 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
               key={cle}
               ref={(el) => { pillRefs.current[cle] = el }}
               onClick={() => selectionnerEtape(cle)}
-              className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 transition-colors ${
+              className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-semibold shadow-sm flex items-center gap-1.5 transition-colors ${
                 etapeVue === cle ? 'bg-accent text-white' : 'bg-carte text-texte-doux'
               }`}
             >
               {libelle}
-              <span className={etapeVue === cle ? 'text-white/70' : 'text-texte-faible'}>
+              <span className={etapeVue === cle ? 'text-white/70' : 'text-texte-doux'}>
                 {byPlanEtape[cle].length}
               </span>
             </button>
@@ -696,13 +696,13 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
           onClick={() => setADeplacer(null)}
         >
           <div
-            className="bg-carte w-full rounded-t-2xl p-4 max-h-[75vh] overflow-y-auto"
+            className="bg-carte w-full rounded-t-carte p-4 max-h-[75vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-sm font-semibold text-texte">
+            <p className="text-sm font-bold text-texte">
               {aDeplacer.clients ? (nomClient(aDeplacer.clients) ?? aDeplacer.titre) : aDeplacer.titre}
             </p>
-            <p className="text-xs text-texte-faible mb-4">Choisir la nouvelle étape</p>
+            <p className="text-xs text-texte-doux mb-4">Choisir la nouvelle étape</p>
 
             <div className="flex flex-col gap-2">
               {/* Le menu « Déplacer » doit proposer le vocabulaire du bon
@@ -719,9 +719,9 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
                   <button
                     key={valeur}
                     onClick={() => changerEtape(aDeplacer, valeur)}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left text-sm ${
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-imbrique border text-left text-sm ${
                       courante
-                        ? 'border-accent bg-accent/15 text-accent font-medium'
+                        ? 'border-accent bg-accent/15 text-accent font-semibold'
                         : 'border-bordure text-texte-doux'
                     }`}
                   >
@@ -734,7 +734,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
 
             <button
               onClick={() => setADeplacer(null)}
-              className="w-full mt-3 py-3 rounded-xl bg-carte-douce text-texte-doux text-sm font-medium"
+              className="w-full mt-3 py-3 rounded-imbrique bg-carte-douce text-texte-doux text-sm font-semibold"
             >
               Annuler
             </button>

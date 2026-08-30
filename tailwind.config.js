@@ -28,6 +28,13 @@ export default {
         carte: '16px',
         imbrique: '12px',
       },
+      boxShadow: {
+        // Élévation pendant le glisser-déposer : une assise sombre pour la
+        // profondeur (un shadow-xl classique reste quasi invisible sur un
+        // fond aussi sombre que --fond) + un halo en accent pour que la
+        // carte se détache clairement plutôt que par une simple bordure.
+        drag: '0 20px 40px -12px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(139, 146, 255, 0.45), 0 0 24px rgba(139, 146, 255, 0.3)',
+      },
       fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
     },
   },
