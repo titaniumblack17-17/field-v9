@@ -1,0 +1,40 @@
+# .graphifyignore — ce que Graphify ne doit jamais lire ni indexer.
+# Graphify respecte déjà .gitignore ; ce fichier ajoute une ceinture de sécurité
+# pour les secrets et les données clients réelles, même non suivis par git.
+
+# --- Secrets / clés (Supabase, Anthropic, tout token) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+**/secrets/**
+**/*secret*
+**/*credential*
+**/*.token
+
+# --- Données clients réelles (jamais dans le graphe) ---
+*.docx
+*.doc
+*.xlsx
+*.xls
+*.pdf
+*.csv
+*.numbers
+*.pages
+DUROT_PRO50S_202601002.docx
+raw/
+scans/
+photos/
+
+# --- Dépendances et artefacts de build ---
+node_modules/
+dist/
+build/
+.vite/
+coverage/
+
+# --- Sortie de Graphify elle-même ---
+graphify-out/

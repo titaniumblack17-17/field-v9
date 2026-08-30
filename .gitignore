@@ -3,6 +3,13 @@ dist
 .env
 .env.local
 
+# Graphe Graphify : généré localement, jamais commité (dépôt public).
+graphify-out/
+*.graphify-bak
+
+# Skill Graphify vendoré : régénérable par `graphify install --project`.
+.claude/skills/graphify/
+
 # Dépôt cloné à part, posé ici par accident : suivi par lui-même.
 agency-agents/
 
