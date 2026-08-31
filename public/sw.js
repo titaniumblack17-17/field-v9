@@ -3,7 +3,14 @@
 // le build). Ne fait rien d'autre : pas de mise en cache par route, pas de
 // stratégie réseau élaborée pour les données, pas de synchronisation en
 // arrière-plan. Les appels Supabase (autre origine) ne sont jamais interceptés.
-const CACHE = 'field-v9-shell-v1'
+//
+// __BUILD_VERSION__ est substitué à chaque `npm run build` (scripts/stamp-sw.mjs).
+// Sans ça, ce fichier est identique à chaque déploiement — le navigateur ne
+// réinstalle un service worker que s'il détecte un changement d'octets dans
+// sw.js lui-même, donc un contenu figé revient à ne jamais se mettre à jour,
+// quoi que change par ailleurs dans l'app (constaté en conditions réelles :
+// le bouton « + » restait bloqué sur une ancienne couleur indéfiniment).
+const CACHE = 'field-v9-shell-__BUILD_VERSION__'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "eslint src && vite build",
+    "build": "eslint src && vite build && node scripts/stamp-sw.mjs",
     "preview": "vite preview",
     "lint": "eslint src",
     "test": "node --test 'scripts/lib/**/*.test.mjs'"
