@@ -33,7 +33,14 @@ export default function ClientForm({ onCreated, onCancel }) {
   // appel à chaque frappe. Purement un confort : aucun blocage si elle ne
   // trouve rien, la saisie manuelle continue de fonctionner normalement.
   useEffect(() => {
-    const nom = (values.nom_cabinet || values.nom_praticien || '').trim()
+    // Prénom + nom du praticien, dans des champs séparés, doivent être
+    // recombinés pour la recherche — un nom de famille seul (ex. « Capela »)
+    // renvoie des centaines de résultats sans rapport, alors que « Capela
+    // Camille » retrouve directement le bon praticien (constaté en conditions
+    // réelles : la recherche fonctionnait par accident quand tout était tapé
+    // dans un seul champ, jamais quand Prénom/Nom étaient remplis séparément).
+    const nomPraticien = [values.prenom_praticien, values.nom_praticien].filter(Boolean).join(' ')
+    const nom = (values.nom_cabinet || nomPraticien || '').trim()
     const ville = (values.ville || '').trim()
     if (!nom || !ville) {
       setSuggestions([])
@@ -48,7 +55,7 @@ export default function ClientForm({ onCreated, onCancel }) {
       if (!erreurRecherche && data?.resultats) setSuggestions(data.resultats)
     }, 500)
     return () => clearTimeout(minuteur)
-  }, [values.nom_cabinet, values.nom_praticien, values.ville])
+  }, [values.nom_cabinet, values.prenom_praticien, values.nom_praticien, values.ville])
 
   // Un tap est une confirmation explicite de Bruce à ce moment précis : les
   // données officielles remplacent adresse/CP/ville, y compris l'orthographe

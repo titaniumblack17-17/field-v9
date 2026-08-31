@@ -89,10 +89,16 @@ Deno.serve(async (req: Request) => {
   // Jamais de blocage si l'API est indisponible ou répond mal : une
   // recherche d'adresse est un confort, pas une dépendance critique de la
   // création d'un client (manuelle ou dictée).
+  //
+  // per_page=25 (pas 10) : constaté en testant le correctif prénom+nom —
+  // l'API ne classe pas ses résultats par pertinence dentaire/géographique,
+  // un praticien au nom courant (ex. « Jean-Christophe Mathieu ») peut se
+  // retrouver 11e sur des centaines d'homonymes, donc absent des 10 premiers
+  // avant même que notre propre score (ville/NAF) n'ait pu s'appliquer.
   let bruts: any[] = []
   try {
     const apiRes = await fetch(
-      `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(q)}&per_page=10`
+      `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(q)}&per_page=25`
     )
     if (apiRes.ok) {
       const apiData = await apiRes.json()

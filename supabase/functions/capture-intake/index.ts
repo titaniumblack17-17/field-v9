@@ -406,8 +406,12 @@ peut-être fausse sans avertissement.
     cree = true
     // Nom + ville dictés : assez de signal pour tenter l'API gouv avant la
     // recherche web générale — sinon inutile de la solliciter pour rien.
+    // Prénom + nom doivent être recombinés : un nom de famille seul (ex.
+    // « Capela ») renvoie des centaines de résultats sans rapport côté API,
+    // même bug que celui trouvé et corrigé côté ClientForm.jsx.
     const idCree = client_id
-    const nomPourRecherche = champs.nom_cabinet || nomDicte
+    const nomCompletDicte = [champs.prenom_praticien, nomDicte].filter(Boolean).join(' ')
+    const nomPourRecherche = champs.nom_cabinet || nomCompletDicte
     const villeDictee = champs.ville
     EdgeRuntime.waitUntil(
       (villeDictee
