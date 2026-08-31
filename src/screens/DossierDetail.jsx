@@ -9,8 +9,10 @@ import ChampChoix from '../components/ChampChoix'
 import PiecesJointes from '../components/PiecesJointes'
 import Rappels from '../components/Rappels'
 import NoteTexte from '../components/NoteTexte'
+import NoteTaches from '../components/NoteTaches'
 import TexteModifiable from '../components/TexteModifiable'
 import { retirerRappelsTodoist, assurerRappelDeRelance } from '../lib/rappel'
+import { extrairePoints } from '../lib/notesTaches'
 import useConfirm from '../hooks/useConfirm'
 import usePrompt from '../hooks/usePrompt'
 import {
@@ -60,6 +62,12 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   const [confirmer, boîteConfirmation] = useConfirm()
   const [demanderTexte, boîtePrompt] = usePrompt()
   const [resumeCopie, setResumeCopie] = useState(false)
+  // Sous-tâches groupées par note (note_id -> tâches). Table séparée de
+  // dossier_notes plutôt que colonne dessus : une note garde son texte
+  // d'origine, les tâches ont chacune leur propre statut fait/pas fait.
+  const [taches, setTaches] = useState({})
+  const [ajoutTachePour, setAjoutTachePour] = useState(null)
+  const [texteNouvelleTache, setTexteNouvelleTache] = useState('')
 
   // Partager un dossier avec un collègue aujourd'hui, faute de compte
   // partagé dans Field V9, ça passe par un texte propre à coller dans un
@@ -80,6 +88,13 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
       return
     await supabase.from('dossier_notes').delete().eq('id', note.id)
     setNotes((cur) => cur.filter((n) => n.id !== note.id))
+    // La suppression cascade côté base (dossier_note_taches.note_id) ; ici
+    // c'est juste l'état local qui n'a plus de raison de garder ces tâches.
+    setTaches((cur) => {
+      if (!cur[note.id]) return cur
+      const { [note.id]: _retiree, ...reste } = cur
+      return reste
+    })
   }
 
   const s = styleDossier(values)
@@ -344,6 +359,132 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
       supabase.removeChannel(channel)
     }
   }, [dossier.id])
+
+  // dossier_id en doublon de note_id -> dossier_notes -> dossier_id : évite
+  // une jointure pour charger/filtrer, au prix d'une colonne redondante —
+  // même choix que dossier_notes lui-même vis-à-vis de dossiers.
+  useEffect(() => {
+    let active = true
+
+    supabase
+      .from('dossier_note_taches')
+      .select('*')
+      .eq('dossier_id', dossier.id)
+      .order('position', { ascending: true })
+      .then(({ data, error }) => {
+        if (!active || error) return
+        const groupees = {}
+        for (const t of data ?? []) {
+          ;(groupees[t.note_id] ??= []).push(t)
+        }
+        setTaches(groupees)
+      })
+
+    const channel = supabase
+      .channel(`dossier-note-taches-${dossier.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dossier_note_taches', filter: `dossier_id=eq.${dossier.id}` },
+        (payload) => {
+          setTaches((current) => {
+            if (payload.eventType === 'INSERT') {
+              const liste = current[payload.new.note_id] ?? []
+              if (liste.some((t) => t.id === payload.new.id)) return current
+              return {
+                ...current,
+                [payload.new.note_id]: [...liste, payload.new].sort((a, b) => a.position - b.position),
+              }
+            }
+            if (payload.eventType === 'UPDATE') {
+              const liste = current[payload.new.note_id] ?? []
+              return { ...current, [payload.new.note_id]: liste.map((t) => (t.id === payload.new.id ? payload.new : t)) }
+            }
+            if (payload.eventType === 'DELETE') {
+              const liste = current[payload.old.note_id] ?? []
+              return { ...current, [payload.old.note_id]: liste.filter((t) => t.id !== payload.old.id) }
+            }
+            return current
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      active = false
+      supabase.removeChannel(channel)
+    }
+  }, [dossier.id])
+
+  // Pas de suggestion si la note a déjà des tâches : reconvertir écraserait
+  // le compte fait/pas fait déjà en cours. ≥2 lignes de liste détectées ⇒
+  // conversion proposée, jamais automatique.
+  const suggestionPour = (note) => {
+    if (taches[note.id]?.length) return null
+    const { points } = extrairePoints(note.texte)
+    return points.length >= 2 ? points : null
+  }
+
+  const convertirEnTaches = async (note, points) => {
+    const { resteTexte } = extrairePoints(note.texte)
+    const lignes = points.map((texte, position) => ({
+      id: crypto.randomUUID(),
+      dossier_id: dossier.id,
+      note_id: note.id,
+      texte,
+      position,
+      fait: false,
+    }))
+    // Optimiste, y compris hors ligne (la file d'écriture rejoue l'insertion
+    // en arrière-plan) : la conversion doit se sentir instantanée pendant un
+    // appel. Le texte de la note n'est mis à jour qu'après l'insertion —
+    // mieux vaut une note pas encore convertie qu'une note vidée sans ses
+    // tâches si l'insertion échoue.
+    setTaches((cur) => ({ ...cur, [note.id]: [...(cur[note.id] ?? []), ...lignes] }))
+    setNotes((cur) => cur.map((n) => (n.id === note.id ? { ...n, texte: resteTexte } : n)))
+    const { error } = await supabase.from('dossier_note_taches').insert(lignes)
+    if (error) {
+      mettreEnFile({ type: 'note', table: 'dossier_note_taches', payload: lignes })
+    } else {
+      await supabase.from('dossier_notes').update({ texte: resteTexte }).eq('id', note.id)
+    }
+  }
+
+  const basculerTache = async (tache) => {
+    const fait = !tache.fait
+    setTaches((cur) => ({
+      ...cur,
+      [tache.note_id]: cur[tache.note_id].map((t) => (t.id === tache.id ? { ...t, fait } : t)),
+    }))
+    await supabase.from('dossier_note_taches').update({ fait }).eq('id', tache.id)
+  }
+
+  const supprimerTache = async (tache) => {
+    const extrait = tache.texte.length > 60 ? tache.texte.slice(0, 60) + '…' : tache.texte
+    if (!(await confirmer(`« ${extrait} »`, { titre: 'Supprimer cette tâche ?', confirmLabel: 'Supprimer' })))
+      return
+    setTaches((cur) => ({
+      ...cur,
+      [tache.note_id]: cur[tache.note_id].filter((t) => t.id !== tache.id),
+    }))
+    await supabase.from('dossier_note_taches').delete().eq('id', tache.id)
+  }
+
+  const ajouterTacheManuelle = async (note, texteBrut) => {
+    const texte = texteBrut.trim()
+    if (!texte) return
+    const existantes = taches[note.id] ?? []
+    const ligne = {
+      id: crypto.randomUUID(),
+      dossier_id: dossier.id,
+      note_id: note.id,
+      texte,
+      position: existantes.length,
+      fait: false,
+    }
+    setTaches((cur) => ({ ...cur, [note.id]: [...existantes, ligne] }))
+    const { error } = await supabase.from('dossier_note_taches').insert(ligne)
+    if (error) mettreEnFile({ type: 'note', table: 'dossier_note_taches', payload: ligne })
+  }
 
   const addNote = async () => {
     const texte = await demanderTexte('', {
@@ -628,7 +769,9 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
           )}
           {notes.length > 0 && (
             <ul className="space-y-2">
-              {(toutesNotes ? notes : notes.slice(0, APERCU_NOTES)).map((n) => (
+              {(toutesNotes ? notes : notes.slice(0, APERCU_NOTES)).map((n) => {
+                const suggestion = noteEnEdition === n.id ? null : suggestionPour(n)
+                return (
                 <li key={n.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
                   {noteEnEdition === n.id ? (
                     <TexteModifiable
@@ -642,7 +785,17 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
                       }}
                     />
                   ) : (
-                    <NoteTexte texte={n.texte} />
+                    <>
+                      {n.texte && <NoteTexte texte={n.texte} />}
+                      {suggestion && (
+                        <button
+                          onClick={() => convertirEnTaches(n, suggestion)}
+                          className="text-accent text-xs font-medium mt-2"
+                        >
+                          {suggestion.length} points détectés · Créer les tâches
+                        </button>
+                      )}
+                    </>
                   )}
                   <div className="flex items-center gap-3 mt-1">
                   <p className="text-xs text-texte-faible flex-1">
@@ -668,9 +821,44 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
                   >
                     Supprimer
                   </button>
+                  {noteEnEdition !== n.id && (
+                    <button
+                      onClick={() => setAjoutTachePour((cur) => (cur === n.id ? null : n.id))}
+                      className="text-accent text-xs font-medium h-9 px-1"
+                    >
+                      + Tâche
+                    </button>
+                  )}
                   </div>
+                  {ajoutTachePour === n.id && (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        if (!texteNouvelleTache.trim()) return
+                        ajouterTacheManuelle(n, texteNouvelleTache)
+                        setTexteNouvelleTache('')
+                        setAjoutTachePour(null)
+                      }}
+                      className="flex items-center gap-2 mt-2 bg-fond rounded-lg border border-bordure px-3 py-2"
+                    >
+                      <input
+                        autoFocus
+                        value={texteNouvelleTache}
+                        onChange={(e) => setTexteNouvelleTache(e.target.value)}
+                        placeholder="Nouvelle tâche…"
+                        className="flex-1 min-w-0 bg-transparent text-sm text-texte outline-none placeholder:text-texte-fantome"
+                      />
+                      <button type="submit" className="text-accent text-xs font-medium flex-shrink-0">
+                        Ajouter
+                      </button>
+                    </form>
+                  )}
+                  {taches[n.id]?.length > 0 && (
+                    <NoteTaches taches={taches[n.id]} onToggle={basculerTache} onDelete={supprimerTache} />
+                  )}
                 </li>
-              ))}
+                )
+              })}
             </ul>
           )}
         </div>
