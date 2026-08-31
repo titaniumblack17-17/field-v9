@@ -492,6 +492,18 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
     return { byEtape, bySavEtape, byPlanEtape }
   }, [dossiers])
 
+  // Compteurs des 3 onglets de kanban — mêmes formules que l'ancien menu
+  // déroulant, juste extraites pour ne plus tripler les .filter() à chaque
+  // rendu. Recalculés dès que `dossiers` change (temps réel, comme le reste
+  // de l'écran, déjà abonné aux mises à jour Supabase).
+  const compteurs = useMemo(() => ({
+    projet: dossiers.filter((d) => d.type === 'projet').length,
+    sav: dossiers.filter((d) => d.type === 'sav').length,
+    plan: dossiers.filter(
+      (d) => d.type === 'plan' || (d.type === 'projet' && ['a_faire', 'en_cours'].includes(d.plan_statut))
+    ).length,
+  }), [dossiers])
+
   // Une étape vide reste affichée si elle est la destination d'un glissé en
   // cours : la faire disparaître sous le doigt rendrait le dépôt impossible.
   const etapesVisibles = useMemo(
@@ -623,26 +635,36 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
 
   return (
     <div className="flex flex-col h-screen bg-fond">
-      <header className="px-4 pt-6 pb-4 flex items-center gap-3 flex-shrink-0">
+      {/* overflow-x-hidden ici seulement, pas sur le conteneur racine : les
+          colonnes du kanban plus bas défilent horizontalement à dessein,
+          seul le header (qui ne doit jamais déborder) a besoin du filet. */}
+      <header className="px-4 pt-6 pb-4 flex items-center gap-2 flex-shrink-0 overflow-x-hidden">
         <button onClick={onBack} className="text-accent text-sm font-semibold h-11 -ml-2 pl-2 pr-1 flex items-center">
           ← Clients
         </button>
-        <h1 className="text-lg font-bold text-texte">Pipeline</h1>
-        <select
-          value={vue}
-          onChange={(e) => setVue(e.target.value)}
-          aria-label="Choisir le kanban"
-          className="bg-carte text-texte-doux text-sm font-semibold rounded-full h-9 pl-3 pr-2 outline-none border border-bordure"
-        >
-          <option value="projet">Projet · {dossiers.filter((d) => d.type === 'projet').length}</option>
-          <option value="sav">SAV · {dossiers.filter((d) => d.type === 'sav').length}</option>
-          <option value="plan">
-            Plan ·{' '}
-            {dossiers.filter(
-              (d) => d.type === 'plan' || (d.type === 'projet' && ['a_faire', 'en_cours'].includes(d.plan_statut))
-            ).length}
-          </option>
-        </select>
+        {/* Pas de titre « Pipeline » séparé : les 3 onglets juste à côté
+            (Projet/Plan/SAV) disent déjà où on est — sur iPhone (375px), le
+            titre en plus des onglets et du bouton « + » ne tenait pas sans
+            déborder (vérifié : "SAV" coupé, body.scrollWidth > viewport). */}
+        <div className="flex items-center gap-1">
+          {[
+            ['projet', 'Projet'],
+            ['plan', 'Plan'],
+            ['sav', 'SAV'],
+          ].map(([cle, libelle]) => (
+            <button
+              key={cle}
+              onClick={() => setVue(cle)}
+              aria-label={`Kanban ${libelle}`}
+              className={`flex-shrink-0 h-9 px-2 rounded-full text-xs font-semibold flex items-center gap-1 transition-colors ${
+                vue === cle ? 'bg-accent text-white' : 'bg-carte text-texte-doux border border-bordure'
+              }`}
+            >
+              {libelle}
+              <span className={vue === cle ? 'text-white/70' : 'text-texte-doux'}>{compteurs[cle]}</span>
+            </button>
+          ))}
+        </div>
         <div className="flex-1" />
         {onCreate && (
           <button
