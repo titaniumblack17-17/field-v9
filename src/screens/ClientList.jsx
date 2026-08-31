@@ -23,7 +23,7 @@ const normalize = (s) =>
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
 
-export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, onBrief, onCatalogue }) {
+export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, onBrief }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -142,39 +142,39 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
   }
 
   return (
-    <div className="min-h-screen bg-fond">
-      <header className="sticky top-0 z-10 bg-fond/90 backdrop-blur px-4 pt-6 pb-3">
+    <div className="min-h-screen bg-fond overflow-x-hidden">
+      {/* overflow-x-hidden ici et sur le header : filet de sécurité pour que
+          le débordement du groupe de pilules de nav (voulu, contenu dans son
+          propre défilement) ne puisse jamais, par une subtilité de calcul de
+          largeur flex propre à un moteur donné, se répercuter sur la page
+          entière — c'est justement ce qui s'est produit sur iPhone. */}
+      <header className="sticky top-0 z-10 bg-fond/90 backdrop-blur px-4 pt-6 pb-3 overflow-x-hidden">
         <div className="flex items-center justify-between gap-2 mb-3">
-          <h1 className="text-xl font-bold text-texte">Clients</h1>
-          <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold text-texte flex-shrink-0">Clients</h1>
+          {/* 3 pilules tiennent nativement sur un iPhone standard
+              (375-430px) avec ce padding resserré (px-4→px-2, gap-2→gap-1.5,
+              respiration dédiée de Pipeline retirée) — plus besoin du
+              conteneur à défilement horizontal qu'il fallait avec 4
+              pilules. */}
+          <div className="flex items-center gap-1.5 min-w-0">
             <button
               onClick={onBrief}
               aria-label="Brief soir"
-              className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-semibold shadow"
+              className="flex-shrink-0 px-2 h-11 rounded-full bg-carte text-accent text-sm font-semibold shadow"
             >
               Brief
             </button>
-            {/* Pipeline respire davantage de ses voisins (marge en plus du
-                gap-2 du groupe) : c'est l'action de nav la plus utilisée,
-                elle mérite de se détacher plutôt que de se fondre dans une
-                rangée à espacement uniforme. */}
             <button
               onClick={onPipeline}
-              className="px-4 h-11 mx-2 rounded-full bg-carte text-accent text-sm font-semibold shadow"
+              className="flex-shrink-0 px-2 h-11 rounded-full bg-carte text-accent text-sm font-semibold shadow"
             >
               Pipeline
             </button>
             <button
               onClick={onCapture}
-              className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-semibold shadow"
+              className="flex-shrink-0 px-2 h-11 rounded-full bg-carte text-accent text-sm font-semibold shadow"
             >
               Capture
-            </button>
-            <button
-              onClick={onCatalogue}
-              className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-semibold shadow"
-            >
-              Catalogue
             </button>
             {/* Action principale de l'écran : plus grande que les pilules de
                 nav (48px vs 44px) et dans la variante accent-vif (cyan,

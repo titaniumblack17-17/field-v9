@@ -314,6 +314,9 @@ export default function App() {
       />
     )
   } else if (view.name === 'catalogue') {
+    // Plus de pilule dans la nav de ClientList (retirée, trop peu utilisée
+    // pour sa place dans la nav principale) — la route reste volontairement
+    // câblée, accessible si un point d'entrée redevient utile plus tard.
     écran = <Catalogue onBack={back} />
   } else if (view.name === 'dossier-create') {
     écran = (
@@ -340,7 +343,6 @@ export default function App() {
         onCapture={() => push({ name: 'capture' })}
         onPipeline={() => push({ name: 'pipeline' })}
         onBrief={() => push({ name: 'brief' })}
-        onCatalogue={() => push({ name: 'catalogue' })}
       />
     )
   }
