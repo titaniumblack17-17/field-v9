@@ -105,58 +105,44 @@ function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTi
   )
 }
 
-function Section({ sectionRef, titre, compte, urgent, vide, repliable, ouverte, onToggle, children }) {
-  // Une section qui réclame une décision ce soir (SAV bloquant, devis
-  // oublié, retard) se voit avant même de lire le chiffre : titre en clair
-  // plutôt qu'en petites capitales, compteur sur pastille colorée plutôt
-  // que gris neutre. Le reste garde la sobriété d'une liste de suivi.
-  const actif = urgent && compte > 0
-  // repliable : même chevron ▶ (rotate-90 ouvert) que les cartes-résumé du
-  // premier regard — voir le compteur d'une section sans défiler tout son
-  // détail. Réservé aux sections sans résumé plus haut (Rappels à venir,
-  // Plans, Règlements, À chiffrer) : SAV/Devis/À rappeler restent toujours
-  // ouvertes ici, on y arrive via « Voir les N autres » depuis leur
-  // carte-résumé — un second tap pour voir ce qu'on est venu chercher
-  // serait absurde. État contrôlé par le parent (pas un useState local) :
-  // sauter à une section via une pastille doit pouvoir la forcer ouverte.
-  const peutReplier = repliable && compte > 0
-  const estOuverte = peutReplier ? ouverte : true
-
-  const titreEtCompte = (
-    <>
-      <h2 className={actif ? 'text-sm font-semibold text-texte' : 'text-xs text-texte-faible uppercase tracking-wider'}>
-        {titre}
-      </h2>
-      {compte > 0 &&
-        (actif ? (
-          <span className="text-xs font-semibold text-alerte bg-alerte/10 rounded-full px-2 py-0.5">
-            {compte}
-          </span>
-        ) : (
-          <span className="text-xs text-texte-faible">{compte}</span>
-        ))}
-    </>
-  )
-
+// En-tête partagé par Section et CarteResume : une seule apparence de carte
+// repliable (chevron ▶ rotate-90 à l'ouverture, compteur coloré à droite)
+// pour toute la page, du premier regard jusqu'à « À chiffrer » — jamais de
+// section qui détonne visuellement des deux autres. Toujours affiché, même
+// à 0 : le chevron ne se cache pas selon le contenu, seul le corps change.
+function EnTeteCarte({ titre, compte, urgent, ouverte, onToggle }) {
   return (
-    <section ref={sectionRef} className="mt-6 scroll-mt-32">
-      <div className="flex items-baseline gap-2 px-1 mb-2">
-        {peutReplier ? (
-          <button onClick={onToggle} className="flex items-baseline gap-2 h-9 -ml-1 pl-1 pr-2 flex-1 text-left">
-            <span
-              className={`text-texte-faible text-[10px] self-center transition-transform ${estOuverte ? 'rotate-90' : ''}`}
-              aria-hidden="true"
-            >
-              ▶
-            </span>
-            {titreEtCompte}
-          </button>
-        ) : (
-          titreEtCompte
-        )}
-      </div>
-      {estOuverte &&
-        (compte === 0 ? <p className="text-texte-faible text-sm px-1">{vide}</p> : <ul className="space-y-2">{children}</ul>)}
+    <button onClick={onToggle} className="w-full flex items-center gap-2 px-4 py-3 text-left">
+      <span
+        className={`text-texte-faible text-[10px] flex-shrink-0 transition-transform ${ouverte ? 'rotate-90' : ''}`}
+        aria-hidden="true"
+      >
+        ▶
+      </span>
+      <span className="flex-1 text-sm font-medium text-texte truncate">{titre}</span>
+      <span className={`text-sm font-semibold flex-shrink-0 ${urgent ? 'text-alerte' : 'text-texte-doux'}`}>
+        {compte}
+      </span>
+    </button>
+  )
+}
+
+// État ouvert/fermé toujours contrôlé par le parent (pas de useState local) :
+// sauter à une section via une pastille ou un lien « Voir les N autres »
+// doit pouvoir la forcer ouverte avant d'y défiler.
+function Section({ sectionRef, titre, compte, urgent, vide, ouverte, onToggle, children }) {
+  return (
+    <section ref={sectionRef} className="mt-6 scroll-mt-32 bg-carte rounded-xl overflow-hidden">
+      <EnTeteCarte titre={titre} compte={compte} urgent={urgent && compte > 0} ouverte={ouverte} onToggle={onToggle} />
+      {ouverte && (
+        <div className="px-4 pb-3">
+          {compte === 0 ? (
+            <p className="text-texte-faible text-sm">{vide}</p>
+          ) : (
+            <ul className="space-y-2">{children}</ul>
+          )}
+        </div>
+      )}
     </section>
   )
 }
@@ -165,47 +151,32 @@ function Section({ sectionRef, titre, compte, urgent, vide, repliable, ouverte, 
 // Devis sans réponse — l'Objectif s'affiche à part, en jauge complète juste
 // au-dessus). Le compte et les 2 dossiers les plus urgents sont visibles
 // sans taper : le tap replie/déplie pour dégager de la place une fois le
-// point fait, jamais pour révéler une info qui devrait déjà être là. Même
-// chevron (▶, rotate-90 à l'ouverture) que Rubrique.jsx, pour rester dans
-// le même langage d'interaction que le reste de l'app.
+// point fait, jamais pour révéler une info qui devrait déjà être là.
 function CarteResume({ titre, compte, urgent, vide, items, onVoirTout }) {
   const [ouverte, setOuverte] = useState(compte > 0)
-
-  if (compte === 0) {
-    return (
-      <div className="bg-carte rounded-xl px-4 py-3 flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-texte">{titre}</span>
-        <span className="text-xs text-texte-doux">{vide}</span>
-      </div>
-    )
-  }
-
   const restants = compte - items.length
 
   return (
     <div className="bg-carte rounded-xl overflow-hidden">
-      <button onClick={() => setOuverte((v) => !v)} className="w-full flex items-center gap-2 px-4 py-3 text-left">
-        <span
-          className={`text-texte-faible text-[10px] transition-transform ${ouverte ? 'rotate-90' : ''}`}
-          aria-hidden="true"
-        >
-          ▶
-        </span>
-        <span className="flex-1 text-sm font-medium text-texte">{titre}</span>
-        <span className={`text-sm font-semibold ${urgent ? 'text-alerte' : 'text-texte-doux'}`}>{compte}</span>
-      </button>
+      <EnTeteCarte titre={titre} compte={compte} urgent={urgent} ouverte={ouverte} onToggle={() => setOuverte((v) => !v)} />
       {ouverte && (
-        <div className="px-4 pb-3 space-y-1.5">
-          {items.map((it) => (
-            <div key={it.id} className="flex items-center justify-between gap-2 text-xs">
-              <span className="text-texte truncate">{it.nom}</span>
-              <span className={`flex-shrink-0 ${it.classe}`}>{it.droite}</span>
+        <div className="px-4 pb-3">
+          {compte === 0 ? (
+            <p className="text-xs text-texte-doux">{vide}</p>
+          ) : (
+            <div className="space-y-1.5">
+              {items.map((it) => (
+                <div key={it.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-texte truncate">{it.nom}</span>
+                  <span className={`flex-shrink-0 ${it.classe}`}>{it.droite}</span>
+                </div>
+              ))}
+              {restants > 0 && (
+                <button onClick={onVoirTout} className="text-accent text-xs pt-0.5">
+                  Voir {restants > 1 ? `les ${restants} autres` : `l'autre`} →
+                </button>
+              )}
             </div>
-          ))}
-          {restants > 0 && (
-            <button onClick={onVoirTout} className="text-accent text-xs pt-0.5">
-              Voir {restants > 1 ? `les ${restants} autres` : `l'autre`} →
-            </button>
           )}
         </div>
       )}
@@ -227,11 +198,13 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   // directement à la section concernée.
   const sectionRefs = useRef({})
 
-  // Repliées par défaut (Rappels à venir, Plans, Règlements, À chiffrer) :
-  // clé absente = repliée. État levé ici plutôt que dans Section, pour
-  // qu'une pastille ou un lien « Voir les N autres » puisse forcer
-  // l'ouverture de sa cible avant d'y sauter.
-  const [sectionsOuvertes, setSectionsOuvertes] = useState({})
+  // SAV/Devis/À rappeler ouvertes par défaut (on y arrive via « Voir les N
+  // autres » depuis leur carte-résumé — un second tap pour voir ce qu'on est
+  // venu chercher serait absurde) ; Rappels à venir/Plans/Règlements/À
+  // chiffrer repliées par défaut (clé absente). État levé ici plutôt que
+  // local à chaque section, pour qu'une pastille ou un lien « Voir les N
+  // autres » puisse forcer l'ouverture de sa cible avant d'y sauter.
+  const [sectionsOuvertes, setSectionsOuvertes] = useState({ sav: true, devis: true, rappeler: true })
   const toggleSection = (cle) => setSectionsOuvertes((s) => ({ ...s, [cle]: !s[cle] }))
   const allerASection = (cle) => {
     // Le haut de la section ne bouge pas quand son contenu se déplie en
@@ -536,6 +509,8 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               compte={bilan.savOuverts.length}
               urgent={bilan.savOuverts.some((d) => d.statut !== 'en_attente')}
               vide="Aucun SAV en cours."
+              ouverte={!!sectionsOuvertes.sav}
+              onToggle={() => toggleSection('sav')}
             >
               {bilan.savOuverts.map((d) => (
                 <Ligne
@@ -559,6 +534,8 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               compte={bilan.devisSansReponse.length}
               urgent
               vide="Aucun devis oublié."
+              ouverte={!!sectionsOuvertes.devis}
+              onToggle={() => toggleSection('devis')}
             >
               {bilan.devisSansReponse.map((d) => (
                 <Ligne
@@ -577,6 +554,8 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               compte={bilan.aRappeler.length}
               urgent
               vide="Aucun rappel en retard. "
+              ouverte={!!sectionsOuvertes.rappeler}
+              onToggle={() => toggleSection('rappeler')}
             >
               {bilan.aRappeler.map((d) => (
                 <Ligne
@@ -597,7 +576,6 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               titre="Rappels à venir"
               compte={bilan.aVenir.length}
               vide="Rien de programmé."
-              repliable
               ouverte={!!sectionsOuvertes.avenir}
               onToggle={() => toggleSection('avenir')}
             >
@@ -619,7 +597,6 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               titre="Plans à produire"
               compte={bilan.plansAProduire.length}
               vide="Aucun plan en attente."
-              repliable
               ouverte={!!sectionsOuvertes.plans}
               onToggle={() => toggleSection('plans')}
             >
@@ -643,7 +620,6 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               compte={bilan.reglements.length}
               urgent={bilan.reglements.some((d) => d.statut === 'reglement_demande')}
               vide="Aucun plan en attente de règlement."
-              repliable
               ouverte={!!sectionsOuvertes.reglements}
               onToggle={() => toggleSection('reglements')}
             >
@@ -684,7 +660,6 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               titre="À chiffrer"
               compte={bilan.sansMontant.length}
               vide="Tous les dossiers actifs sont chiffrés."
-              repliable
               ouverte={!!sectionsOuvertes.chiffrer}
               onToggle={() => toggleSection('chiffrer')}
             >
