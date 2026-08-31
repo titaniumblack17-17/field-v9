@@ -131,6 +131,58 @@ function Section({ sectionRef, titre, compte, urgent, vide, children }) {
   )
 }
 
+// Une carte par information critique du premier regard (SAV, À rappeler,
+// Devis sans réponse — l'Objectif s'affiche à part, en jauge complète juste
+// au-dessus). Le compte et les 2 dossiers les plus urgents sont visibles
+// sans taper : le tap replie/déplie pour dégager de la place une fois le
+// point fait, jamais pour révéler une info qui devrait déjà être là. Même
+// chevron (▶, rotate-90 à l'ouverture) que Rubrique.jsx, pour rester dans
+// le même langage d'interaction que le reste de l'app.
+function CarteResume({ titre, compte, urgent, vide, items, onVoirTout }) {
+  const [ouverte, setOuverte] = useState(compte > 0)
+
+  if (compte === 0) {
+    return (
+      <div className="bg-carte rounded-xl px-4 py-3 flex items-center justify-between gap-2">
+        <span className="text-sm font-medium text-texte">{titre}</span>
+        <span className="text-xs text-texte-doux">{vide}</span>
+      </div>
+    )
+  }
+
+  const restants = compte - items.length
+
+  return (
+    <div className="bg-carte rounded-xl overflow-hidden">
+      <button onClick={() => setOuverte((v) => !v)} className="w-full flex items-center gap-2 px-4 py-3 text-left">
+        <span
+          className={`text-texte-faible text-[10px] transition-transform ${ouverte ? 'rotate-90' : ''}`}
+          aria-hidden="true"
+        >
+          ▶
+        </span>
+        <span className="flex-1 text-sm font-medium text-texte">{titre}</span>
+        <span className={`text-sm font-semibold ${urgent ? 'text-alerte' : 'text-texte-doux'}`}>{compte}</span>
+      </button>
+      {ouverte && (
+        <div className="px-4 pb-3 space-y-1.5">
+          {items.map((it) => (
+            <div key={it.id} className="flex items-center justify-between gap-2 text-xs">
+              <span className="text-texte truncate">{it.nom}</span>
+              <span className={`flex-shrink-0 ${it.classe}`}>{it.droite}</span>
+            </div>
+          ))}
+          {restants > 0 && (
+            <button onClick={onVoirTout} className="text-accent text-xs pt-0.5">
+              Voir {restants > 1 ? `les ${restants} autres` : `l'autre`} →
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function BriefSoir({ onBack, onOpenDossier }) {
   const [dossiers, setDossiers] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -138,10 +190,11 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   const [tentative, setTentative] = useState(0)
   const [demanderTexte, boîtePrompt] = usePrompt()
 
-  // Huit sections avant la jauge : sans repère, une lecture rapide oblige à
-  // tout traverser pour savoir si quelque chose presse. Les pastilles
-  // ci-dessous donnent la réponse d'un coup d'œil et sautent directement
-  // à la section concernée.
+  // Premier regard : jauge Objectif + cartes-résumé (À rappeler, SAV,
+  // Devis) tout en haut, sans défiler. Les pastilles plus bas (Rappels à
+  // venir, Plans, Règlements, À chiffrer inclus) et les liens « Voir les
+  // N autres » des cartes-résumé partagent les mêmes refs pour sauter
+  // directement à la section concernée.
   const sectionRefs = useRef({})
   const allerASection = (cle) =>
     sectionRefs.current[cle]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -341,23 +394,6 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
           </button>
           <h1 className="text-lg font-semibold text-texte">Brief soir</h1>
         </header>
-
-        {!chargement && pastilles.length > 0 && (
-          <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto">
-            {pastilles.map((p) => (
-              <button
-                key={p.cle}
-                onClick={() => allerASection(p.cle)}
-                className={`flex-shrink-0 h-9 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 ${
-                  p.urgent ? 'bg-alerte/10 text-alerte' : 'bg-carte text-texte-doux'
-                }`}
-              >
-                {p.titre}
-                <span className={p.urgent ? 'text-alerte/70' : 'text-texte-faible'}>{p.compte}</span>
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       <main className="px-4 pb-8">
@@ -369,6 +405,90 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
 
         {!chargement && !erreur && (
           <>
+            <section className="mt-6">
+              <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mb-2">
+                Objectif {bilan.annee}
+              </h2>
+              <JaugeObjectif
+                annee={bilan.annee}
+                projection={bilan.projection}
+                signe={bilan.signe}
+                facture={bilan.facture}
+                reportables={bilan.reportables}
+              />
+              {bilan.planFacture > 0 && (
+                <p className="text-xs text-texte-doux mt-2 px-1">
+                  Casquette technique, hors objectif : {bilan.planFacture} plan
+                  {bilan.planFacture > 1 ? 's' : ''} soldé{bilan.planFacture > 1 ? 's' : ''} ·{' '}
+                  {euros(bilan.planFacture * 500)}
+                </p>
+              )}
+            </section>
+
+            {/* Pas dans les 4 informations du premier regard demandées :
+                l'alerte pousserait « Devis sans réponse » sous la ligne de
+                flottaison à 375px quand elle est active. Elle reste juste
+                avant « À chiffrer », la section qu'elle concerne. */}
+
+            <div className="mt-4 space-y-2">
+              <CarteResume
+                titre="À rappeler"
+                compte={bilan.aRappeler.length}
+                urgent={bilan.aRappeler.length > 0}
+                vide="Aucun rappel en retard."
+                items={bilan.aRappeler.slice(0, 2).map((d) => ({
+                  id: d.id,
+                  nom: nomClient(d.clients) ?? '—',
+                  droite: etatRappel(d.rappel_date, d.rappel_heure)?.texte,
+                  classe: etatRappel(d.rappel_date, d.rappel_heure)?.classe,
+                }))}
+                onVoirTout={() => allerASection('rappeler')}
+              />
+              <CarteResume
+                titre="SAV ouverts"
+                compte={bilan.savOuverts.length}
+                urgent={bilan.savOuverts.some((d) => d.statut !== 'en_attente')}
+                vide="Aucun SAV en cours."
+                items={bilan.savOuverts.slice(0, 2).map((d) => ({
+                  id: d.id,
+                  nom: nomClient(d.clients) ?? '—',
+                  droite: STATUTS_SAV_LABELS[d.statut] ?? d.statut,
+                  classe: d.statut !== 'en_attente' ? 'text-alerte font-medium' : 'text-texte-doux',
+                }))}
+                onVoirTout={() => allerASection('sav')}
+              />
+              <CarteResume
+                titre="Devis sans réponse"
+                compte={bilan.devisSansReponse.length}
+                urgent={bilan.devisSansReponse.length > 0}
+                vide="Aucun devis oublié."
+                items={bilan.devisSansReponse.slice(0, 2).map((d) => ({
+                  id: d.id,
+                  nom: nomClient(d.clients) ?? '—',
+                  droite: `${joursDevisSansReponse(d)} j`,
+                  classe: 'text-alerte font-medium',
+                }))}
+                onVoirTout={() => allerASection('devis')}
+              />
+            </div>
+
+            {pastilles.length > 0 && (
+              <div className="flex gap-1.5 overflow-x-auto mt-6 pb-1">
+                {pastilles.map((p) => (
+                  <button
+                    key={p.cle}
+                    onClick={() => allerASection(p.cle)}
+                    className={`flex-shrink-0 h-9 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 ${
+                      p.urgent ? 'bg-alerte/10 text-alerte' : 'bg-carte text-texte-doux'
+                    }`}
+                  >
+                    {p.titre}
+                    <span className={p.urgent ? 'text-alerte/70' : 'text-texte-faible'}>{p.compte}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <Section
               sectionRef={(el) => (sectionRefs.current.sav = el)}
               titre="SAV ouverts"
@@ -494,28 +614,8 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               </p>
             )}
 
-            <section className="mt-6">
-              <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mb-2">
-                Objectif {bilan.annee}
-              </h2>
-              <JaugeObjectif
-                annee={bilan.annee}
-                projection={bilan.projection}
-                signe={bilan.signe}
-                facture={bilan.facture}
-                reportables={bilan.reportables}
-              />
-              {bilan.planFacture > 0 && (
-                <p className="text-xs text-texte-doux mt-2 px-1">
-                  Casquette technique, hors objectif : {bilan.planFacture} plan
-                  {bilan.planFacture > 1 ? 's' : ''} soldé{bilan.planFacture > 1 ? 's' : ''} ·{' '}
-                  {euros(bilan.planFacture * 500)}
-                </p>
-              )}
-            </section>
-
             {couvertureFaible && (
-              <section className="mt-4">
+              <section className="mt-6">
                 <div className="bg-alerte/10 border border-alerte/30 rounded-xl px-4 py-3">
                   <p className="text-sm text-texte">
                     {bilan.signesSansMontant > 0
