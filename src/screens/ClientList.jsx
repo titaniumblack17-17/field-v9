@@ -145,37 +145,47 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
     <div className="min-h-screen bg-fond">
       <header className="sticky top-0 z-10 bg-fond/90 backdrop-blur px-4 pt-6 pb-3">
         <div className="flex items-center justify-between gap-2 mb-3">
-          <h1 className="text-xl font-semibold text-texte">Clients</h1>
+          <h1 className="text-xl font-bold text-texte">Clients</h1>
           <div className="flex items-center gap-2">
             <button
               onClick={onBrief}
               aria-label="Brief soir"
-              className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-medium shadow"
+              className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-semibold shadow"
             >
               Brief
             </button>
+            {/* Pipeline respire davantage de ses voisins (marge en plus du
+                gap-2 du groupe) : c'est l'action de nav la plus utilisée,
+                elle mérite de se détacher plutôt que de se fondre dans une
+                rangée à espacement uniforme. */}
             <button
               onClick={onPipeline}
-              className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-medium shadow"
+              className="px-4 h-11 mx-2 rounded-full bg-carte text-accent text-sm font-semibold shadow"
             >
               Pipeline
             </button>
             <button
               onClick={onCapture}
-              className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-medium shadow"
+              className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-semibold shadow"
             >
               Capture
             </button>
             <button
               onClick={onCatalogue}
-              className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-medium shadow"
+              className="px-4 h-11 rounded-full bg-carte text-accent text-sm font-semibold shadow"
             >
               Catalogue
             </button>
+            {/* Action principale de l'écran : plus grande que les pilules de
+                nav (48px vs 44px) et dans la variante accent-vif (cyan,
+                choisi hors de la famille violet/bleu pour trancher) plutôt
+                que l'accent générique, pour se voir en premier. Texte foncé
+                plutôt que blanc : le cyan est trop clair pour un bon
+                contraste avec du blanc. */}
             <button
               onClick={onCreate}
               aria-label="Nouveau client"
-              className="w-11 h-11 flex-shrink-0 rounded-full bg-accent text-white text-xl leading-none flex items-center justify-center shadow"
+              className="w-12 h-12 flex-shrink-0 rounded-full bg-accent-vif text-[#0A2E33] text-2xl leading-none flex items-center justify-center shadow"
             >
               +
             </button>
@@ -183,14 +193,31 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
         </div>
 
         <div className="relative">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            type="search"
-            placeholder="Rechercher un praticien, une ville…"
-            aria-label="Rechercher un client"
-            className="w-full bg-carte rounded-xl shadow-sm pl-4 pr-9 py-3 text-texte outline-none placeholder:text-texte-faible"
-          />
+          {/* Halo porté par ce div, pas par l'input : sur iPhone (Safari en
+              PWA installée), le halo restait invisible malgré
+              -webkit-appearance: none et une inspection confirmant les
+              bonnes valeurs en CSS — iOS conserve une couche de rendu
+              native pour les contrôles de formulaire qui semble ignorer/
+              écraser le box-shadow de l'input lui-même, même une fois son
+              chrome visuel neutralisé (constat récurrent dans la
+              communauté sur ce point précis, sans ticket WebKit unique
+              identifié — contrairement à navigator.onLine plus tôt dans ce
+              chantier). Un div ordinaire n'est jamais soumis à ce rendu
+              natif, donc le halo devrait s'afficher quel que soit l'input
+              qu'il entoure. */}
+          <div className="rounded-carte shadow-halo-recherche focus-within:shadow-halo-recherche-focus transition-shadow duration-200">
+            {/* Agrandie (py-3→py-5) : c'est le premier champ touché en
+                ouvrant l'app, il mérite plus de place que les autres
+                contrôles. */}
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              type="search"
+              placeholder="Rechercher un praticien, une ville…"
+              aria-label="Rechercher un client"
+              className="w-full bg-carte rounded-carte pl-5 pr-10 py-5 text-texte outline-none placeholder:text-texte-faible"
+            />
+          </div>
           {query && (
             <button
               onClick={() => setQuery('')}
@@ -250,9 +277,9 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
               <li key={client.id} ref={(el) => { ligneRefs.current[client.id] = el }}>
                 <button
                   onClick={() => onSelect(client)}
-                  className="w-full text-left bg-carte rounded-xl px-4 py-3 shadow-sm active:scale-[0.98] transition"
+                  className="w-full text-left bg-carte rounded-carte px-4 py-3 shadow-sm active:scale-[0.98] transition"
                 >
-                  <p className="font-medium text-texte">{nomClient(client) ?? 'Client'}</p>
+                  <p className="font-bold text-texte">{nomClient(client) ?? 'Client'}</p>
                   {sousTitre && <p className="text-sm text-texte-doux">{sousTitre}</p>}
                   {ambigu && client.adresse && (
                     <p className="text-xs text-texte-faible mt-0.5">{client.adresse}</p>
@@ -275,7 +302,7 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
                 key={lettre}
                 onClick={() => disponible && allerALaLettre(lettre)}
                 disabled={!disponible}
-                className={`text-[10px] leading-[13px] w-4 font-medium ${
+                className={`text-[10px] leading-[13px] w-4 font-semibold ${
                   disponible ? 'text-accent' : 'text-texte-fantome/40'
                 }`}
               >

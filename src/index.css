@@ -27,6 +27,12 @@
   --separateur: 42 44 51;
   --bordure: 42 44 51;
   --accent: 139 146 255;
+  /* Couleur d'appoint pour une action unique par écran qui doit ressortir
+     franchement plus que l'accent habituel (ex. le bouton « + » principal)
+     — pas un deuxième accent générique à réutiliser partout. Cyan choisi
+     délibérément hors de la famille violet/bleu de l'accent, pour un
+     contraste net plutôt qu'une simple variante plus saturée. */
+  --accent-vif: 34 211 238;
   --alerte: 240 169 59;
   --erreur: 248 113 113;
   color-scheme: dark;
@@ -50,3 +56,22 @@ body {
 /* Force le rendu sombre des contrôles natifs (sélecteurs de date, listes
    déroulantes), qui sinon restent blancs au milieu d'une fiche sombre. */
 input, select, textarea { color-scheme: inherit; }
+
+/* Safari/WebKit habille un <input type="search"> avec son propre chrome
+   natif (-webkit-appearance: searchfield) : padding et rayon imposés par
+   l'OS, qui ignorent silencieusement nos classes Tailwind — le CSS généré
+   est correct, seul le rendu WebKit l'écrase. Invisible sur ce projet
+   jusqu'ici car Chrome (utilisé pour les captures automatisées) ne
+   l'applique pas aussi agressivement. On neutralise le chrome natif pour
+   que le style personnalisé (padding, rayon, halo au focus) s'affiche
+   réellement sur iPhone/Safari, pas seulement dans le CSS. */
+input[type='search'] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type='search']::-webkit-search-decoration,
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-results-button,
+input[type='search']::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+}
