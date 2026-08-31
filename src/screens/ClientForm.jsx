@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import PersonListField from '../components/PersonListField'
 import ChampChoix from '../components/ChampChoix'
@@ -23,8 +23,40 @@ export default function ClientForm({ onCreated, onCancel }) {
   const [assistantes, setAssistantes] = useState([{ prenom: '', nom: '', telephone: '' }])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [suggestions, setSuggestions] = useState([])
+  const [recherche, setRecherche] = useState(false)
 
   const setField = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }))
+
+  // Recherche automatique (API Recherche d'Entreprises, gratuite, sans clé)
+  // dès que nom + ville sont renseignés — débouncée pour ne pas lancer un
+  // appel à chaque frappe. Purement un confort : aucun blocage si elle ne
+  // trouve rien, la saisie manuelle continue de fonctionner normalement.
+  useEffect(() => {
+    const nom = (values.nom_cabinet || values.nom_praticien || '').trim()
+    const ville = (values.ville || '').trim()
+    if (!nom || !ville) {
+      setSuggestions([])
+      return
+    }
+    const minuteur = setTimeout(async () => {
+      setRecherche(true)
+      const { data, error: erreurRecherche } = await supabase.functions.invoke('entreprise-lookup', {
+        body: { q: nom, ville },
+      })
+      setRecherche(false)
+      if (!erreurRecherche && data?.resultats) setSuggestions(data.resultats)
+    }, 500)
+    return () => clearTimeout(minuteur)
+  }, [values.nom_cabinet, values.nom_praticien, values.ville])
+
+  // Un tap est une confirmation explicite de Bruce à ce moment précis : les
+  // données officielles remplacent adresse/CP/ville, y compris l'orthographe
+  // de la ville — la cohérence de la fiche prime sur la saisie initiale.
+  const appliquerSuggestion = (s) => {
+    setValues((v) => ({ ...v, adresse: s.adresse ?? v.adresse, code_postal: s.code_postal ?? v.code_postal, ville: s.ville ?? v.ville }))
+    setSuggestions([])
+  }
 
   const cleanPeople = (people) =>
     people
@@ -79,18 +111,42 @@ export default function ClientForm({ onCreated, onCancel }) {
       <main className="px-4 pb-8">
         <form onSubmit={submit} className="bg-carte rounded-xl shadow-sm divide-y divide-separateur">
           {FIELDS.map(([key, label, required]) => (
-            <div key={key} className="px-4 py-3">
-              <label className="text-xs text-texte-faible" htmlFor={key}>
-                {label}
-                {required ? ' *' : ''}
-              </label>
-              <input
-                id={key}
-                value={values[key] ?? ''}
-                onChange={setField(key)}
-                className="w-full text-texte outline-none bg-transparent"
-              />
-            </div>
+            <React.Fragment key={key}>
+              <div className="px-4 py-3">
+                <label className="text-xs text-texte-faible" htmlFor={key}>
+                  {label}
+                  {required ? ' *' : ''}
+                </label>
+                <input
+                  id={key}
+                  value={values[key] ?? ''}
+                  onChange={setField(key)}
+                  className="w-full text-texte outline-none bg-transparent"
+                />
+              </div>
+              {key === 'ville' && (recherche || suggestions.length > 0) && (
+                <div className="px-4 py-3 space-y-2">
+                  <p className="text-xs text-texte-faible">
+                    {recherche
+                      ? 'Recherche…'
+                      : `${suggestions.length} résultat${suggestions.length > 1 ? 's' : ''} — Recherche d'Entreprises`}
+                  </p>
+                  {suggestions.map((s) => (
+                    <button
+                      key={s.siren}
+                      type="button"
+                      onClick={() => appliquerSuggestion(s)}
+                      className="w-full text-left bg-fond rounded-xl px-3 py-2"
+                    >
+                      <p className="text-sm font-semibold text-texte">{s.nom}</p>
+                      <p className="text-xs text-texte-doux">
+                        {[s.adresse, s.code_postal, s.ville].filter(Boolean).join(', ')}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </React.Fragment>
           ))}
           <PersonListField label="Associé(s)" people={associes} onChange={setAssocies} />
           <PersonListField label="Assistante(s)" people={assistantes} onChange={setAssistantes} />
