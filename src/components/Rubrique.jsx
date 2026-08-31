@@ -10,8 +10,12 @@ import React, { useEffect, useState } from 'react'
  * doit révéler son formulaire même section repliée) sans empêcher l'utilisateur
  * de replier ensuite à la main — la bascule ne se redéclenche que sur un
  * passage de false à true, jamais en continu.
+ *
+ * rempli teinte le titre en accent quand la section, une fois repliée,
+ * contient déjà une information renseignée — un repère visuel pour ne pas
+ * avoir à déplier juste pour vérifier s'il y a quelque chose dedans.
  */
-export default function Rubrique({ titre, compte, defautOuvert = false, forceOuvert = false, action, children }) {
+export default function Rubrique({ titre, compte, defautOuvert = false, forceOuvert = false, rempli = false, action, children }) {
   const [ouvert, setOuvert] = useState(defautOuvert)
 
   useEffect(() => {
@@ -31,7 +35,7 @@ export default function Rubrique({ titre, compte, defautOuvert = false, forceOuv
           >
             ▶
           </span>
-          <span className="text-xs text-texte-faible">
+          <span className={`text-xs ${rempli ? 'text-accent' : 'text-texte-faible'}`}>
             {titre}
             {compte != null && compte > 0 ? ` · ${compte}` : ''}
           </span>

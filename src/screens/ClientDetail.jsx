@@ -227,6 +227,21 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     </div>
   )
 
+  // Indice visuel sur les sections repliées : le titre passe en accent dès
+  // qu'il y a quelque chose dedans, pour ne pas avoir à déplier pour vérifier.
+  const adresseRemplie = useMemo(
+    () =>
+      ADRESSE_FIELDS.some(([k]) => (values[k] ?? '').trim()) ||
+      Boolean(values.etage) ||
+      Boolean(values.digicode) ||
+      values.ascenseur != null,
+    [values]
+  )
+  const associesRemplis = useMemo(
+    () => cleanPeople(associes).length > 0 || cleanPeople(assistantes).length > 0,
+    [associes, assistantes]
+  )
+
   // Une suggestion en attente ne doit jamais rester cachée derrière le
   // « Afficher toutes les entrées » : sinon on retombe dans le trou qu'on
   // vient de combler.
@@ -674,7 +689,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
 
         {/* Consultée une fois à la création, rarement ensuite — repliée par
             défaut, contrairement au contact direct juste en dessous. */}
-        <Rubrique titre="Adresse">
+        <Rubrique titre="Adresse" rempli={adresseRemplie}>
           <div className="bg-carte rounded-carte shadow-sm divide-y divide-separateur">
             {ADRESSE_FIELDS.map(renderChamp)}
             <AccesCabinet
@@ -692,7 +707,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           {CONTACT_FIELDS.map(renderChamp)}
         </div>
 
-        <Rubrique titre="Associé(s) et assistante(s)">
+        <Rubrique titre="Associé(s) et assistante(s)" rempli={associesRemplis}>
           <div className="bg-carte rounded-carte shadow-sm divide-y divide-separateur">
             <PersonListField label="Associé(s)" people={associes} onChange={setAssocies} />
             <PersonListField label="Assistante(s)" people={assistantes} onChange={setAssistantes} />

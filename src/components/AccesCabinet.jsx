@@ -78,14 +78,26 @@ export default function AccesCabinet({ client, onEnregistre }) {
   }
 
   return (
-    <div className="px-4 py-3 space-y-2">
-      <label className="block text-xs text-texte-doux">Accès</label>
-      <input
-        value={brouillon.etage}
-        onChange={(e) => setBrouillon((b) => ({ ...b, etage: e.target.value }))}
-        placeholder="Étage (ex. 3ème, RDC)"
-        className="w-full bg-carte-douce rounded-imbrique px-2 py-1.5 text-texte outline-none placeholder:text-texte-fantome"
-      />
+    <div className="px-4 py-3 space-y-3">
+      <p className="text-xs text-texte-doux">Accès</p>
+      <div>
+        {/* Un placeholder seul se lisait comme une valeur déjà remplie plutôt
+            qu'une invite à saisir (retour terrain) : un label permanent,
+            comme sur le reste de la fiche, lève l'ambiguïté même une fois
+            le champ rempli. */}
+        <label className="text-xs text-texte-doux" htmlFor="acces-cabinet-etage">
+          Étage
+        </label>
+        <input
+          id="acces-cabinet-etage"
+          value={brouillon.etage}
+          onChange={(e) => setBrouillon((b) => ({ ...b, etage: e.target.value }))}
+          placeholder="ex. 3ème, RDC"
+          autoComplete="off"
+          name="acces-cabinet-etage"
+          className="w-full bg-carte-douce rounded-imbrique px-2 py-1.5 text-texte outline-none placeholder:text-texte-fantome"
+        />
+      </div>
       <div className="flex gap-2">
         {OPTIONS_ASCENSEUR.map(([valeur, libelle]) => (
           <button
@@ -101,12 +113,20 @@ export default function AccesCabinet({ client, onEnregistre }) {
           </button>
         ))}
       </div>
-      <input
-        value={brouillon.digicode}
-        onChange={(e) => setBrouillon((b) => ({ ...b, digicode: e.target.value }))}
-        placeholder="Digicode"
-        className="w-full bg-carte-douce rounded-imbrique px-2 py-1.5 text-texte outline-none placeholder:text-texte-fantome"
-      />
+      <div>
+        <label className="text-xs text-texte-doux" htmlFor="acces-cabinet-digicode">
+          Digicode
+        </label>
+        <input
+          id="acces-cabinet-digicode"
+          value={brouillon.digicode}
+          onChange={(e) => setBrouillon((b) => ({ ...b, digicode: e.target.value }))}
+          placeholder="—"
+          autoComplete="off"
+          name="acces-cabinet-digicode"
+          className="w-full bg-carte-douce rounded-imbrique px-2 py-1.5 text-texte outline-none placeholder:text-texte-fantome"
+        />
+      </div>
       <div className="flex justify-end gap-3 pt-1">
         <button onClick={() => setEdition(false)} className="text-texte-fantome text-sm h-9 px-1">
           Annuler

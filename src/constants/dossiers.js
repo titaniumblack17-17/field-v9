@@ -37,11 +37,11 @@ export const ETAPES_PROJET = [
   ['visite_local', 'Visite local'],
   ['negociation', 'Négociation'],
   ['confirmation', 'Confirmation'],
+  ['financement', 'Financement'],
   ['commande', 'Commande'],
   ['reunion_chantier', 'Réunion de chantier'],
   ['installation', 'Installation'],
   ['finition', 'Finition'],
-  ['financement', 'Financement'],
   // Étape terminale « gagnée » : une vente installée et réglée n'a plus rien
   // à suivre au jour le jour. Symétrique de « Dossier perdu » — même
   // traitement dans le Pipeline (colonne repliée, comptée à part) pour
