@@ -105,28 +105,58 @@ function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTi
   )
 }
 
-function Section({ sectionRef, titre, compte, urgent, vide, children }) {
+function Section({ sectionRef, titre, compte, urgent, vide, repliable, ouverte, onToggle, children }) {
   // Une section qui réclame une décision ce soir (SAV bloquant, devis
   // oublié, retard) se voit avant même de lire le chiffre : titre en clair
   // plutôt qu'en petites capitales, compteur sur pastille colorée plutôt
   // que gris neutre. Le reste garde la sobriété d'une liste de suivi.
   const actif = urgent && compte > 0
+  // repliable : même chevron ▶ (rotate-90 ouvert) que les cartes-résumé du
+  // premier regard — voir le compteur d'une section sans défiler tout son
+  // détail. Réservé aux sections sans résumé plus haut (Rappels à venir,
+  // Plans, Règlements, À chiffrer) : SAV/Devis/À rappeler restent toujours
+  // ouvertes ici, on y arrive via « Voir les N autres » depuis leur
+  // carte-résumé — un second tap pour voir ce qu'on est venu chercher
+  // serait absurde. État contrôlé par le parent (pas un useState local) :
+  // sauter à une section via une pastille doit pouvoir la forcer ouverte.
+  const peutReplier = repliable && compte > 0
+  const estOuverte = peutReplier ? ouverte : true
+
+  const titreEtCompte = (
+    <>
+      <h2 className={actif ? 'text-sm font-semibold text-texte' : 'text-xs text-texte-faible uppercase tracking-wider'}>
+        {titre}
+      </h2>
+      {compte > 0 &&
+        (actif ? (
+          <span className="text-xs font-semibold text-alerte bg-alerte/10 rounded-full px-2 py-0.5">
+            {compte}
+          </span>
+        ) : (
+          <span className="text-xs text-texte-faible">{compte}</span>
+        ))}
+    </>
+  )
+
   return (
     <section ref={sectionRef} className="mt-6 scroll-mt-32">
       <div className="flex items-baseline gap-2 px-1 mb-2">
-        <h2 className={actif ? 'text-sm font-semibold text-texte' : 'text-xs text-texte-faible uppercase tracking-wider'}>
-          {titre}
-        </h2>
-        {compte > 0 &&
-          (actif ? (
-            <span className="text-xs font-semibold text-alerte bg-alerte/10 rounded-full px-2 py-0.5">
-              {compte}
+        {peutReplier ? (
+          <button onClick={onToggle} className="flex items-baseline gap-2 h-9 -ml-1 pl-1 pr-2 flex-1 text-left">
+            <span
+              className={`text-texte-faible text-[10px] self-center transition-transform ${estOuverte ? 'rotate-90' : ''}`}
+              aria-hidden="true"
+            >
+              ▶
             </span>
-          ) : (
-            <span className="text-xs text-texte-faible">{compte}</span>
-          ))}
+            {titreEtCompte}
+          </button>
+        ) : (
+          titreEtCompte
+        )}
       </div>
-      {compte === 0 ? <p className="text-texte-faible text-sm px-1">{vide}</p> : <ul className="space-y-2">{children}</ul>}
+      {estOuverte &&
+        (compte === 0 ? <p className="text-texte-faible text-sm px-1">{vide}</p> : <ul className="space-y-2">{children}</ul>)}
     </section>
   )
 }
@@ -196,8 +226,19 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   // N autres » des cartes-résumé partagent les mêmes refs pour sauter
   // directement à la section concernée.
   const sectionRefs = useRef({})
-  const allerASection = (cle) =>
+
+  // Repliées par défaut (Rappels à venir, Plans, Règlements, À chiffrer) :
+  // clé absente = repliée. État levé ici plutôt que dans Section, pour
+  // qu'une pastille ou un lien « Voir les N autres » puisse forcer
+  // l'ouverture de sa cible avant d'y sauter.
+  const [sectionsOuvertes, setSectionsOuvertes] = useState({})
+  const toggleSection = (cle) => setSectionsOuvertes((s) => ({ ...s, [cle]: !s[cle] }))
+  const allerASection = (cle) => {
+    // Le haut de la section ne bouge pas quand son contenu se déplie en
+    // dessous : pas besoin d'attendre le re-rendu avant de lancer le scroll.
+    setSectionsOuvertes((s) => (s[cle] ? s : { ...s, [cle]: true }))
     sectionRefs.current[cle]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   // Retrait immédiat plutôt qu'attendre une relecture : on vient de le faire,
   // le voir rester dans « À rappeler » ferait douter que ça ait pris.
@@ -556,6 +597,9 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               titre="Rappels à venir"
               compte={bilan.aVenir.length}
               vide="Rien de programmé."
+              repliable
+              ouverte={!!sectionsOuvertes.avenir}
+              onToggle={() => toggleSection('avenir')}
             >
               {bilan.aVenir.map((d) => (
                 <Ligne
@@ -575,6 +619,9 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               titre="Plans à produire"
               compte={bilan.plansAProduire.length}
               vide="Aucun plan en attente."
+              repliable
+              ouverte={!!sectionsOuvertes.plans}
+              onToggle={() => toggleSection('plans')}
             >
               {bilan.plansAProduire.map((d) => (
                 <Ligne
@@ -596,6 +643,9 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               compte={bilan.reglements.length}
               urgent={bilan.reglements.some((d) => d.statut === 'reglement_demande')}
               vide="Aucun plan en attente de règlement."
+              repliable
+              ouverte={!!sectionsOuvertes.reglements}
+              onToggle={() => toggleSection('reglements')}
             >
               {bilan.reglements.map((d) => (
                 <Ligne
@@ -634,6 +684,9 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               titre="À chiffrer"
               compte={bilan.sansMontant.length}
               vide="Tous les dossiers actifs sont chiffrés."
+              repliable
+              ouverte={!!sectionsOuvertes.chiffrer}
+              onToggle={() => toggleSection('chiffrer')}
             >
               {bilan.sansMontant.map((d) => (
                 <Ligne
