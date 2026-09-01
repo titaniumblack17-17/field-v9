@@ -496,11 +496,20 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
   // déroulant, juste extraites pour ne plus tripler les .filter() à chaque
   // rendu. Recalculés dès que `dossiers` change (temps réel, comme le reste
   // de l'écran, déjà abonné aux mises à jour Supabase).
+  //
+  // Statuts terminaux exclus des 3 : un SAV Clos, un projet Terminé/Perdu ou
+  // un plan Soldé n'a plus rien d'actif à suivre — les compter grossirait le
+  // chiffre de l'onglet sans rien dire de ce qui reste à traiter aujourd'hui.
+  // Ces dossiers restent entièrement consultables (fiche client, colonnes
+  // dédiées du kanban) : seul le compteur d'onglet change, rien n'est masqué
+  // ni supprimé.
   const compteurs = useMemo(() => ({
-    projet: dossiers.filter((d) => d.type === 'projet').length,
-    sav: dossiers.filter((d) => d.type === 'sav').length,
+    projet: dossiers.filter((d) => d.type === 'projet' && d.statut !== 'termine' && d.statut !== 'perdu').length,
+    sav: dossiers.filter((d) => d.type === 'sav' && d.statut !== 'clos').length,
     plan: dossiers.filter(
-      (d) => d.type === 'plan' || (d.type === 'projet' && ['a_faire', 'en_cours'].includes(d.plan_statut))
+      (d) =>
+        (d.type === 'plan' && d.statut !== 'solde') ||
+        (d.type === 'projet' && ['a_faire', 'en_cours'].includes(d.plan_statut))
     ).length,
   }), [dossiers])
 
