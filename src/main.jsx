@@ -40,6 +40,15 @@ if (import.meta.env.PROD) {
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') registration.update()
         })
+        // Filet de secours pour l'inverse : une session qui reste au premier
+        // plan sans jamais repasser par visibilitychange (l'app ouverte en
+        // continu) ne revérifierait sinon jamais — hypothèse la plus
+        // probable derrière un bug rapporté par Bruce (recherche
+        // automatique d'entreprise absente sur iPhone alors que l'API, la
+        // fonction Edge et le code déployé se sont tous montrés corrects
+        // en test), sans confirmation directe possible faute d'accès à son
+        // appareil. Cadence modeste : un filet, pas le mécanisme principal.
+        setInterval(() => registration.update(), 20 * 60 * 1000)
       }).catch(() => {})
     })
   }
