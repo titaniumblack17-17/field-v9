@@ -105,10 +105,9 @@ function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTi
   )
 }
 
-// En-tête partagé par Section et CarteResume : une seule apparence de carte
-// repliable (chevron ▶ rotate-90 à l'ouverture, compteur coloré à droite)
-// pour toute la page, du premier regard jusqu'à « À chiffrer » — jamais de
-// section qui détonne visuellement des deux autres. Toujours affiché, même
+// En-tête de Section : chevron ▶ (rotate-90 à l'ouverture), titre, compteur
+// coloré à droite — la même carte repliable pour les 7 sections de la page,
+// jamais l'une qui détonne visuellement des autres. Toujours affiché, même
 // à 0 : le chevron ne se cache pas selon le contenu, seul le corps change.
 function EnTeteCarte({ titre, compte, urgent, ouverte, onToggle }) {
   return (
@@ -147,43 +146,6 @@ function Section({ sectionRef, titre, compte, urgent, vide, ouverte, onToggle, c
   )
 }
 
-// Une carte par information critique du premier regard (SAV, À rappeler,
-// Devis sans réponse — l'Objectif s'affiche à part, en jauge complète juste
-// au-dessus). Le compte et les 2 dossiers les plus urgents sont visibles
-// sans taper : le tap replie/déplie pour dégager de la place une fois le
-// point fait, jamais pour révéler une info qui devrait déjà être là.
-function CarteResume({ titre, compte, urgent, vide, items, onVoirTout }) {
-  const [ouverte, setOuverte] = useState(compte > 0)
-  const restants = compte - items.length
-
-  return (
-    <div className="bg-carte rounded-xl overflow-hidden">
-      <EnTeteCarte titre={titre} compte={compte} urgent={urgent} ouverte={ouverte} onToggle={() => setOuverte((v) => !v)} />
-      {ouverte && (
-        <div className="px-4 pb-3">
-          {compte === 0 ? (
-            <p className="text-xs text-texte-doux">{vide}</p>
-          ) : (
-            <div className="space-y-1.5">
-              {items.map((it) => (
-                <div key={it.id} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-texte truncate">{it.nom}</span>
-                  <span className={`flex-shrink-0 ${it.classe}`}>{it.droite}</span>
-                </div>
-              ))}
-              {restants > 0 && (
-                <button onClick={onVoirTout} className="text-accent text-xs pt-0.5">
-                  Voir {restants > 1 ? `les ${restants} autres` : `l'autre`} →
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function BriefSoir({ onBack, onOpenDossier }) {
   const [dossiers, setDossiers] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -191,19 +153,17 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   const [tentative, setTentative] = useState(0)
   const [demanderTexte, boîtePrompt] = usePrompt()
 
-  // Premier regard : jauge Objectif + cartes-résumé (À rappeler, SAV,
-  // Devis) tout en haut, sans défiler. Les pastilles plus bas (Rappels à
-  // venir, Plans, Règlements, À chiffrer inclus) et les liens « Voir les
-  // N autres » des cartes-résumé partagent les mêmes refs pour sauter
-  // directement à la section concernée.
+  // Jauge Objectif puis pastilles de navigation tout en haut ; les pastilles
+  // sautent directement à la section concernée plus bas via ces mêmes refs.
   const sectionRefs = useRef({})
 
-  // SAV/Devis/À rappeler ouvertes par défaut (on y arrive via « Voir les N
-  // autres » depuis leur carte-résumé — un second tap pour voir ce qu'on est
-  // venu chercher serait absurde) ; Rappels à venir/Plans/Règlements/À
-  // chiffrer repliées par défaut (clé absente). État levé ici plutôt que
-  // local à chaque section, pour qu'une pastille ou un lien « Voir les N
-  // autres » puisse forcer l'ouverture de sa cible avant d'y sauter.
+  // SAV/Devis/À rappeler ouvertes par défaut : ce sont les décisions les
+  // plus urgentes du soir, elles doivent se voir sans taper. Rappels à
+  // venir/Plans/Règlements/À chiffrer repliées par défaut (clé absente) —
+  // moins prioritaires par nature, pas besoin de défiler leur détail pour
+  // voir juste le compteur. État levé ici plutôt que local à chaque
+  // section, pour qu'une pastille puisse forcer l'ouverture de sa cible
+  // avant d'y sauter.
   const [sectionsOuvertes, setSectionsOuvertes] = useState({ sav: true, devis: true, rappeler: true })
   const toggleSection = (cle) => setSectionsOuvertes((s) => ({ ...s, [cle]: !s[cle] }))
   const allerASection = (cle) => {
@@ -439,55 +399,8 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
               )}
             </section>
 
-            {/* Pas dans les 4 informations du premier regard demandées :
-                l'alerte pousserait « Devis sans réponse » sous la ligne de
-                flottaison à 375px quand elle est active. Elle reste juste
-                avant « À chiffrer », la section qu'elle concerne. */}
-
-            <div className="mt-4 space-y-2">
-              <CarteResume
-                titre="À rappeler"
-                compte={bilan.aRappeler.length}
-                urgent={bilan.aRappeler.length > 0}
-                vide="Aucun rappel en retard."
-                items={bilan.aRappeler.slice(0, 2).map((d) => ({
-                  id: d.id,
-                  nom: nomClient(d.clients) ?? '—',
-                  droite: etatRappel(d.rappel_date, d.rappel_heure)?.texte,
-                  classe: etatRappel(d.rappel_date, d.rappel_heure)?.classe,
-                }))}
-                onVoirTout={() => allerASection('rappeler')}
-              />
-              <CarteResume
-                titre="SAV ouverts"
-                compte={bilan.savOuverts.length}
-                urgent={bilan.savOuverts.some((d) => d.statut !== 'en_attente')}
-                vide="Aucun SAV en cours."
-                items={bilan.savOuverts.slice(0, 2).map((d) => ({
-                  id: d.id,
-                  nom: nomClient(d.clients) ?? '—',
-                  droite: STATUTS_SAV_LABELS[d.statut] ?? d.statut,
-                  classe: d.statut !== 'en_attente' ? 'text-alerte font-medium' : 'text-texte-doux',
-                }))}
-                onVoirTout={() => allerASection('sav')}
-              />
-              <CarteResume
-                titre="Devis sans réponse"
-                compte={bilan.devisSansReponse.length}
-                urgent={bilan.devisSansReponse.length > 0}
-                vide="Aucun devis oublié."
-                items={bilan.devisSansReponse.slice(0, 2).map((d) => ({
-                  id: d.id,
-                  nom: nomClient(d.clients) ?? '—',
-                  droite: `${joursDevisSansReponse(d)} j`,
-                  classe: 'text-alerte font-medium',
-                }))}
-                onVoirTout={() => allerASection('devis')}
-              />
-            </div>
-
             {pastilles.length > 0 && (
-              <div className="flex gap-1.5 overflow-x-auto mt-6 pb-1">
+              <div className="flex gap-1.5 overflow-x-auto mt-4 pb-1">
                 {pastilles.map((p) => (
                   <button
                     key={p.cle}
