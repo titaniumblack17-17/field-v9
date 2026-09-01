@@ -149,14 +149,25 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
           largeur flex propre à un moteur donné, se répercuter sur la page
           entière — c'est justement ce qui s'est produit sur iPhone. */}
       <header className="sticky top-0 z-10 bg-fond/90 backdrop-blur px-4 pt-6 pb-3 overflow-x-hidden">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <h1 className="text-xl font-bold text-texte flex-shrink-0">Clients</h1>
+        {/* Colonnes latérales de largeur FIXE identique (w-20 des deux
+            côtés), pas 1fr/1fr : un 1fr ne garantit une largeur égale que si
+            le contenu des deux côtés est assez petit pour ne jamais dépasser
+            sa part équitable — ici "Clients" (~68px de texte réel, mesuré au
+            canvas) est plus large que sa part calculée face au bouton "+"
+            (48px), donc la colonne du titre s'élargissait plus que celle du
+            bouton et décalait les pilules vers la droite. Deux largeurs
+            fixes identiques éliminent le problème quel que soit le contenu
+            de chaque côté — testé sur iPhone (375px) et Mac. */}
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-20 flex-shrink-0">
+            <h1 className="text-xl font-bold text-texte">Clients</h1>
+          </div>
           {/* 3 pilules tiennent nativement sur un iPhone standard
               (375-430px) avec ce padding resserré (px-4→px-2, gap-2→gap-1.5,
               respiration dédiée de Pipeline retirée) — plus besoin du
               conteneur à défilement horizontal qu'il fallait avec 4
               pilules. */}
-          <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex-1 flex items-center justify-center gap-1.5 min-w-0">
             <button
               onClick={onBrief}
               aria-label="Brief soir"
@@ -176,16 +187,19 @@ export default function ClientList({ onSelect, onCreate, onCapture, onPipeline, 
             >
               Capture
             </button>
-            {/* Action principale de l'écran : plus grande que les pilules de
-                nav (48px vs 44px) et dans la variante accent-vif (cyan,
-                choisi hors de la famille violet/bleu pour trancher) plutôt
-                que l'accent générique, pour se voir en premier. Texte foncé
-                plutôt que blanc : le cyan est trop clair pour un bon
-                contraste avec du blanc. */}
+          </div>
+          {/* Action principale de l'écran : plus grande que les pilules de
+              nav (48px vs 44px) et dans la variante accent-vif (cyan, choisi
+              hors de la famille violet/bleu pour trancher) plutôt que
+              l'accent générique, pour se voir en premier. Texte foncé plutôt
+              que blanc : le cyan est trop clair pour un bon contraste avec
+              du blanc. w-20 + justify-end : même largeur que le titre à
+              gauche, bouton collé au bord droit de cette largeur. */}
+          <div className="w-20 flex-shrink-0 flex justify-end">
             <button
               onClick={onCreate}
               aria-label="Nouveau client"
-              className="w-12 h-12 flex-shrink-0 rounded-full bg-accent-vif text-[#0A2E33] text-2xl leading-none flex items-center justify-center shadow"
+              className="w-12 h-12 rounded-full bg-accent-vif text-[#0A2E33] text-2xl leading-none flex items-center justify-center shadow"
             >
               +
             </button>
