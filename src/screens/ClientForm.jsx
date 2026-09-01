@@ -108,19 +108,19 @@ export default function ClientForm({ onCreated, onCancel }) {
   return (
     <div className="min-h-screen bg-fond">
       <header className="sticky top-0 bg-fond/90 backdrop-blur px-4 pt-6 pb-4 flex items-center justify-between">
-        <button onClick={onCancel} className="text-accent text-sm font-medium">
+        <button onClick={onCancel} className="text-accent text-sm font-semibold">
           Annuler
         </button>
-        <h1 className="text-lg font-semibold text-texte">Nouveau client</h1>
+        <h1 className="text-lg font-bold text-texte">Nouveau client</h1>
         <span className="w-16" />
       </header>
 
       <main className="px-4 pb-8">
-        <form onSubmit={submit} className="bg-carte rounded-xl shadow-sm divide-y divide-separateur">
+        <form onSubmit={submit} className="bg-carte rounded-carte shadow-sm divide-y divide-separateur">
           {FIELDS.map(([key, label, required]) => (
             <React.Fragment key={key}>
               <div className="px-4 py-3">
-                <label className="text-xs text-texte-faible" htmlFor={key}>
+                <label className="text-xs text-texte-doux" htmlFor={key}>
                   {label}
                   {required ? ' *' : ''}
                 </label>
@@ -133,7 +133,7 @@ export default function ClientForm({ onCreated, onCancel }) {
               </div>
               {key === 'ville' && (recherche || suggestions.length > 0) && (
                 <div className="px-4 py-3 space-y-2">
-                  <p className="text-xs text-texte-faible">
+                  <p className="text-xs text-texte-doux">
                     {recherche
                       ? 'Recherche…'
                       : `${suggestions.length} résultat${suggestions.length > 1 ? 's' : ''} — Recherche d'Entreprises`}
@@ -143,9 +143,9 @@ export default function ClientForm({ onCreated, onCancel }) {
                       key={s.siren}
                       type="button"
                       onClick={() => appliquerSuggestion(s)}
-                      className="w-full text-left bg-fond rounded-xl px-3 py-2"
+                      className="w-full text-left bg-fond rounded-imbrique px-3 py-2"
                     >
-                      <p className="text-sm font-semibold text-texte">{s.nom}</p>
+                      <p className="text-sm font-bold text-texte">{s.nom}</p>
                       <p className="text-xs text-texte-doux">
                         {[s.adresse, s.code_postal, s.ville].filter(Boolean).join(', ')}
                       </p>
@@ -167,7 +167,7 @@ export default function ClientForm({ onCreated, onCancel }) {
           />
           {values.source_type && (
             <div className="px-4 py-3">
-              <label className="text-xs text-texte-faible" htmlFor="source_detail">
+              <label className="text-xs text-texte-doux" htmlFor="source_detail">
                 {SOURCE_DETAIL_PLACEHOLDER[values.source_type]}
               </label>
               <input
@@ -179,7 +179,7 @@ export default function ClientForm({ onCreated, onCancel }) {
             </div>
           )}
           <div className="px-4 py-3">
-            <label className="text-xs text-texte-faible" htmlFor="notes">
+            <label className="text-xs text-texte-doux" htmlFor="notes">
               Informations annexes (mail, SMS, ou toute autre info à coller)
             </label>
             <textarea
@@ -197,7 +197,7 @@ export default function ClientForm({ onCreated, onCancel }) {
         <button
           onClick={submit}
           disabled={saving}
-          className="w-full mt-5 bg-accent text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
+          className="w-full mt-5 bg-accent text-white font-semibold rounded-imbrique py-3 shadow disabled:opacity-50"
         >
           {saving ? 'Enregistrement…' : 'Créer le client'}
         </button>
