@@ -3,7 +3,7 @@ import usePrompt from '../hooks/usePrompt'
 import { supabase } from '../lib/supabaseClient'
 import EtatErreur from '../components/EtatErreur'
 import JaugeObjectif from '../components/JaugeObjectif'
-import { etatRappel, cloreProchainRappel, reconcilierRappels } from '../lib/rappel'
+import { etatRappel, etatEcheanceTache, cloreProchainRappel, reconcilierRappels } from '../lib/rappel'
 import { nomClient } from '../lib/client'
 import {
   ETAPES_PROJET,
@@ -148,6 +148,11 @@ function Section({ sectionRef, titre, compte, urgent, vide, ouverte, onToggle, c
 
 export default function BriefSoir({ onBack, onOpenDossier }) {
   const [dossiers, setDossiers] = useState([])
+  // Sous-tâches de note en retard, tous dossiers confondus : chargées à part
+  // de `dossiers` (table séparée), rejointes à leur dossier localement dans
+  // `bilan` plutôt que par une jointure SQL — le nom du client et le type
+  // sont déjà dans `dossiers`, pas besoin de les redemander.
+  const [taches, setTaches] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [tentative, setTentative] = useState(0)
@@ -164,7 +169,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   // voir juste le compteur. État levé ici plutôt que local à chaque
   // section, pour qu'une pastille puisse forcer l'ouverture de sa cible
   // avant d'y sauter.
-  const [sectionsOuvertes, setSectionsOuvertes] = useState({ sav: true, devis: true, rappeler: true })
+  const [sectionsOuvertes, setSectionsOuvertes] = useState({ sav: true, devis: true, rappeler: true, taches: true })
   const toggleSection = (cle) => setSectionsOuvertes((s) => ({ ...s, [cle]: !s[cle] }))
   const allerASection = (cle) => {
     // Le haut de la section ne bouge pas quand son contenu se déplie en
@@ -258,6 +263,59 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
     }
   }, [tentative])
 
+  useEffect(() => {
+    let actif = true
+
+    // « En retard » se dérive du jour qui passe, pas d'un filtre côté
+    // requête (même logique que rappel_date pour `dossiers` juste au-dessus) :
+    // on charge toute tâche non faite avec une échéance, et `bilan` isole
+    // celles qui sont dépassées.
+    supabase
+      .from('dossier_note_taches')
+      .select('*')
+      .eq('fait', false)
+      .not('echeance', 'is', null)
+      .then(({ data, error }) => {
+        if (actif && !error) setTaches(data ?? [])
+      })
+      .catch(() => {})
+
+    const canal = supabase
+      .channel('brief-taches')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dossier_note_taches' },
+        (payload) => {
+          setTaches((cur) => {
+            if (payload.eventType === 'INSERT') {
+              if (!payload.new.echeance || payload.new.fait) return cur
+              return cur.some((t) => t.id === payload.new.id) ? cur : [...cur, payload.new]
+            }
+            if (payload.eventType === 'UPDATE') {
+              // Cochée ou vidée de son échéance : elle sort de la liste,
+              // comme un rappel clos disparaît de « À rappeler ».
+              if (!payload.new.echeance || payload.new.fait) {
+                return cur.filter((t) => t.id !== payload.new.id)
+              }
+              return cur.some((t) => t.id === payload.new.id)
+                ? cur.map((t) => (t.id === payload.new.id ? payload.new : t))
+                : [...cur, payload.new]
+            }
+            if (payload.eventType === 'DELETE') {
+              return cur.filter((t) => t.id !== payload.old.id)
+            }
+            return cur
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      actif = false
+      supabase.removeChannel(canal)
+    }
+  }, [tentative])
+
   const bilan = useMemo(() => {
     const aujourdhui = new Date().toISOString().slice(0, 10)
     const annee = new Date().getFullYear()
@@ -293,6 +351,16 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       .sort((a, b) => a.rappel_date.localeCompare(b.rappel_date))
       .slice(0, 5)
 
+    // Une échéance du jour compte comme en retard (echu), même logique que
+    // « À rappeler aujourd'hui » ci-dessus : ça se décide ce soir, pas demain.
+    // Le dossier peut manquer (pas encore chargé, ou supprimé entre-temps) —
+    // sans lui, rien à afficher pour situer la tâche.
+    const tachesEnRetard = taches
+      .filter((t) => etatEcheanceTache(t.echeance)?.echu)
+      .map((t) => ({ ...t, dossier: dossiers.find((d) => d.id === t.dossier_id) }))
+      .filter((t) => t.dossier)
+      .sort((a, b) => (a.echeance ?? '').localeCompare(b.echeance ?? ''))
+
     // Travail technique dû : plans intégrés à une vente, et plans encore à
     // fabriquer.
     const plansAProduire = [
@@ -321,6 +389,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       devisSansReponse,
       aRappeler,
       aVenir,
+      tachesEnRetard,
       plansAProduire,
       reglements,
       duParPlans: reglements.length * 500,
@@ -341,7 +410,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
         (d) => d.type === 'plan' && d.remuneration_type === 'facture' && d.statut === 'solde'
       ).length,
     }
-  }, [dossiers])
+  }, [dossiers, taches])
 
   const couvertureFaible =
     bilan.signesSansMontant > 0 || (bilan.totalActifs > 0 && bilan.chiffres < bilan.totalActifs / 2)
@@ -353,6 +422,7 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
     { cle: 'sav', titre: 'SAV', compte: bilan.savOuverts.length, urgent: bilan.savOuverts.some((d) => d.statut !== 'en_attente') },
     { cle: 'devis', titre: 'Devis oubliés', compte: bilan.devisSansReponse.length, urgent: bilan.devisSansReponse.length > 0 },
     { cle: 'rappeler', titre: 'À rappeler', compte: bilan.aRappeler.length, urgent: bilan.aRappeler.length > 0 },
+    { cle: 'taches', titre: 'Tâches en retard', compte: bilan.tachesEnRetard.length, urgent: bilan.tachesEnRetard.length > 0 },
     { cle: 'avenir', titre: 'À venir', compte: bilan.aVenir.length, urgent: false },
     { cle: 'plans', titre: 'Plans', compte: bilan.plansAProduire.length, urgent: false },
     { cle: 'reglements', titre: 'Règlements', compte: bilan.reglements.length, urgent: bilan.reglements.some((d) => d.statut === 'reglement_demande') },
@@ -480,6 +550,28 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
                   ligneSecondaire={d.rappel_note}
                   alerte
                   onFait={rappelFait}
+                />
+              ))}
+            </Section>
+
+            <Section
+              sectionRef={(el) => (sectionRefs.current.taches = el)}
+              titre="Tâches en retard"
+              compte={bilan.tachesEnRetard.length}
+              urgent
+              vide="Aucune tâche en retard."
+              ouverte={!!sectionsOuvertes.taches}
+              onToggle={() => toggleSection('taches')}
+            >
+              {bilan.tachesEnRetard.map((t) => (
+                <Ligne
+                  key={t.id}
+                  dossier={t.dossier}
+                  onOuvrir={onOpenDossier}
+                  ligneSecondaire={t.texte}
+                  droite={etatEcheanceTache(t.echeance)?.texte}
+                  droiteClasse={etatEcheanceTache(t.echeance)?.classe}
+                  alerte
                 />
               ))}
             </Section>

@@ -134,6 +134,39 @@ export function etatRappel(date, heure) {
   return { texte: `Rappel le ${affiche}${a}`, classe: 'text-accent', echu: false }
 }
 
+/**
+ * Échéance d'une sous-tâche de note (NoteTaches) : même code couleur que les
+ * rappels — rouge en retard, orange sous 8 jours, bleu au-delà, jamais vert —
+ * sans heure, une sous-tâche n'a qu'une date. `echu` (jours <= 0) sert aussi
+ * de critère pour la remontée dans BriefSoir : une échéance du jour même
+ * demande une décision ce soir au même titre qu'un rappel « à rappeler
+ * aujourd'hui », donc compte comme en retard là-bas.
+ */
+export function etatEcheanceTache(date) {
+  if (!date) return null
+
+  const jour = new Date(date + 'T00:00:00')
+  if (Number.isNaN(jour.getTime())) return null
+
+  const aujourdhui = new Date()
+  aujourdhui.setHours(0, 0, 0, 0)
+
+  const jours = Math.round((jour - aujourdhui) / 86400000)
+  const affiche = jour.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+
+  if (jours < 0) {
+    const retard = -jours
+    return {
+      texte: retard === 1 ? 'En retard depuis hier' : `En retard de ${retard} jours`,
+      classe: 'text-erreur font-medium',
+      echu: true,
+    }
+  }
+  if (jours === 0) return { texte: "Aujourd'hui", classe: 'text-alerte font-medium', echu: true }
+  if (jours <= 7) return { texte: `Le ${affiche}`, classe: 'text-alerte', echu: false }
+  return { texte: `Le ${affiche}`, classe: 'text-accent', echu: false }
+}
+
 /** Aligne la tâche Todoist d'un rappel. Ne lève jamais : un rappel qui ne part
  *  pas ne doit pas faire échouer la saisie, seulement se signaler. */
 export async function synchroniserRappel(rappelId) {
