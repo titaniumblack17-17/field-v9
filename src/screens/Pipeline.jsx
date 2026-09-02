@@ -55,19 +55,23 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
       onClick={() => onOpen(dossier)}
       // La colonne où on se trouve en faisant défiler le kanban ressort : ses
       // fiches restent nettes, celles des colonnes voisines à peine visibles
       // s'effacent — sans ça, impossible de dire d'un coup d'œil dans quelle
       // étape on est vraiment quand deux colonnes se partagent l'écran.
-      // touch-none (touch-action: none) est indispensable ici, pas cosmétique :
-      // sans lui, PointerSensor n'a aucun moyen d'empêcher Safari iOS de
-      // traiter le geste comme un défilement de colonne — les deux anciens
-      // sélecteurs CSS censés le poser ([data-dnd-kit-draggable], .draggable)
-      // ne correspondaient à rien dans le DOM réel, retirés d'index.css.
-      className={`bg-carte rounded-carte border select-none touch-none cursor-pointer transition-all p-2.5 ${
+      //
+      // Ni touch-none ni {...attributes}/{...listeners} ici : posés sur la
+      // carte entière, ils rendaient tout balayage horizontal (changer de
+      // colonne) ou défilement vertical (parcourir une colonne) ambigu avec
+      // un glisser-déposer — touch-action:none coupe le défilement natif dès
+      // le premier contact, pour tout le geste, sans retour possible même si
+      // dnd-kit décide ensuite qu'il ne s'agit pas d'un drag. Un déplacement
+      // accidentel de dossier vers la mauvaise étape en résultait sur le
+      // terrain, malgré la fenêtre d'annulation de 5s (souvent déjà refermée
+      // par la navigation qui suit). Isolés sur la poignée ⠿ ci-dessous : le
+      // reste de la carte redevient un scroll/swipe natif ordinaire.
+      className={`bg-carte rounded-carte border select-none cursor-pointer transition-all p-2.5 ${
         isDragging
           ? 'border-accent shadow-drag scale-105 rotate-1 opacity-95'
           : dansColonneActive
@@ -75,9 +79,30 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
             : 'border-bordure shadow-sm opacity-40'
       }`}
     >
-      <p className="text-[13px] font-bold text-texte leading-tight mb-0.5">
-        {nomClient(client) ?? '—'}
-      </p>
+      <div className="flex items-start justify-between gap-1.5">
+        <p className="text-[13px] font-bold text-texte leading-tight mb-0.5 truncate">
+          {nomClient(client) ?? '—'}
+        </p>
+        {/* Seule zone de la carte qui déclenche le glisser-déposer — le
+            reste (nom, montant, bouton Déplacer) n'a plus touch-none, donc
+            balayer entre colonnes ou faire défiler une colonne longue
+            fonctionne partout ailleurs sans risque de saisir une carte par
+            erreur. */}
+        {onMove && !dossier.emprunte && (
+          <span
+            {...attributes}
+            {...listeners}
+            role="button"
+            aria-label="Glisser pour déplacer"
+            onClick={(e) => e.stopPropagation()}
+            className="touch-none cursor-grab active:cursor-grabbing flex-shrink-0 grid grid-cols-2 gap-[3px] p-1.5 -m-1.5"
+          >
+            {Array.from({ length: 6 }).map((_, i) => (
+              <span key={i} className="w-[3px] h-[3px] rounded-full bg-texte-fantome" />
+            ))}
+          </span>
+        )}
+      </div>
       {dossier.titre && <p className="text-[11px] text-texte-doux mb-1 truncate">{dossier.titre}</p>}
       {dossier.montant_estime != null && (
         <p className="text-[11px] text-texte-doux">
