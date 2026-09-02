@@ -208,16 +208,26 @@ export async function ajouterRappel(dossierId, date, note, heure) {
 }
 
 /**
- * Clôt un rappel. Le commentaire reste attaché au rappel plutôt que de partir
- * au journal général : c'est la suite des rappels qui se relit, et un
- * commentaire noyé parmi les notes du dossier ne raconterait plus rien.
+ * Clôt un rappel. Le commentaire reste attaché au rappel (la suite des
+ * rappels d'un dossier continue de se relire d'un coup d'œil dans
+ * Rappels.jsx) ET devient une vraie note de dossier — visible dans le
+ * journal, soumise à la même détection de sous-tâches (suggestion jamais
+ * imposée) que n'importe quelle autre note. Double écriture assumée : les
+ * deux lectures (historique des rappels, journal du dossier) servent des
+ * usages différents.
  */
 export async function cloreRappel(rappelId, commentaire) {
-  const { error } = await supabase
+  const texte = commentaire?.trim() || null
+  const { data, error } = await supabase
     .from('rappels')
-    .update({ fait_at: new Date().toISOString(), commentaire: commentaire?.trim() || null })
+    .update({ fait_at: new Date().toISOString(), commentaire: texte })
     .eq('id', rappelId)
+    .select('dossier_id')
+    .single()
   if (error) return { erreur: error.message }
+  if (texte) {
+    await supabase.from('dossier_notes').insert({ dossier_id: data.dossier_id, texte })
+  }
   // fait_at est posé : la fonction supprime la tâche au lieu d'en créer une.
   // Là aussi en tâche de fond, même raison que ajouterRappel ci-dessus.
   synchroniserRappel(rappelId)
