@@ -95,6 +95,12 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
   const [captureEnEdition, setCaptureEnEdition] = useState(null)
   const [infosAnnexes, setInfosAnnexes] = useState([])
   const [ajoutInfoOuvert, setAjoutInfoOuvert] = useState(false)
+  // Recherche automatique d'adresse (Recherche d'Entreprises), même
+  // mécanisme qu'à la création (ClientForm.jsx) — mais ici values part déjà
+  // rempli des données de la fiche, donc gardé par un vrai changement (voir
+  // l'effet plus bas), pas par simple présence de valeur.
+  const [suggestionsAdresse, setSuggestionsAdresse] = useState([])
+  const [rechercheAdresse, setRechercheAdresse] = useState(false)
   const [nouvelleInfo, setNouvelleInfo] = useState('')
   const [envoiInfo, setEnvoiInfo] = useState(false)
   const [infoEnEdition, setInfoEnEdition] = useState(null)
@@ -417,6 +423,52 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     }
   }, [client.id])
 
+  // Recherche automatique dès que Prénom/Nom/Cabinet ou Ville sont
+  // corrigés sur une fiche existante — même expérience qu'à la création,
+  // manquante jusqu'ici (bug rapporté : correction du prénom sur « de
+  // Boissieu » sans aucune suggestion). Contrairement à ClientForm.jsx, où
+  // le formulaire part vide, values contient déjà les données de la fiche
+  // dès l'ouverture : sans garde-fou, l'effet se déclencherait à chaque
+  // ouverture, pas seulement à une vraie correction. Le déclencheur est
+  // donc un écart avec `client` (la valeur enregistrée), jamais la simple
+  // présence d'une valeur.
+  useEffect(() => {
+    const aChange =
+      values.prenom_praticien !== client.prenom_praticien ||
+      values.nom_praticien !== client.nom_praticien ||
+      values.nom_cabinet !== client.nom_cabinet ||
+      values.ville !== client.ville
+    if (!aChange) {
+      setSuggestionsAdresse([])
+      return
+    }
+    const nomPraticien = [values.prenom_praticien, values.nom_praticien].filter(Boolean).join(' ')
+    const nom = (values.nom_cabinet || nomPraticien || '').trim()
+    const ville = (values.ville || '').trim()
+    if (!nom || !ville) {
+      setSuggestionsAdresse([])
+      return
+    }
+    const minuteur = setTimeout(async () => {
+      setRechercheAdresse(true)
+      const { data, error: erreurRecherche } = await supabase.functions.invoke('entreprise-lookup', {
+        body: { q: nom, ville },
+      })
+      setRechercheAdresse(false)
+      if (!erreurRecherche && data?.resultats) setSuggestionsAdresse(data.resultats)
+    }, 500)
+    return () => clearTimeout(minuteur)
+  }, [values.nom_cabinet, values.prenom_praticien, values.nom_praticien, values.ville, client])
+
+  // Même contrat qu'à la création : un tap est une confirmation explicite,
+  // les données officielles remplacent adresse/CP/ville. Passe par `values`
+  // comme n'importe quelle frappe — la fiche n'est enregistrée qu'au tap
+  // sur « Enregistrer », pas d'écriture directe ici.
+  const appliquerSuggestionAdresse = (s) => {
+    setValues((v) => ({ ...v, adresse: s.adresse ?? v.adresse, code_postal: s.code_postal ?? v.code_postal, ville: s.ville ?? v.ville }))
+    setSuggestionsAdresse([])
+  }
+
   const [erreurDossiers, setErreurDossiers] = useState(null)
   const [tentativeDossiers, setTentativeDossiers] = useState(0)
   const [dossiersDepuisCache, setDossiersDepuisCache] = useState(false)
@@ -688,10 +740,36 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
         </div>
 
         {/* Consultée une fois à la création, rarement ensuite — repliée par
-            défaut, contrairement au contact direct juste en dessous. */}
-        <Rubrique titre="Adresse" rempli={adresseRemplie}>
+            défaut, contrairement au contact direct juste en dessous.
+            forceOuvert dès qu'une suggestion d'adresse arrive : le champ
+            corrigé (souvent Prénom/Nom, toujours visible) n'est pas
+            forcément celui qui ouvre ce bloc — sans ça la suggestion
+            resterait invisible derrière une section repliée. */}
+        <Rubrique titre="Adresse" rempli={adresseRemplie} forceOuvert={suggestionsAdresse.length > 0}>
           <div className="bg-carte rounded-carte shadow-sm divide-y divide-separateur">
             {ADRESSE_FIELDS.map(renderChamp)}
+            {(rechercheAdresse || suggestionsAdresse.length > 0) && (
+              <div className="px-4 py-3 space-y-2">
+                <p className="text-xs text-texte-doux">
+                  {rechercheAdresse
+                    ? 'Recherche…'
+                    : `${suggestionsAdresse.length} résultat${suggestionsAdresse.length > 1 ? 's' : ''} — Recherche d'Entreprises`}
+                </p>
+                {suggestionsAdresse.map((s) => (
+                  <button
+                    key={s.siren}
+                    type="button"
+                    onClick={() => appliquerSuggestionAdresse(s)}
+                    className="w-full text-left bg-fond rounded-imbrique px-3 py-2"
+                  >
+                    <p className="text-sm font-bold text-texte">{s.nom}</p>
+                    <p className="text-xs text-texte-doux">
+                      {[s.adresse, s.code_postal, s.ville].filter(Boolean).join(', ')}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
             <AccesCabinet
               client={values}
               onEnregistre={(data) => {
