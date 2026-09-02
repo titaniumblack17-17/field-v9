@@ -458,6 +458,17 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
     await supabase.from('dossier_note_taches').update({ fait }).eq('id', tache.id)
   }
 
+  // Optionnelle, sans heure — cohérent avec `basculerTache` : mise à jour
+  // optimiste, écriture directe (pas de file hors-ligne ici, comme le reste
+  // des modifications de tâche existantes).
+  const modifierEcheanceTache = async (tache, echeance) => {
+    setTaches((cur) => ({
+      ...cur,
+      [tache.note_id]: cur[tache.note_id].map((t) => (t.id === tache.id ? { ...t, echeance } : t)),
+    }))
+    await supabase.from('dossier_note_taches').update({ echeance }).eq('id', tache.id)
+  }
+
   const supprimerTache = async (tache) => {
     const extrait = tache.texte.length > 60 ? tache.texte.slice(0, 60) + '…' : tache.texte
     if (!(await confirmer(`« ${extrait} »`, { titre: 'Supprimer cette tâche ?', confirmLabel: 'Supprimer' })))
@@ -505,7 +516,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   return (
     <div className="min-h-screen bg-fond">
       <header className="sticky top-0 z-10 bg-fond/90 backdrop-blur px-4 pt-6 pb-4 flex items-center gap-3">
-        <button onClick={onBack} className="text-accent text-sm font-medium h-11 -ml-2 pl-2 pr-1 flex items-center">
+        <button onClick={onBack} className="text-accent text-sm font-semibold h-11 -ml-2 pl-2 pr-1 flex items-center">
           ← Retour
         </button>
       </header>
@@ -517,7 +528,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
         <div className="px-4 -mt-2 mb-1">
           <button
             onClick={() => onOpenClient?.(client)}
-            className="text-accent text-sm font-medium truncate max-w-full"
+            className="text-accent text-sm font-semibold truncate max-w-full"
           >
             {nomClient(client) ?? 'Client'}
             {client.ville ? ` · ${client.ville}` : ''}
@@ -529,7 +540,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
         <div className="flex items-center gap-2 mb-2">
           <span
             style={{ background: s.fond, color: s.texte }}
-            className="text-[11px] font-medium px-2.5 py-1 rounded-full"
+            className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
           >
             {s.badge}
           </span>
@@ -547,22 +558,22 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
             </span>
           )}
           {PLAN_SANS_COMMERCIAL(values) && (
-            <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-alerte/15 text-alerte">
+            <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-alerte/15 text-alerte">
               Commercial ?
             </span>
           )}
           {TYPE_LABELS[values.type] !== s.badge && (
-            <span className="text-xs text-texte-faible">{TYPE_LABELS[values.type]}</span>
+            <span className="text-xs text-texte-doux">{TYPE_LABELS[values.type]}</span>
           )}
         </div>
 
         <div className="flex items-center justify-between gap-2 mb-4">
-          <h1 className="text-2xl font-semibold text-texte">
+          <h1 className="text-2xl font-bold text-texte">
             {values.titre || TYPE_LABELS[values.type]}
           </h1>
           <button
             onClick={copierResume}
-            className="text-accent text-sm font-medium flex-shrink-0 h-11 px-2 -mr-2"
+            className="text-accent text-sm font-semibold flex-shrink-0 h-11 px-2 -mr-2"
           >
             {resumeCopie ? '✓ Copié' : 'Copier le résumé'}
           </button>
@@ -570,7 +581,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
 
         <div
           style={{ borderColor: s.bordure }}
-          className="bg-carte rounded-xl shadow-sm border-2 overflow-hidden"
+          className="bg-carte rounded-carte shadow-sm border-2 overflow-hidden"
         >
           <div style={{ background: s.bordure }} className="h-2.5" />
           <div className="divide-y divide-separateur">
@@ -582,7 +593,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
             onChange={changerType}
           />
           <div className="px-4 py-3">
-            <label className="text-xs text-texte-faible" htmlFor="titre">
+            <label className="text-xs text-texte-doux" htmlFor="titre">
               Titre
             </label>
             <input
@@ -628,7 +639,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
               />
               {values.statut === 'en_attente' && (
                 <div className="px-4 py-3">
-                  <label className="text-xs text-texte-faible" htmlFor="bloque_par">
+                  <label className="text-xs text-texte-doux" htmlFor="bloque_par">
                     En attente de quoi
                   </label>
                   <input
@@ -703,7 +714,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
           )}
 
           <div className="px-4 py-3">
-            <label className="text-xs text-texte-faible" htmlFor="montant">
+            <label className="text-xs text-texte-doux" htmlFor="montant">
               {values.type === 'sav' ? 'Devis de réparation (€)' : 'Montant estimé (€)'}
             </label>
             <input
@@ -718,7 +729,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
           </div>
 
           <div className="px-4 py-3">
-            <label className="text-xs text-texte-faible" htmlFor="date_installation">
+            <label className="text-xs text-texte-doux" htmlFor="date_installation">
               {values.type === 'sav' ? "Date d'intervention prévue" : "Date d'installation prévue"}
             </label>
             <input
@@ -741,14 +752,14 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
 
         <div className="mt-4">
           <div className="flex items-baseline justify-between px-1 mb-2">
-            <p className="text-xs text-texte-faible">
+            <p className="text-xs text-texte-doux">
               Notes{notes.length > 0 ? ` · ${notes.length}` : ''}
             </p>
             <div className="flex items-center gap-3">
               {notes.length > APERCU_NOTES && (
                 <button
                   onClick={() => setToutesNotes((v) => !v)}
-                  className="text-accent text-xs font-medium"
+                  className="text-accent text-xs font-semibold"
                 >
                   {toutesNotes ? 'Réduire' : `Afficher les ${notes.length} notes`}
                 </button>
@@ -756,7 +767,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
               <button
                 onClick={addNote}
                 disabled={addingNote}
-                className="text-accent text-xs font-medium disabled:opacity-40"
+                className="text-accent text-xs font-semibold disabled:opacity-40"
               >
                 + Ajouter
               </button>
@@ -772,7 +783,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
               {(toutesNotes ? notes : notes.slice(0, APERCU_NOTES)).map((n) => {
                 const suggestion = noteEnEdition === n.id ? null : suggestionPour(n)
                 return (
-                <li key={n.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
+                <li key={n.id} className="bg-carte rounded-carte px-4 py-3 shadow-sm">
                   {noteEnEdition === n.id ? (
                     <TexteModifiable
                       valeur={n.texte}
@@ -790,7 +801,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
                       {suggestion && (
                         <button
                           onClick={() => convertirEnTaches(n, suggestion)}
-                          className="text-accent text-xs font-medium mt-2"
+                          className="text-accent text-xs font-semibold mt-2"
                         >
                           {suggestion.length} points détectés · Créer les tâches
                         </button>
@@ -798,7 +809,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
                     </>
                   )}
                   <div className="flex items-center gap-3 mt-1">
-                  <p className="text-xs text-texte-faible flex-1">
+                  <p className="text-xs text-texte-doux flex-1">
                     {new Date(n.created_at).toLocaleString('fr-FR', {
                       day: '2-digit',
                       month: '2-digit',
@@ -810,21 +821,21 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
                   {noteEnEdition !== n.id && (
                     <button
                       onClick={() => setNoteEnEdition(n.id)}
-                      className="text-accent text-xs font-medium h-9 px-1"
+                      className="text-accent text-xs font-semibold h-9 px-1"
                     >
                       Modifier
                     </button>
                   )}
                   <button
                     onClick={() => supprimerNote(n)}
-                    className="text-texte-fantome text-xs h-9 px-1"
+                    className="text-texte-doux text-xs h-9 px-1"
                   >
                     Supprimer
                   </button>
                   {noteEnEdition !== n.id && (
                     <button
                       onClick={() => setAjoutTachePour((cur) => (cur === n.id ? null : n.id))}
-                      className="text-accent text-xs font-medium h-9 px-1"
+                      className="text-accent text-xs font-semibold h-9 px-1"
                     >
                       + Tâche
                     </button>
@@ -839,7 +850,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
                         setTexteNouvelleTache('')
                         setAjoutTachePour(null)
                       }}
-                      className="flex items-center gap-2 mt-2 bg-fond rounded-lg border border-bordure px-3 py-2"
+                      className="flex items-center gap-2 mt-2 bg-fond rounded-imbrique border border-bordure px-3 py-2"
                     >
                       <input
                         autoFocus
@@ -848,13 +859,18 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
                         placeholder="Nouvelle tâche…"
                         className="flex-1 min-w-0 bg-transparent text-sm text-texte outline-none placeholder:text-texte-fantome"
                       />
-                      <button type="submit" className="text-accent text-xs font-medium flex-shrink-0">
+                      <button type="submit" className="text-accent text-xs font-semibold flex-shrink-0">
                         Ajouter
                       </button>
                     </form>
                   )}
                   {taches[n.id]?.length > 0 && (
-                    <NoteTaches taches={taches[n.id]} onToggle={basculerTache} onDelete={supprimerTache} />
+                    <NoteTaches
+                      taches={taches[n.id]}
+                      onToggle={basculerTache}
+                      onDelete={supprimerTache}
+                      onEcheance={modifierEcheanceTache}
+                    />
                   )}
                 </li>
                 )
@@ -868,7 +884,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
           <button
             onClick={supprimer}
             disabled={suppression}
-            className="w-full text-erreur text-sm py-2 disabled:opacity-50"
+            className="w-full text-erreur text-sm font-semibold py-2 disabled:opacity-50"
           >
             {suppression ? 'Suppression…' : 'Supprimer ce dossier'}
           </button>
@@ -879,14 +895,14 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
         <div className="fixed bottom-0 inset-x-0 bg-fond/95 backdrop-blur border-t border-bordure px-4 py-3 flex gap-2">
           <button
             onClick={annuler}
-            className="flex-1 bg-carte text-texte-doux font-medium rounded-xl py-3 shadow"
+            className="flex-1 bg-carte text-texte-doux font-semibold rounded-imbrique py-3 shadow"
           >
             Annuler
           </button>
           <button
             onClick={save}
             disabled={saving}
-            className="flex-1 bg-accent text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
+            className="flex-1 bg-accent text-white font-semibold rounded-imbrique py-3 shadow disabled:opacity-50"
           >
             {saving ? 'Enregistrement…' : 'Enregistrer'}
           </button>

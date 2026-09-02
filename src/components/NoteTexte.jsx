@@ -46,7 +46,7 @@ export default function NoteTexte({ texte, lignes = 4 }) {
       {(deborde || ouvert) && (
         <button
           onClick={() => setOuvert((o) => !o)}
-          className="text-accent text-xs font-medium mt-1"
+          className="text-accent text-xs font-semibold mt-1"
         >
           {ouvert ? 'Réduire' : 'Lire la suite'}
         </button>
