@@ -94,6 +94,7 @@ format n'est pas encore déterminé. Réimport manuel via
 | `todoist-rappel` | `{rappelId}` synchronise · `{action:'reconcilier'}` rapatrie | true |
 | `devis-montant` | `{fichierId}` lit le total TTC d'un devis PDF | true |
 | `client-web-lookup` | `{client_id}` recherche web (spécialités, adresse, associés…), écrit directement les champs vides trouvés avec confiance ; déclenchée en tâche de fond par `capture-intake` à chaque création de client, et sur demande depuis le bouton « Chercher sur le web » de la fiche | true |
+| `entreprise-lookup` | `{q, ville, client_id?}` API publique Recherche d'Entreprises (INSEE/SIRENE, gratuite, sans clé) — adresse/CP/ville. Sans `client_id` : liste de candidats (`ClientForm`, `ClientDetail`) — ville exacte suffit, Bruce reste juge. Avec `client_id` (écriture automatique et silencieuse) : ville exacte sans concurrent **ET** NAF candidat commençant par `86.2` (dentaire) — la ville seule ne suffit plus depuis le faux positif « HENRI MARTIN » (location de logements à Saint-Quentin, NAF 68.20B, homonyme par pur hasard d'un vrai praticien). **`capture-intake` n'appelle PAS cette fonction** : un self-call Edge→Edge lancé sous `EdgeRuntime.waitUntil` restait bloqué ~13 s puis échouait sans trace ; la dictée interroge donc l'API gouv en direct (même logique de score et même filtre NAF, dupliqués à dessein, à garder synchro) | true |
 
 Secrets : `FIELD_EDGE_API_KEY` (Anthropic), `TODOIST_TOKEN`.
 
