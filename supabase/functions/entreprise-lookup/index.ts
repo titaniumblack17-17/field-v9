@@ -127,11 +127,23 @@ Deno.serve(async (req: Request) => {
   let champsEcrits: string[] = []
 
   if (body.client_id) {
-    // Confiant seulement si un candidat a une ville EXACTE (score >= 10) et
-    // qu'aucun autre n'atteint ce même niveau — sinon plusieurs cabinets
-    // homonymes dans la même ville rendraient le choix automatique risqué.
+    // Confiant seulement si un candidat a une ville EXACTE (score >= 10),
+    // qu'aucun autre n'atteint ce même niveau, ET que son activité est
+    // dentaire (NAF 86.2x) — sinon plusieurs cabinets homonymes dans la même
+    // ville rendraient le choix automatique risqué, et une entité sans
+    // rapport (ex. « HENRI MARTIN », location de logements à Saint-Quentin,
+    // NAF 68.20B) peut coïncider par pur hasard de nom+ville avec un vrai
+    // praticien. La ville seule ne suffit donc plus pour une écriture
+    // automatique et silencieuse — elle reste suffisante pour la liste de
+    // suggestions interactive ci-dessous (ClientForm/ClientDetail), où
+    // Bruce reste juge de la pertinence.
+    const meilleurCandidat = scores[0]?.r
+    const activiteDentaire = (meilleurCandidat?.activite_principale ?? "").startsWith("86.2")
     const confiant =
-      scores.length > 0 && scores[0].score >= 10 && (scores.length === 1 || scores[1].score < 10)
+      scores.length > 0 &&
+      scores[0].score >= 10 &&
+      (scores.length === 1 || scores[1].score < 10) &&
+      activiteDentaire
 
     if (confiant) {
       const supabase = createClient(

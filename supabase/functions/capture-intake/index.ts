@@ -38,7 +38,8 @@ const trouverExistant = (clients: any[], nom: string, prenom: string | null) => 
 // qui a déjà répondu.
 const completerDepuisLeWeb = async (clientId: string) => {
   try {
-    await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/client-web-lookup`, {
+    console.log(`[capture-intake] client-web-lookup : appel pour client=${clientId}`)
+    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/client-web-lookup`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -47,31 +48,144 @@ const completerDepuisLeWeb = async (clientId: string) => {
       },
       body: JSON.stringify({ client_id: clientId }),
     })
-  } catch {
-    // silencieux : voir commentaire ci-dessus
+    console.log(`[capture-intake] client-web-lookup : HTTP ${res.status}`)
+  } catch (e) {
+    // silencieux pour la capture : voir commentaire ci-dessus. On trace quand
+    // même, ce chaînon a déjà échoué en silence par le passé.
+    console.error(`[capture-intake] client-web-lookup a échoué : ${e}`)
   }
 }
 
-// Comme completerDepuisLeWeb, mais déterministe et gratuite (API publique
-// Recherche d'Entreprises) — appelée avant elle : si un candidat sans
+// Comme completerDepuisLeWeb, mais déterministe et gratuite : l'API publique
+// Recherche d'Entreprises (recherche-entreprises.api.gouv.fr — INSEE/SIRENE,
+// sans clé, CORS ouvert) est interrogée EN DIRECT ici. Si un candidat sans
 // ambiguïté est trouvé, adresse/code postal/ville sont remplis en quelques
 // centaines de ms sans passer par un modèle. client-web-lookup, appelé juste
 // après, recalcule de toute façon les champs manquants à ce moment-là : ce
 // qui vient d'être rempli ici ne lui sera simplement plus demandé. Un échec
 // ici ne bloque jamais la suite, et ne remplit jamais un champ déjà dicté.
-const completerAdresseSiRecherchable = async (clientId: string, nom: string, ville: string) => {
+//
+// Pourquoi en direct plutôt que via la fonction Edge entreprise-lookup :
+// l'appel serveur-à-serveur capture-intake → entreprise-lookup, déclenché
+// depuis le contexte d'une requête encore ouverte (EdgeRuntime.waitUntil),
+// restait bloqué ~13 s puis échouait SANS jamais atteindre la fonction cible
+// (aucune entrée dans function_edge_logs), le tout avalé en silence par le
+// catch. Résultat : les clients créés par dictée ne voyaient jamais ce
+// préremplissage rapide, seulement la recherche web (plus lente, payante)
+// ~13 s plus tard. Un fetch sortant vers api.gouv.fr se comporte comme
+// l'appel à l'API Anthropic plus bas : fiable, aucun self-call Edge.
+//
+// La logique de score et le seuil de confiance sont volontairement identiques
+// à supabase/functions/entreprise-lookup/index.ts (branche avec client_id) —
+// les deux doivent rester synchronisés si l'un des deux change.
+const RECHERCHE_ENTREPRISES = "https://recherche-entreprises.api.gouv.fr/search"
+
+const normaliserCommune = (s: unknown) =>
+  String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim()
+
+const adresseDepuisSiege = (siege: any): string | null => {
+  const rue = [siege?.numero_voie, siege?.indice_repetition, siege?.type_voie, siege?.libelle_voie]
+    .filter(Boolean)
+    .join(" ")
+    .trim()
+  return rue || null
+}
+
+const scorerEntreprise = (resultat: any, ville: string): number | null => {
+  if (resultat.etat_administratif !== "A") return null
+  let score = 0
+  const commune = normaliserCommune(resultat.siege?.libelle_commune)
+  const v = normaliserCommune(ville)
+  if (v && commune === v) score += 10
+  else if (v && commune && (commune.includes(v) || v.includes(commune))) score += 4
+  if ((resultat.activite_principale ?? "").startsWith("86.23")) score += 3
+  return score
+}
+
+const completerAdresseSiRecherchable = async (
+  clientId: string,
+  nom: string,
+  ville: string,
+  supabase: ReturnType<typeof createClient>
+) => {
   try {
-    await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/entreprise-lookup`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      },
-      body: JSON.stringify({ q: nom, ville, client_id: clientId }),
-    })
-  } catch {
-    // silencieux : voir commentaire ci-dessus
+    console.log(`[capture-intake] recherche-entreprises : q="${nom}" ville="${ville}" client=${clientId}`)
+
+    let bruts: any[] = []
+    try {
+      const apiRes = await fetch(`${RECHERCHE_ENTREPRISES}?q=${encodeURIComponent(nom)}&per_page=25`)
+      if (apiRes.ok) {
+        const apiData = await apiRes.json()
+        bruts = Array.isArray(apiData.results) ? apiData.results : []
+      } else {
+        console.log(`[capture-intake] recherche-entreprises : HTTP ${apiRes.status}`)
+      }
+    } catch (e) {
+      console.error(`[capture-intake] recherche-entreprises injoignable : ${e}`)
+      return
+    }
+
+    const scores = bruts
+      .map((r: any) => ({ r, score: scorerEntreprise(r, ville) }))
+      .filter((x: any): x is { r: any; score: number } => x.score !== null)
+      .sort((a: any, b: any) => b.score - a.score)
+
+    // Confiant seulement si le meilleur candidat a une ville EXACTE (score
+    // >= 10), qu'aucun autre n'atteint ce niveau, ET que son activité est
+    // dentaire (NAF 86.2x) — même garde-fou que entreprise-lookup (branche
+    // client_id), à garder synchro : une entité sans rapport (ex. « HENRI
+    // MARTIN », location de logements à Saint-Quentin, NAF 68.20B) peut
+    // coïncider par pur hasard de nom+ville avec un vrai praticien. La ville
+    // seule ne suffit plus pour cette écriture automatique et silencieuse.
+    const meilleurCandidat = scores[0]?.r
+    const activiteDentaire = (meilleurCandidat?.activite_principale ?? "").startsWith("86.2")
+    const confiant =
+      scores.length > 0 &&
+      scores[0].score >= 10 &&
+      (scores.length === 1 || scores[1].score < 10) &&
+      activiteDentaire
+    console.log(
+      `[capture-intake] recherche-entreprises : ${scores.length} candidat(s) scorés, confiant=${confiant}` +
+        (scores[0] ? ` (meilleur: NAF ${scores[0].r.activite_principale}, score ${scores[0].score})` : '')
+    )
+    if (!confiant) return
+
+    const siege = scores[0].r.siege
+    const trouve = {
+      adresse: adresseDepuisSiege(siege),
+      code_postal: siege?.code_postal ?? null,
+      ville: siege?.libelle_commune ?? null,
+    }
+
+    const { data } = await supabase
+      .from("clients")
+      .select("adresse, code_postal, ville")
+      .eq("id", clientId)
+      .single()
+    const fiche = data as { adresse: string | null; code_postal: string | null; ville: string | null } | null
+    if (!fiche) return
+
+    // Enrichir sans écraser : seuls les champs encore vides, jamais une valeur
+    // déjà dictée par Bruce (la ville dictée notamment n'est jamais recouverte
+    // par la casse officielle).
+    const update: Record<string, string> = {}
+    if (!fiche.adresse && trouve.adresse) update.adresse = trouve.adresse
+    if (!fiche.code_postal && trouve.code_postal) update.code_postal = trouve.code_postal
+    if (!fiche.ville && trouve.ville) update.ville = trouve.ville
+
+    if (!Object.keys(update).length) {
+      console.log(`[capture-intake] recherche-entreprises : rien à remplir, fiche déjà renseignée`)
+      return
+    }
+
+    const { error } = await supabase.from("clients").update(update).eq("id", clientId)
+    if (error) {
+      console.error(`[capture-intake] recherche-entreprises : écriture échouée : ${error.message}`)
+    } else {
+      console.log(`[capture-intake] recherche-entreprises : rempli ${Object.keys(update).join(", ")}`)
+    }
+  } catch (e) {
+    console.error(`[capture-intake] completerAdresseSiRecherchable a échoué : ${e}`)
   }
 }
 
@@ -408,14 +522,18 @@ peut-être fausse sans avertissement.
     // recherche web générale — sinon inutile de la solliciter pour rien.
     // Prénom + nom doivent être recombinés : un nom de famille seul (ex.
     // « Capela ») renvoie des centaines de résultats sans rapport côté API,
-    // même bug que celui trouvé et corrigé côté ClientForm.jsx.
+    // même bug que celui trouvé et corrigé côté ClientForm.jsx. Le praticien
+    // nommé a la priorité sur le cabinet — Sirene indexe des raisons
+    // sociales, pas des enseignes commerciales (« Grandental Avron » renvoie
+    // 0 résultat quand le praticien nommé en aurait renvoyé) ; le cabinet ne
+    // sert de repli que pour les centres/SCM sans praticien nommé.
     const idCree = client_id
     const nomCompletDicte = [champs.prenom_praticien, nomDicte].filter(Boolean).join(' ')
-    const nomPourRecherche = champs.nom_cabinet || nomCompletDicte
+    const nomPourRecherche = nomCompletDicte || champs.nom_cabinet
     const villeDictee = champs.ville
     EdgeRuntime.waitUntil(
       (villeDictee
-        ? completerAdresseSiRecherchable(idCree, nomPourRecherche, villeDictee)
+        ? completerAdresseSiRecherchable(idCree, nomPourRecherche, villeDictee, supabase)
         : Promise.resolve()
       ).then(() => completerDepuisLeWeb(idCree))
     )
