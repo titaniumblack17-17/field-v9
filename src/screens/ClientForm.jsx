@@ -39,8 +39,15 @@ export default function ClientForm({ onCreated, onCancel }) {
     // Camille » retrouve directement le bon praticien (constaté en conditions
     // réelles : la recherche fonctionnait par accident quand tout était tapé
     // dans un seul champ, jamais quand Prénom/Nom étaient remplis séparément).
+    // Le praticien nommé a la priorité sur le cabinet : Sirene indexe des
+    // raisons sociales, pas des enseignes commerciales — « Grandental Avron »
+    // (une enseigne) renvoie 0 résultat quand « Mikael Cohen » (la personne)
+    // en aurait renvoyé, masqué jusqu'ici par le cabinet dès qu'il était
+    // rempli. Le cabinet ne sert de terme de recherche qu'en repli, pour les
+    // centres/SCM sans praticien nommé — seul cas où il reste le seul terme
+    // utilisable.
     const nomPraticien = [values.prenom_praticien, values.nom_praticien].filter(Boolean).join(' ')
-    const nom = (values.nom_cabinet || nomPraticien || '').trim()
+    const nom = (nomPraticien || values.nom_cabinet || '').trim()
     const ville = (values.ville || '').trim()
     if (!nom || !ville) {
       setSuggestions([])
@@ -101,6 +108,14 @@ export default function ClientForm({ onCreated, onCancel }) {
       setError(dbError.message)
       return
     }
+
+    // Recherche web en arrière-plan (spécialité, adresse, associés…), comme
+    // pour un client né d'une dictée (capture-intake) — jamais attendue :
+    // Bruce ne doit pas patienter plusieurs secondes après avoir tapé
+    // « Créer le client ». ClientDetail (où onCreated l'amène) écoute la
+    // table clients en temps réel : les champs complétés apparaîtront sous
+    // ses yeux, sans qu'il ait besoin de recharger.
+    supabase.functions.invoke('client-web-lookup', { body: { client_id: data.id } }).catch(() => {})
 
     onCreated(data)
   }

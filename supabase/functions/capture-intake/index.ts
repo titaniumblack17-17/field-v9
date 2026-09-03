@@ -408,10 +408,14 @@ peut-être fausse sans avertissement.
     // recherche web générale — sinon inutile de la solliciter pour rien.
     // Prénom + nom doivent être recombinés : un nom de famille seul (ex.
     // « Capela ») renvoie des centaines de résultats sans rapport côté API,
-    // même bug que celui trouvé et corrigé côté ClientForm.jsx.
+    // même bug que celui trouvé et corrigé côté ClientForm.jsx. Le praticien
+    // nommé a la priorité sur le cabinet — Sirene indexe des raisons
+    // sociales, pas des enseignes commerciales (« Grandental Avron » renvoie
+    // 0 résultat quand le praticien nommé en aurait renvoyé) ; le cabinet ne
+    // sert de repli que pour les centres/SCM sans praticien nommé.
     const idCree = client_id
     const nomCompletDicte = [champs.prenom_praticien, nomDicte].filter(Boolean).join(' ')
-    const nomPourRecherche = champs.nom_cabinet || nomCompletDicte
+    const nomPourRecherche = nomCompletDicte || champs.nom_cabinet
     const villeDictee = champs.ville
     EdgeRuntime.waitUntil(
       (villeDictee

@@ -442,8 +442,12 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       setSuggestionsAdresse([])
       return
     }
+    // Même priorité qu'à la création (ClientForm.jsx) : le praticien nommé
+    // avant le cabinet — Sirene indexe des raisons sociales, pas des
+    // enseignes commerciales, le cabinet ne sert de repli que pour les
+    // centres/SCM sans praticien nommé.
     const nomPraticien = [values.prenom_praticien, values.nom_praticien].filter(Boolean).join(' ')
-    const nom = (values.nom_cabinet || nomPraticien || '').trim()
+    const nom = (nomPraticien || values.nom_cabinet || '').trim()
     const ville = (values.ville || '').trim()
     if (!nom || !ville) {
       setSuggestionsAdresse([])
@@ -528,6 +532,42 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       supabase.removeChannel(channel)
     }
   }, [client.id, tentativeDossiers])
+
+  // Une recherche web peut compléter la fiche en arrière-plan pendant que
+  // Bruce est déjà sur cet écran — juste après une création (ClientForm.jsx)
+  // ou une dictée (capture-intake) qui l'a lancée sans l'attendre. Sans cet
+  // abonnement, les champs trouvés n'apparaissaient qu'au prochain
+  // rechargement, silencieusement. Seuls les champs qu'il n'a pas encore
+  // touchés sont mis à jour : une frappe en cours ne doit jamais être
+  // écrasée par une écriture distante, même bien intentionnée.
+  useEffect(() => {
+    const estVide = (v) => v == null || v === '' || (Array.isArray(v) && v.length === 0)
+
+    const canal = supabase
+      .channel(`client-${client.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'clients', filter: `id=eq.${client.id}` },
+        (payload) => {
+          const nouveau = payload.new
+          setValues((v) => {
+            const maj = {}
+            for (const [cle, val] of Object.entries(nouveau)) {
+              if (cle === 'id' || cle === 'associes' || cle === 'assistantes') continue
+              if (estVide(v[cle]) && !estVide(val)) maj[cle] = val
+            }
+            return Object.keys(maj).length ? { ...v, ...maj } : v
+          })
+          if (Array.isArray(nouveau.associes) && cleanPeople(associes).length === 0 && nouveau.associes.length > 0) {
+            setAssocies(emptyPeople(nouveau.associes))
+          }
+          Object.assign(client, nouveau)
+        }
+      )
+      .subscribe()
+
+    return () => supabase.removeChannel(canal)
+  }, [client.id])
 
   const nomComplet = nomClient(values) ?? 'Client'
 
