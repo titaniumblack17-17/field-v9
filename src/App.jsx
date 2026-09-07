@@ -138,6 +138,22 @@ async function executerActionEnFile(action) {
       if (!res.ok) throw new Error('échec capture-intake')
       return
     }
+    case 'capture-lien': {
+      // Relie une capture au dossier créé depuis sa suggestion (SAV/Projet/
+      // Plan). Sans ce lien, le bouton « Créer le dossier » ne se cache
+      // jamais (voir SuggestionCapture.jsx) — et contrairement à l'écran
+      // Capture, ce bouton reste affiché de façon persistante dans le
+      // journal du client. Un échec silencieux ici expose donc Bruce à
+      // retaper « Créer » sur une capture déjà traitée, des jours ou des
+      // semaines plus tard, et à générer un vrai doublon de dossier — sans
+      // outil de fusion pour les dossiers (contrairement aux clients).
+      const { error } = await supabase
+        .from('captures')
+        .update({ [action.champ]: action.dossierId })
+        .eq('id', action.captureId)
+      if (error) throw error
+      return
+    }
     default:
       throw new Error(`Type d'action inconnu : ${action.type}`)
   }
