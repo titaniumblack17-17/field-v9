@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { mettreEnFile } from '../lib/fileAttente'
 import TexteModifiable from './TexteModifiable'
 import useConfirm from '../hooks/useConfirm'
 import Rubrique from './Rubrique'
@@ -178,7 +179,9 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   }
 
   const basculerCumul = async (f) => {
-    await supabase.from('fichiers').update({ cumule: !f.cumule }).eq('id', f.id)
+    const cumule = !f.cumule
+    const { error } = await supabase.from('fichiers').update({ cumule }).eq('id', f.id)
+    if (error) mettreEnFile({ type: 'update', table: 'fichiers', rowId: f.id, champs: { cumule } })
     onMontantChange?.()
   }
 
@@ -203,7 +206,8 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
       return
     }
     await supabase.storage.from('documents').remove([f.chemin])
-    await supabase.from('fichiers').delete().eq('id', f.id)
+    const { error } = await supabase.from('fichiers').delete().eq('id', f.id)
+    if (error) mettreEnFile({ type: 'delete', table: 'fichiers', rowId: f.id })
     // Retrait immédiat : ne pas faire attendre l'aller-retour temps réel pour
     // voir disparaître ce qu'on vient de supprimer soi-même.
     setListe((cur) => cur.filter((x) => x.id !== f.id))
@@ -269,7 +273,9 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                   className="text-texte"
                   onFermer={() => setRenommage(null)}
                   onEnregistrer={async (v) => {
-                    if (v) await supabase.from('fichiers').update({ nom: v }).eq('id', f.id)
+                    if (!v) return
+                    const { error } = await supabase.from('fichiers').update({ nom: v }).eq('id', f.id)
+                    if (error) mettreEnFile({ type: 'update', table: 'fichiers', rowId: f.id, champs: { nom: v } })
                   }}
                 />
               ) : (

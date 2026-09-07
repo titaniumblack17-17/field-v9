@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { mettreEnFile } from '../lib/fileAttente'
 import TexteModifiable from './TexteModifiable'
 import useConfirm from '../hooks/useConfirm'
 import Rubrique from './Rubrique'
@@ -55,14 +56,20 @@ export default function MaterielInstalle({ clientId }) {
   const ajouter = async () => {
     if (!saisie.marque.trim() && !saisie.modele.trim()) return
     setEnregistre(true)
-    await supabase.from('materiel').insert({
+    const payload = {
       client_id: clientId,
       marque: saisie.marque.trim() || null,
       modele: saisie.modele.trim() || null,
       annee: saisie.annee ? Number(saisie.annee) : null,
       quantite: saisie.quantite ? Number(saisie.quantite) : null,
       note: saisie.note.trim() || null,
-    })
+    }
+    const { error } = await supabase.from('materiel').insert(payload)
+    // Ici, contrairement aux notes/tâches, l'écran ne ment pas en cas
+    // d'échec : la liste ne se met à jour que via le temps réel (pas de
+    // setListe optimiste), donc rien n'apparaît si l'insert a échoué. La
+    // file évite quand même d'avoir à ressaisir une fois le réseau revenu.
+    if (error) mettreEnFile({ type: 'insert', table: 'materiel', payload })
     setSaisie(vide)
     setFormulaireOuvert(false)
     setEnregistre(false)
@@ -71,12 +78,14 @@ export default function MaterielInstalle({ clientId }) {
   // Une marque mal orthographiée ou une année corrigée ne doivent pas obliger
   // à supprimer la ligne et à la ressaisir.
   const modifier = async (id, champs) => {
-    await supabase.from('materiel').update(champs).eq('id', id)
+    const { error } = await supabase.from('materiel').update(champs).eq('id', id)
+    if (error) mettreEnFile({ type: 'update', table: 'materiel', rowId: id, champs })
   }
 
   const supprimer = async (id) => {
     if (!(await confirmer('Retirer cet équipement de la liste ?', { confirmLabel: 'Retirer' }))) return
-    await supabase.from('materiel').delete().eq('id', id)
+    const { error } = await supabase.from('materiel').delete().eq('id', id)
+    if (error) mettreEnFile({ type: 'delete', table: 'materiel', rowId: id })
     setListe((cur) => cur.filter((m) => m.id !== id))
   }
 
