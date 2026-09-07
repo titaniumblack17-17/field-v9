@@ -106,6 +106,30 @@ Secrets : `FIELD_EDGE_API_KEY` (Anthropic), `TODOIST_TOKEN`.
 > `git log` avant de reprendre : la fusion de fiches et la décision SAV
 > viennent d'une branche parallèle.
 
+## Bugs de perte/corruption de données corrigés le 07/09/2026
+
+- **File d'attente hors-ligne (`executerActionEnFile`, App.jsx)** — les cas
+  `'note'` et `'etape'` n'ont jamais vérifié l'erreur retournée par Supabase.
+  `insert`/`update` de supabase-js ne lèvent jamais (réseau coupé, contrainte
+  violée…) — la promesse se résout avec `{ error }` plutôt que de rejeter.
+  `viderFile` comptait donc l'action comme traitée et la sortait de la file
+  même quand rien n'était écrit en base : une note tapée par Bruce a disparu
+  ainsi, sans bandeau ni trace ensuite. Corrigé par une simple vérification
+  `if (error) throw error` dans les deux cas — l'action reste désormais en
+  file (bandeau visible, nouvelle tentative au prochain retour réseau) tant
+  qu'elle n'a pas vraiment réussi.
+- **Échéance de tâche affichée "Aujourd'hui" au lieu de la date choisie**
+  (`TexteModifiable.jsx`) — les champs `type="date"`/`"time"` s'enregistraient
+  automatiquement à chaque `onChange`. La roue native iOS déclenche un
+  `onChange` par cran de défilement, chacun avec une valeur complète et
+  valide du point de vue du navigateur, pas seulement au choix final :
+  plusieurs écritures concurrentes partaient en parallèle, et l'ordre
+  d'arrivée des réponses réseau (pas l'ordre d'envoi) décidait quelle date
+  restait en base. Corrigé en retirant l'enregistrement automatique — le
+  brouillon se met à jour au défilement, seul un appui explicite sur ✓ (ou
+  Entrée) enregistre. S'applique à tous les champs date/heure du composant
+  (échéances de tâches, dates de rappels).
+
 ## Chiffres au 22/08/2026
 
 76 clients · 56 projets, 18 plans, 1 SAV · 8 rappels ouverts · 17 pièces
