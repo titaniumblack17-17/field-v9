@@ -11,6 +11,7 @@ import {
 import TexteModifiable from './TexteModifiable'
 import useConfirm from '../hooks/useConfirm'
 import usePrompt from '../hooks/usePrompt'
+import { mettreEnFile } from '../lib/fileAttente'
 
 const leJour = (v) =>
   v ? new Date(v).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : ''
@@ -204,7 +205,8 @@ export default function Rappels({ dossierId, statut }) {
       }))
     )
       return
-    await supabase.from('rappels').delete().eq('id', rappel.id)
+    const { error } = await supabase.from('rappels').delete().eq('id', rappel.id)
+    if (error) mettreEnFile({ type: 'delete', table: 'rappels', rowId: rappel.id })
     setListe((cur) => cur.filter((r) => r.id !== rappel.id))
   }
 

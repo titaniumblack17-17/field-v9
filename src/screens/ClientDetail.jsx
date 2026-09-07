@@ -127,7 +127,8 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     const extrait = info.texte.length > 60 ? info.texte.slice(0, 60) + '…' : info.texte
     if (!(await confirmer(`« ${extrait} »`, { titre: 'Supprimer cette entrée ?', confirmLabel: 'Supprimer' })))
       return
-    await supabase.from('client_notes').delete().eq('id', info.id)
+    const { error } = await supabase.from('client_notes').delete().eq('id', info.id)
+    if (error) mettreEnFile({ type: 'delete', table: 'client_notes', rowId: info.id })
     setInfosAnnexes((cur) => cur.filter((i) => i.id !== info.id))
   }
   const [dicteeVisible, setDicteeVisible] = useState(null)
@@ -175,7 +176,8 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       }))
     )
       return
-    await supabase.from('captures').delete().eq('id', capture.id)
+    const { error } = await supabase.from('captures').delete().eq('id', capture.id)
+    if (error) mettreEnFile({ type: 'delete', table: 'captures', rowId: capture.id })
     setJournal((cur) => cur.filter((c) => c.id !== capture.id))
   }
 
@@ -1015,7 +1017,12 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                     className="text-texte text-sm"
                     onFermer={() => setInfoEnEdition(null)}
                     onEnregistrer={async (v) => {
-                      if (v) await supabase.from('client_notes').update({ texte: v }).eq('id', info.id)
+                      if (!v) return
+                      const { error } = await supabase
+                        .from('client_notes')
+                        .update({ texte: v })
+                        .eq('id', info.id)
+                      if (error) mettreEnFile({ type: 'update', table: 'client_notes', rowId: info.id, champs: { texte: v } })
                     }}
                   />
                 ) : (
@@ -1078,7 +1085,12 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
                       className="text-texte text-sm"
                       onFermer={() => setCaptureEnEdition(null)}
                       onEnregistrer={async (v) => {
-                        if (v) await supabase.from('captures').update({ resume: v }).eq('id', c.id)
+                        if (!v) return
+                        const { error } = await supabase
+                          .from('captures')
+                          .update({ resume: v })
+                          .eq('id', c.id)
+                        if (error) mettreEnFile({ type: 'update', table: 'captures', rowId: c.id, champs: { resume: v } })
                       }}
                     />
                   ) : (

@@ -86,7 +86,8 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
     const extrait = note.texte.length > 60 ? note.texte.slice(0, 60) + '…' : note.texte
     if (!(await confirmer(`« ${extrait} »`, { titre: 'Supprimer cette note ?', confirmLabel: 'Supprimer' })))
       return
-    await supabase.from('dossier_notes').delete().eq('id', note.id)
+    const { error } = await supabase.from('dossier_notes').delete().eq('id', note.id)
+    if (error) mettreEnFile({ type: 'delete', table: 'dossier_notes', rowId: note.id })
     setNotes((cur) => cur.filter((n) => n.id !== note.id))
     // La suppression cascade côté base (dossier_note_taches.note_id) ; ici
     // c'est juste l'état local qui n'a plus de raison de garder ces tâches.
@@ -445,7 +446,13 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
     if (error) {
       mettreEnFile({ type: 'note', table: 'dossier_note_taches', payload: lignes })
     } else {
-      await supabase.from('dossier_notes').update({ texte: resteTexte }).eq('id', note.id)
+      const { error: errTexte } = await supabase
+        .from('dossier_notes')
+        .update({ texte: resteTexte })
+        .eq('id', note.id)
+      if (errTexte) {
+        mettreEnFile({ type: 'update', table: 'dossier_notes', rowId: note.id, champs: { texte: resteTexte } })
+      }
     }
   }
 
@@ -455,18 +462,18 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
       ...cur,
       [tache.note_id]: cur[tache.note_id].map((t) => (t.id === tache.id ? { ...t, fait } : t)),
     }))
-    await supabase.from('dossier_note_taches').update({ fait }).eq('id', tache.id)
+    const { error } = await supabase.from('dossier_note_taches').update({ fait }).eq('id', tache.id)
+    if (error) mettreEnFile({ type: 'update', table: 'dossier_note_taches', rowId: tache.id, champs: { fait } })
   }
 
-  // Optionnelle, sans heure — cohérent avec `basculerTache` : mise à jour
-  // optimiste, écriture directe (pas de file hors-ligne ici, comme le reste
-  // des modifications de tâche existantes).
+  // Optionnelle, sans heure — cohérent avec `basculerTache`.
   const modifierEcheanceTache = async (tache, echeance) => {
     setTaches((cur) => ({
       ...cur,
       [tache.note_id]: cur[tache.note_id].map((t) => (t.id === tache.id ? { ...t, echeance } : t)),
     }))
-    await supabase.from('dossier_note_taches').update({ echeance }).eq('id', tache.id)
+    const { error } = await supabase.from('dossier_note_taches').update({ echeance }).eq('id', tache.id)
+    if (error) mettreEnFile({ type: 'update', table: 'dossier_note_taches', rowId: tache.id, champs: { echeance } })
   }
 
   const supprimerTache = async (tache) => {
@@ -477,7 +484,8 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
       ...cur,
       [tache.note_id]: cur[tache.note_id].filter((t) => t.id !== tache.id),
     }))
-    await supabase.from('dossier_note_taches').delete().eq('id', tache.id)
+    const { error } = await supabase.from('dossier_note_taches').delete().eq('id', tache.id)
+    if (error) mettreEnFile({ type: 'delete', table: 'dossier_note_taches', rowId: tache.id })
   }
 
   const ajouterTacheManuelle = async (note, texteBrut) => {
@@ -792,7 +800,12 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
                       className="text-texte text-sm"
                       onFermer={() => setNoteEnEdition(null)}
                       onEnregistrer={async (v) => {
-                        if (v) await supabase.from('dossier_notes').update({ texte: v }).eq('id', n.id)
+                        if (!v) return
+                        const { error } = await supabase
+                          .from('dossier_notes')
+                          .update({ texte: v })
+                          .eq('id', n.id)
+                        if (error) mettreEnFile({ type: 'update', table: 'dossier_notes', rowId: n.id, champs: { texte: v } })
                       }}
                     />
                   ) : (

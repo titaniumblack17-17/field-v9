@@ -79,7 +79,13 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
 
   const relier = async (capture, client) => {
     setARelier(null)
-    await supabase.from('captures').update({ client_id: client.id }).eq('id', capture.id)
+    const { error } = await supabase
+      .from('captures')
+      .update({ client_id: client.id })
+      .eq('id', capture.id)
+    if (error) {
+      mettreEnFile({ type: 'update', table: 'captures', rowId: capture.id, champs: { client_id: client.id } })
+    }
     setUnclassified((cur) => cur.filter((c) => c.id !== capture.id))
   }
 

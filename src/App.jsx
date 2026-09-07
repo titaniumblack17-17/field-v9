@@ -154,6 +154,35 @@ async function executerActionEnFile(action) {
       if (error) throw error
       return
     }
+    // Trois cas génériques (table + rowId/payload fournis par l'appelant),
+    // introduits lors de l'audit du 07/09 pour couvrir les sites d'écriture
+    // optimiste (tâches, notes, captures, rappels…) qui ne vérifiaient pas
+    // l'erreur Supabase — même défaut que 'note'/'etape' ci-dessus, mais sur
+    // update/delete plutôt qu'insert. Génériques plutôt qu'un cas par
+    // (table, opération) : ~15 sites identifiés, un cas dédié par site
+    // aurait doublé la taille de ce switch pour la même logique répétée.
+    //
+    // `rowId`, jamais `id` : mettreEnFile (fileAttente.js) écrase déjà
+    // `action.id` avec son propre UUID interne (identifiant de l'entrée
+    // dans la file, pas la ligne à modifier) — un champ `id` ici aurait
+    // silencieusement pointé la mise à jour vers une ligne inexistante,
+    // Supabase ne renvoyant aucune erreur sur un update/delete qui ne
+    // matche aucune ligne. Trouvé par le test, pas par relecture.
+    case 'insert': {
+      const { error } = await supabase.from(action.table).insert(action.payload)
+      if (error) throw error
+      return
+    }
+    case 'update': {
+      const { error } = await supabase.from(action.table).update(action.champs).eq('id', action.rowId)
+      if (error) throw error
+      return
+    }
+    case 'delete': {
+      const { error } = await supabase.from(action.table).delete().eq('id', action.rowId)
+      if (error) throw error
+      return
+    }
     default:
       throw new Error(`Type d'action inconnu : ${action.type}`)
   }
