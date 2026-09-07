@@ -108,11 +108,23 @@ function useEnLigne() {
 async function executerActionEnFile(action) {
   switch (action.type) {
     case 'note': {
-      await supabase.from(action.table).insert(action.payload)
+      // supabase-js ne lève jamais sur un échec d'insert (réseau coupé,
+      // contrainte violée, RLS...) — la promesse se résout avec { error }
+      // plutôt que de rejeter. Sans cette vérification, viderFile comptait
+      // l'action comme traitée et la retirait de la file même quand rien
+      // n'avait été écrit en base : une note tapée par Bruce a disparu
+      // ainsi, sans bandeau ni trace ensuite, malgré un résultat qui
+      // ressemblait à un succès. Même défaut corrigé sur 'etape' ci-dessous.
+      const { error } = await supabase.from(action.table).insert(action.payload)
+      if (error) throw error
       return
     }
     case 'etape': {
-      await supabase.from('dossiers').update({ statut: action.statut }).eq('id', action.dossierId)
+      const { error } = await supabase
+        .from('dossiers')
+        .update({ statut: action.statut })
+        .eq('id', action.dossierId)
+      if (error) throw error
       await assurerRappelDeRelance(action.dossierId, action.statut)
       return
     }

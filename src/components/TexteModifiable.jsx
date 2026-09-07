@@ -98,14 +98,18 @@ export default function TexteModifiable({
           const v = e.target.value
           setBrouillon(v)
           if (multiligne) ajusterHauteur(e.target)
-          // Date et heure : le sélecteur natif ne déclenche onChange que sur une
-          // valeur complète et valide (jamais une saisie à moitié faite), donc le
-          // risque que le double appui « ✓ / × » devait couvrir n'existe pas ici.
-          // Sur téléphone, les deux boutons sont côte à côte et minuscules — un
-          // doigt qui touche le × par erreur annulait silencieusement le
-          // changement de date, sans aucune différence visible avec un
-          // enregistrement réussi. On enregistre donc tout de suite.
-          if (!multiligne && (type === 'date' || type === 'time')) enregistrer(v)
+          // Ancien comportement : enregistrer tout de suite sur date/heure,
+          // pour éviter qu'un doigt touchant le × par erreur annule
+          // silencieusement le changement. Retiré — la roue native (iOS)
+          // déclenche un onChange par cran de défilement, chacun avec une
+          // valeur complète et valide du point de vue du navigateur, pas
+          // seulement au choix final. Plusieurs enregistrements concurrents
+          // partaient donc en parallèle, et l'ordre d'arrivée des réponses
+          // réseau — pas l'ordre d'envoi — décidait quelle date restait en
+          // base : une échéance choisie une semaine plus loin s'est ainsi
+          // retrouvée enregistrée à une valeur intermédiaire du défilement,
+          // sans erreur ni indice. Le brouillon se met à jour ici ; seul un
+          // appui explicite sur ✓ (ou Entrée) déclenche l'enregistrement.
         }}
         placeholder={placeholder}
         onKeyDown={(e) => {
