@@ -5,6 +5,7 @@ import ChoixClient from '../components/ChoixClient'
 import { SuggestionSav, SuggestionProjet, SuggestionPlan } from '../components/SuggestionCapture'
 import { creerDossierDepuisSuggestion, ignorerSuggestion } from '../lib/suggestions'
 import { mettreEnFile } from '../lib/fileAttente'
+import useWakeLock from '../hooks/useWakeLock'
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/capture-intake`
 
@@ -20,6 +21,14 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
   const [creationSav, setCreationSav] = useState(null)
   const [creationProjet, setCreationProjet] = useState(null)
   const [creationPlan, setCreationPlan] = useState(null)
+  // La dictée native iOS n'expose aucun événement « micro activé » — le
+  // focus du champ est le seul signal disponible. On tient donc le verrou
+  // tant que Bruce a le champ ouvert (frappe ou dictée), pas seulement
+  // pendant la dictée elle-même : ça ne coûte rien de garder l'écran allumé
+  // pendant une frappe normale, et ça couvre le cas réel (plusieurs dictées
+  // à la suite, entre deux cabinets, sans revalider à chaque fois).
+  const [saisieActive, setSaisieActive] = useState(false)
+  useWakeLock(saisieActive)
 
   // Le dossier n'est jamais créé tout seul : la dictée ne fait que le
   // proposer. C'est Bruce qui confirme, comme pour un rappel ou une fusion.
@@ -194,6 +203,8 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
           <textarea
             value={texte}
             onChange={(e) => setTexte(e.target.value)}
+            onFocus={() => setSaisieActive(true)}
+            onBlur={() => setSaisieActive(false)}
             rows={5}
             placeholder="Client, qu'est-ce qui se passe ?"
             className="w-full text-texte outline-none bg-transparent resize-none"
