@@ -1,6 +1,14 @@
 import { supabase } from './supabaseClient'
 
-export const aujourdhui = () => new Date().toISOString().slice(0, 10)
+// Date locale, pas `toISOString()` : minuit à Paris tombe la veille en UTC
+// (23h ou 22h selon la saison) — passer par l'ISO ferait glisser la date
+// d'un jour entre minuit et 1h-2h du matin heure de Paris. Exportée pour que
+// BriefSoir.jsx, qui redéfinissait le même calcul en local (donc le même
+// décalage), la réutilise au lieu de le dupliquer.
+export const versISO = (date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+export const aujourdhui = () => versISO(new Date())
 
 const JOURS_FERIES_FIXES = [
   [1, 1], // Jour de l'an
@@ -39,13 +47,6 @@ const plusJoursCalendaires = (date, n) => {
   return d
 }
 
-// Formatage en date locale, pas `toISOString()` : ces fériés sont construits
-// à minuit local, et minuit à Paris tombe la veille en UTC (23h ou 22h selon
-// la saison) — passer par l'ISO ferait glisser chaque férié d'un jour et ne
-// matcherait plus jamais la date du jour.
-const versISO = (date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-
 const joursFeries = (annee) => {
   const p = paques(annee)
   return [
@@ -73,7 +74,7 @@ const dansNJoursOuvres = (n) => {
     d.setDate(d.getDate() + 1)
     if (estJourOuvre(d)) restants -= 1
   }
-  return d.toISOString().slice(0, 10)
+  return versISO(d)
 }
 
 // Cadence de relance des pros du secteur : première relance à J+3, seconde

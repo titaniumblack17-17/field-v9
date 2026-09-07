@@ -3,7 +3,13 @@ import usePrompt from '../hooks/usePrompt'
 import { supabase } from '../lib/supabaseClient'
 import EtatErreur from '../components/EtatErreur'
 import JaugeObjectif from '../components/JaugeObjectif'
-import { etatRappel, etatEcheanceTache, cloreProchainRappel, reconcilierRappels } from '../lib/rappel'
+import {
+  etatRappel,
+  etatEcheanceTache,
+  cloreProchainRappel,
+  reconcilierRappels,
+  aujourdhui as calculerAujourdhui,
+} from '../lib/rappel'
 import { nomClient } from '../lib/client'
 import {
   ETAPES_PROJET,
@@ -317,7 +323,11 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   }, [tentative])
 
   const bilan = useMemo(() => {
-    const aujourdhui = new Date().toISOString().slice(0, 10)
+    // Date locale (versISO via rappel.js), pas toISOString() : sinon un
+    // rappel du jour classé « à venir » au lieu d'« à rappeler » entre
+    // minuit et 1h-2h du matin heure de Paris — décalage UTC déjà corrigé
+    // dans rappel.js, redéfini ici par erreur, désormais réutilisé.
+    const aujourdhui = calculerAujourdhui()
     const annee = new Date().getFullYear()
     const projets = dossiers.filter((d) => d.type === 'projet')
 
