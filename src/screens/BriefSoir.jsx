@@ -3,6 +3,7 @@ import usePrompt from '../hooks/usePrompt'
 import { supabase } from '../lib/supabaseClient'
 import EtatErreur from '../components/EtatErreur'
 import JaugeObjectif from '../components/JaugeObjectif'
+import { synchroniserTache, reconcilierTaches } from '../lib/todoistTaches'
 import {
   etatRappel,
   etatEcheanceTache,
@@ -168,6 +169,13 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   // sautent directement à la section concernée plus bas via ces mêmes refs.
   const sectionRefs = useRef({})
 
+  // Garde-fou anti-doublon pour la synchro Todoist des tâches en retard : le
+  // job planifié (pg_cron) est le mécanisme fiable, ceci n'est qu'un aller
+  // plus rapide quand Bruce a déjà le Brief ouvert. Sans cette Set, un
+  // recalcul de `bilan` avant que la réponse serveur ne soit revenue (et
+  // n'ait posé todoist_task_id) redéclencherait le même appel en double.
+  const syncTacheEnCours = useRef(new Set())
+
   // SAV/Devis/À rappeler ouvertes par défaut : ce sont les décisions les
   // plus urgentes du soir, elles doivent se voir sans taper. Rappels à
   // venir/Plans/Règlements/À chiffrer repliées par défaut (clé absente) —
@@ -272,15 +280,22 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   useEffect(() => {
     let actif = true
 
+    // Réconcilier avant de lire, même principe que pour les rappels
+    // juste au-dessus : une tâche cochée sur la montre ne doit pas continuer
+    // à s'afficher « en retard » dans le Brief qu'on est en train de lire.
+    //
     // « En retard » se dérive du jour qui passe, pas d'un filtre côté
     // requête (même logique que rappel_date pour `dossiers` juste au-dessus) :
     // on charge toute tâche non faite avec une échéance, et `bilan` isole
     // celles qui sont dépassées.
-    supabase
-      .from('dossier_note_taches')
-      .select('*')
-      .eq('fait', false)
-      .not('echeance', 'is', null)
+    reconcilierTaches()
+      .then(() =>
+        supabase
+          .from('dossier_note_taches')
+          .select('*')
+          .eq('fait', false)
+          .not('echeance', 'is', null)
+      )
       .then(({ data, error }) => {
         if (actif && !error) setTaches(data ?? [])
       })
@@ -421,6 +436,21 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       ).length,
     }
   }, [dossiers, taches])
+
+  // Aller Todoist immédiat pour les tâches fraîchement en retard, en plus du
+  // job planifié (pg_cron, la garantie qui ne dépend pas de l'ouverture de
+  // l'app) — même logique de filet que le service worker dans main.jsx
+  // (vérification immédiate + repasse périodique indépendante). Ne fait rien
+  // pour une tâche déjà liée (todoist_task_id posé) : le serveur est de
+  // toute façon idempotent, cette Set n'évite qu'un aller réseau redondant
+  // pendant que la réponse précédente n'est pas encore revenue.
+  useEffect(() => {
+    for (const t of bilan.tachesEnRetard) {
+      if (t.todoist_task_id || syncTacheEnCours.current.has(t.id)) continue
+      syncTacheEnCours.current.add(t.id)
+      synchroniserTache(t.id).finally(() => syncTacheEnCours.current.delete(t.id))
+    }
+  }, [bilan.tachesEnRetard])
 
   const couvertureFaible =
     bilan.signesSansMontant > 0 || (bilan.totalActifs > 0 && bilan.chiffres < bilan.totalActifs / 2)

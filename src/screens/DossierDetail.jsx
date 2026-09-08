@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { lireAvecCache } from '../lib/cacheLecture'
 import { mettreEnFile } from '../lib/fileAttente'
+import { synchroniserTache } from '../lib/todoistTaches'
 import { nomClient } from '../lib/client'
 import { resumeDossier } from '../lib/resume'
 import { copierPressePapier } from '../lib/texte'
@@ -463,7 +464,14 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
       [tache.note_id]: cur[tache.note_id].map((t) => (t.id === tache.id ? { ...t, fait } : t)),
     }))
     const { error } = await supabase.from('dossier_note_taches').update({ fait }).eq('id', tache.id)
-    if (error) mettreEnFile({ type: 'update', table: 'dossier_note_taches', rowId: tache.id, champs: { fait } })
+    if (error) {
+      mettreEnFile({ type: 'update', table: 'dossier_note_taches', rowId: tache.id, champs: { fait } })
+    } else if (fait && tache.todoist_task_id) {
+      // Cochée alors qu'elle avait été escaladée vers Todoist (passage en
+      // retard) : la tâche n'y a plus lieu d'être. En tâche de fond — la
+      // coche doit rester instantanée, pas attendre l'aller-retour Todoist.
+      synchroniserTache(tache.id)
+    }
   }
 
   // Optionnelle, sans heure — cohérent avec `basculerTache`.
