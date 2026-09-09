@@ -32,6 +32,12 @@ import { useEffect, useRef } from 'react'
 // délai normal.
 const disponible = typeof navigator !== 'undefined' && 'wakeLock' in navigator
 
+// Délai avant une nouvelle tentative après un échec de (ré)acquisition, et
+// nombre de tentatives avant d'abandonner — voir le commentaire dans
+// `demander` ci-dessous pour le bug de terrain que ça corrige.
+const NOUVELLE_TENTATIVE_MS = 2000
+const TENTATIVES_MAX = 5
+
 export default function useWakeLock(actif) {
   const verrouRef = useRef(null)
 
@@ -39,8 +45,11 @@ export default function useWakeLock(actif) {
     if (!disponible || !actif) return
 
     let annulé = false
+    let tentative = 0
+    let minuteur = null
 
     const demander = async () => {
+      if (annulé || verrouRef.current) return
       try {
         const verrou = await navigator.wakeLock.request('screen')
         if (annulé) {
@@ -48,6 +57,7 @@ export default function useWakeLock(actif) {
           verrou.release().catch(() => {})
           return
         }
+        tentative = 0
         verrouRef.current = verrou
         verrou.addEventListener('release', () => {
           // Ne nettoie que si c'est bien CE verrou qui vient d'être relâché —
@@ -56,8 +66,23 @@ export default function useWakeLock(actif) {
           if (verrouRef.current === verrou) verrouRef.current = null
         })
       } catch {
-        // Refusé (batterie faible, onglet caché au moment de la demande…) —
-        // pas de verrou, la saisie continue normalement sans protection.
+        // Bug de terrain (07/09) : sur un deuxième changement d'orientation
+        // pendant la même dictée, la réacquisition peut échouer pour une
+        // raison transitoire (constaté par test : l'API rejette aussi si
+        // appelée avant que `visibilitychange` ne soit revenu à « visible »,
+        // et rien ne garantit que ce retour arrive après notre tentative
+        // plutôt qu'avant) — le document est alors déjà visible, donc plus
+        // aucun `visibilitychange` à venir pour redéclencher `demander` via
+        // `surVisibilité`. Reproduit précisément : sans cette relance, un
+        // seul échec transitoire laissait la dictée sans protection pour le
+        // reste de la saisie, quel que soit le nombre de changements
+        // d'orientation suivants. Bornée (TENTATIVES_MAX) : un refus
+        // vraiment permanent (batterie faible…) ne doit pas marteler l'API.
+        if (annulé || tentative >= TENTATIVES_MAX) return
+        tentative += 1
+        minuteur = setTimeout(() => {
+          if (!annulé && !verrouRef.current && document.visibilityState === 'visible') demander()
+        }, NOUVELLE_TENTATIVE_MS)
       }
     }
 
@@ -70,6 +95,7 @@ export default function useWakeLock(actif) {
 
     return () => {
       annulé = true
+      if (minuteur) clearTimeout(minuteur)
       document.removeEventListener('visibilitychange', surVisibilité)
       verrouRef.current?.release().catch(() => {})
       verrouRef.current = null
