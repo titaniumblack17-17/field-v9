@@ -17,8 +17,6 @@ export default function DossierForm({ client, onCreated, onCancel }) {
   const [remunerationType, setRemunerationType] = useState('integre')
   const [projetSourceId, setProjetSourceId] = useState('')
   const [dateInstallation, setDateInstallation] = useState('')
-  const [rappelDate, setRappelDate] = useState('')
-  const [rappelNote, setRappelNote] = useState('')
   const [projetsClient, setProjetsClient] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -54,8 +52,6 @@ export default function DossierForm({ client, onCreated, onCancel }) {
       remuneration_type: type === 'plan' ? remunerationType : null,
       projet_source_id: type === 'sav' && projetSourceId ? projetSourceId : null,
       date_installation: dateInstallation || null,
-      rappel_date: rappelDate || null,
-      rappel_note: rappelNote.trim() || null,
     }
 
     const { data, error: dbError } = await supabase
@@ -193,30 +189,11 @@ export default function DossierForm({ client, onCreated, onCancel }) {
             />
           </div>
 
-          <div className="px-4 py-3">
-            <label className="text-xs text-texte-doux" htmlFor="rappel_date">
-              Date de rappel
-            </label>
-            <input
-              id="rappel_date"
-              type="date"
-              value={rappelDate}
-              onChange={(e) => setRappelDate(e.target.value)}
-              className="w-full text-texte outline-none bg-transparent"
-            />
-          </div>
-
-          <div className="px-4 py-3">
-            <label className="text-xs text-texte-doux" htmlFor="rappel_note">
-              Note de rappel
-            </label>
-            <input
-              id="rappel_note"
-              value={rappelNote}
-              onChange={(e) => setRappelNote(e.target.value)}
-              className="w-full text-texte outline-none bg-transparent"
-            />
-          </div>
+          {/* Pas de « Date de rappel » ici : ce champ écrivait rappel_date en
+              colonne reflet sans créer de ligne rappels — un rappel fantôme
+              ni gérable ni synchronisable, et le sélecteur de date natif iOS
+              validait « aujourd'hui » par défaut au moindre effleurement. Le
+              rappel se pose après création, via le composant Rappels normal. */}
         </form>
 
         {error && <p className="text-erreur text-sm mt-3">{error}</p>}
