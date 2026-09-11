@@ -80,6 +80,10 @@ format n'est pas encore déterminé. Réimport manuel via
   (aperçu par défaut, `--appliquer` pour écrire) — logique de parsing
   vCard partagée dans `scripts/lib/vcard.mjs`
 - Dépôt `documents` (privé, 25 Mo, PDF et images), liens signés 60 s
+- `loupe_runs` / `loupe_memoire` — journal d'exécution et mémoire d'erreurs
+  des « loupes » (automatisations planifiées type `loupe-dossiers-dormants`) ;
+  RLS activée sans policy sur les deux (accès `service_role` uniquement,
+  contrairement au reste du schéma où la RLS est désactivée par choix assumé)
 
 **Déclencheurs**
 - `refleter_prochain_rappel` — recopie le prochain rappel non fait sur le dossier
@@ -96,6 +100,7 @@ format n'est pas encore déterminé. Réimport manuel via
 | `devis-montant` | `{fichierId}` lit le total TTC d'un devis PDF | true |
 | `client-web-lookup` | `{client_id}` recherche web (spécialités, adresse, associés…), écrit directement les champs vides trouvés avec confiance ; déclenchée en tâche de fond par `capture-intake` à chaque création de client, et sur demande depuis le bouton « Chercher sur le web » de la fiche | true |
 | `entreprise-lookup` | `{q, ville, client_id?}` API publique Recherche d'Entreprises (INSEE/SIRENE, gratuite, sans clé) — adresse/CP/ville. Sans `client_id` : liste de candidats (`ClientForm`, `ClientDetail`) — ville exacte suffit, Bruce reste juge. Avec `client_id` (écriture automatique et silencieuse) : ville exacte sans concurrent **ET** NAF candidat commençant par `86.2` (dentaire) — la ville seule ne suffit plus depuis le faux positif « HENRI MARTIN » (location de logements à Saint-Quentin, NAF 68.20B, homonyme par pur hasard d'un vrai praticien). **`capture-intake` n'appelle PAS cette fonction** : un self-call Edge→Edge lancé sous `EdgeRuntime.waitUntil` restait bloqué ~13 s puis échouait sans trace ; la dictée interroge donc l'API gouv en direct (même logique de score et même filtre NAF, dupliqués à dessein, à garder synchro) | true |
+| `loupe-dossiers-dormants` | Première des « loupes » (automatisations planifiées, journalisées dans `loupe_runs`/`loupe_memoire`). Détecte les dossiers Projet actifs sans note ni changement d'étape depuis 14 jours (exclut ceux déjà couverts par un rappel ouvert), pose pour chacun un rappel (prochain jour ouvré, jours fériés FR compris — même règle que partout ailleurs) + une note de journal, puis synchronise vers Todoist. `{}` ou tout corps sans `dryRun:false` = **dry-run par défaut** (identifie et journalise dans `loupe_runs`, n'écrit rien) ; `{dryRun:false}` = écriture réelle. Job `pg_cron` quotidien (`loupe-dossiers-dormants-quotidien`, 7h UTC, via `pg_net`, même pattern que `todoist-taches-echues-quotidien`) — **actuellement en dry-run** (`body: {"dryRun": true}`) le temps que Bruce valide quelques jours de log avant de passer à l'écriture réelle | false (appelée par pg_cron, sans session utilisateur) |
 
 Secrets : `FIELD_EDGE_API_KEY` (Anthropic), `TODOIST_TOKEN`.
 
