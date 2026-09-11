@@ -105,6 +105,46 @@ format n'est pas encore déterminé. Réimport manuel via
 
 Secrets : `FIELD_EDGE_API_KEY` (Anthropic), `TODOIST_TOKEN`.
 
+### Loupe « mailscan » — manuelle, pas de fonction Edge
+
+Contrairement aux deux loupes ci-dessus, `mailscan` (matching des échanges
+email avec les clients existants, extraction décisions/actions/urgences)
+n'est **pas** construite en fonction Edge — décision du 11/09 après un
+dry-run manuel de validation (30 j, comptes `bruce.dasilva@societe-bailleul.fr`
++ `bruce.societe.bailleul@gmail.com`, via le connecteur Spark) :
+
+- Un faux positif d'appariement ici écrit une note dans le dossier du
+  mauvais praticien (constaté : un email de « Fabrice MATHEU »
+  <fabrice.matheu@sodental.fr>, collègue SoDental, a failli être attribué au
+  client *Fabrice Matheu-Cohen* par simple ressemblance de nom) — pas le
+  même niveau de risque qu'une requête SQL rejouable et sans conséquence
+  relationnelle comme sur `dossiers-dormants`/`relances-echues`.
+- Nature différente des deux premières loupes : celles-ci sont
+  déterministes (une requête SQL a une seule bonne réponse), `mailscan`
+  demande un jugement (LLM) par email — un vrai risque d'interprétation à
+  chaque exécution.
+- Coût réel (chantier OAuth Google côté fonction Edge + appel LLM par
+  email) à payer avant de savoir si ça vaut le coup, alors que la valeur est
+  déjà obtenue via une passe manuelle.
+
+**Pattern retenu** : dry-run manuel via connecteur de chat (Spark ou
+équivalent), écriture uniquement dans `loupe_runs`/`loupe_memoire` — jamais
+directement sur un dossier ni sur Todoist. À la demande, ou en tâche
+programmée Cowork hebdomadaire (remonte la liste à valider, n'écrit rien
+seule). Réévaluer l'infra OAuth serveur seulement si cette passe devient une
+corvée régulière et que le matching reste fiable dans le temps.
+
+**Liste d'exclusion collègues/fournisseurs** (à réutiliser telle quelle,
+manuel ou Cowork — trouvée en croisant les emails les plus fréquents du
+dry-run avec les clients existants) :
+- Domaines internes : `@societe-bailleul.fr`, `@sodental.fr`
+- Personnes : Alexandra Coulaud, Joël Morgado, Kevin Saez, Federica Grotto,
+  Pascolini Laurent, Stéphane Do Rego
+- Piège à retenir : un nom de collègue peut ressembler à s'y méprendre à un
+  nom de client (Fabrice Matheu vs Matheu-Cohen) — toujours vérifier le
+  domaine d'envoi et la signature complète du corps du message, jamais
+  seulement le display-name de l'en-tête.
+
 > Les règles de travail avec Bruce et les décisions structurantes du produit
 > vivent désormais dans `CLAUDE.md` (chargé automatiquement à chaque session),
 > pas ici — pour ne pas les maintenir à deux endroits.
