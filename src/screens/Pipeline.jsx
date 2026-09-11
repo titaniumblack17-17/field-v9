@@ -674,7 +674,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
           seul le header (qui ne doit jamais déborder) a besoin du filet. */}
       <header className="px-4 pt-6 pb-4 flex items-center gap-2 flex-shrink-0 overflow-x-hidden">
         <button onClick={onBack} className="text-accent text-sm font-semibold h-11 -ml-2 pl-2 pr-1 flex items-center">
-          ← Clients
+          ← Brief
         </button>
         {/* Pas de titre « Pipeline » séparé : les 3 onglets juste à côté
             (Projet/Plan/SAV) disent déjà où on est — sur iPhone (375px), le

@@ -1,16 +1,17 @@
 import React, { Suspense, useEffect, useRef, useState } from 'react'
-// Clients reste chargé d'un bloc : c'est le tout premier écran, autant ne
-// pas ajouter un aller-retour réseau avant même de le voir apparaître. Les
-// autres écrans ne se chargent qu'une fois qu'on y navigue — auparavant,
-// tout partait dans un seul paquet, même pour n'ouvrir que le Brief.
-import ClientList from './screens/ClientList'
+// Brief soir reste chargé d'un bloc : c'est le tout premier écran depuis son
+// passage en écran de démarrage, autant ne pas ajouter un aller-retour
+// réseau avant même de le voir apparaître. Les autres écrans ne se chargent
+// qu'une fois qu'on y navigue — Clients y compris désormais, qui a cédé sa
+// place de racine.
+import BriefSoir from './screens/BriefSoir'
+const ClientList = React.lazy(() => import('./screens/ClientList'))
 const ClientDetail = React.lazy(() => import('./screens/ClientDetail'))
 const ClientForm = React.lazy(() => import('./screens/ClientForm'))
 const Capture = React.lazy(() => import('./screens/Capture'))
 const DossierForm = React.lazy(() => import('./screens/DossierForm'))
 const DossierDetail = React.lazy(() => import('./screens/DossierDetail'))
 const Pipeline = React.lazy(() => import('./screens/Pipeline'))
-const BriefSoir = React.lazy(() => import('./screens/BriefSoir'))
 const Catalogue = React.lazy(() => import('./screens/Catalogue'))
 import useConfirm from './hooks/useConfirm'
 import { tailleFile, ecouterTailleFile, viderFile } from './lib/fileAttente'
@@ -259,7 +260,7 @@ export default function App() {
   // Pile d'écrans doublée d'entrées dans l'historique du navigateur : le swipe
   // natif iOS et le bouton Retour du navigateur reviennent d'un écran, sans
   // geste maison qui entrerait en conflit avec le glisser-déposer du Pipeline.
-  const [stack, setStack] = useState([{ name: 'list' }])
+  const [stack, setStack] = useState([{ name: 'brief' }])
   const view = stack[stack.length - 1]
 
   // Le swipe est un geste réflexe : sans garde-fou, quitter une fiche modifiée
@@ -355,11 +356,12 @@ export default function App() {
         onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
       />
     )
-  } else if (view.name === 'brief') {
+  } else if (view.name === 'list') {
     écran = (
-      <BriefSoir
+      <ClientList
         onBack={back}
-        onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
+        onSelect={(client) => push({ name: 'detail', client })}
+        onCreate={() => push({ name: 'create' })}
       />
     )
   } else if (view.name === 'pipeline') {
@@ -393,13 +395,15 @@ export default function App() {
       />
     )
   } else {
+    // Écran de démarrage (stack initiale : [{ name: 'brief' }]) — aussi le
+    // repli par défaut pour un nom de vue inconnu, plutôt qu'un écran vide.
     écran = (
-      <ClientList
-        onSelect={(client) => push({ name: 'detail', client })}
-        onCreate={() => push({ name: 'create' })}
-        onCapture={() => push({ name: 'capture' })}
+      <BriefSoir
+        onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
+        onOpenClient={(client) => push({ name: 'detail', client })}
+        onClients={() => push({ name: 'list' })}
         onPipeline={() => push({ name: 'pipeline' })}
-        onBrief={() => push({ name: 'brief' })}
+        onCapture={() => push({ name: 'capture' })}
       />
     )
   }

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import usePrompt from '../hooks/usePrompt'
 import { supabase } from '../lib/supabaseClient'
+import { lireAvecCache } from '../lib/cacheLecture'
+import { mettreEnFile } from '../lib/fileAttente'
 import EtatErreur from '../components/EtatErreur'
 import JaugeObjectif from '../components/JaugeObjectif'
 import { synchroniserTache, reconcilierTaches } from '../lib/todoistTaches'
@@ -21,6 +23,7 @@ import {
   TYPE_LABELS,
   styleDossier,
   joursDevisSansReponse,
+  SEUIL_DEVIS_SANS_REPONSE_JOURS,
 } from '../constants/dossiers'
 
 // Objectif annuel de la spec (§1) : 5 M€ TTC.
@@ -51,7 +54,18 @@ const euros = (n) =>
 
 const libelleEtape = (v) => ETAPES_PROJET.find(([k]) => k === v)?.[1] ?? v
 
-function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTitre, ligneSecondaire }) {
+// Même normalisation que ClientList.jsx/ChoixClient.jsx : insensible aux
+// accents et à la casse, pour que « poirot » retrouve « Poirot ».
+const normaliser = (s) =>
+  (s ?? '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+
+const TAG_LABELS = { rappel: 'Rappel', sav: 'SAV', tache: 'Tâche', devis: 'Devis' }
+
+function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTitre, ligneSecondaire, tag }) {
   const s = styleDossier(dossier)
   const [enCours, setEnCours] = useState(false)
 
@@ -72,7 +86,18 @@ function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTi
         className="flex-1 min-w-0 text-left px-4 py-3 active:scale-[0.98] transition flex items-center gap-3"
       >
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-texte truncate">{nomClient(dossier.clients) ?? '—'}</p>
+          <p className="font-medium text-texte truncate">
+            {/* Tag de type (Rappel/SAV/Tâche/Devis) : seulement dans la liste
+                fusionnée « Aussi à traiter », où plusieurs familles se
+                mélangent — inutile dans les 7 sections détaillées plus bas,
+                déjà homogènes chacune sur son propre type. */}
+            {tag && (
+              <span className="inline-block align-middle text-[10px] font-semibold uppercase tracking-wide text-texte-faible bg-carte-douce rounded px-1.5 py-0.5 mr-1.5">
+                {tag}
+              </span>
+            )}
+            {nomClient(dossier.clients) ?? '—'}
+          </p>
           <p className="text-sm text-texte-doux truncate">
             {dossier.commercial ? `${dossier.commercial} · ` : ''}
             {/* Le titre du dossier est souvent vide ou générique
@@ -101,8 +126,8 @@ function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTi
         <button
           onClick={fait}
           disabled={enCours}
-          aria-label="Marquer le rappel comme fait"
-          title="Rappel fait"
+          aria-label="Marquer comme traité"
+          title="Traité"
           className="w-14 flex-shrink-0 flex items-center justify-center text-texte-fantome text-xl active:text-accent disabled:opacity-40 border-l border-separateur"
         >
           {enCours ? '…' : '✓'}
@@ -153,7 +178,59 @@ function Section({ sectionRef, titre, compte, urgent, vide, ouverte, onToggle, c
   )
 }
 
-export default function BriefSoir({ onBack, onOpenDossier }) {
+// Tuile compacte de la grille 2x2 : un chiffre à lire d'un coup d'œil, pas de
+// détail — le détail, c'est le board et les 7 sections juste en dessous.
+function TuileKPI({ titre, valeur, sousTitre, urgent }) {
+  return (
+    <div className="bg-carte rounded-xl shadow-sm px-3 py-3">
+      <p className="text-xs text-texte-doux truncate">{titre}</p>
+      <p className={`text-2xl font-bold tabular-nums mt-1 ${urgent ? 'text-alerte' : 'text-texte'}`}>{valeur}</p>
+      {sousTitre && <p className="text-xs text-texte-faible mt-0.5 truncate">{sousTitre}</p>}
+    </div>
+  )
+}
+
+// Carte « Priorité du jour » : le seul élément (tous types confondus) au
+// retard le plus long. Accent ambre = le token `alerte` existant de l'app
+// (déjà l'orange du code couleur des échéances), pas une couleur importée —
+// cohérent avec le reste de l'interface plutôt qu'une nouvelle teinte.
+function CartePriorite({ item, onOuvrir, onAppeler, onPlusTard }) {
+  return (
+    <section className="mt-4 bg-alerte/10 border border-alerte/40 rounded-xl px-4 py-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-alerte mb-2">Priorité du jour</p>
+      <button onClick={() => onOuvrir(item.dossier)} className="w-full text-left">
+        <p className="font-semibold text-texte truncate">
+          <span className="inline-block align-middle text-[10px] font-semibold uppercase tracking-wide text-alerte bg-carte rounded px-1.5 py-0.5 mr-1.5">
+            {TAG_LABELS[item.type]}
+          </span>
+          {nomClient(item.dossier.clients) ?? '—'}
+        </p>
+        <p className="text-sm text-alerte font-medium mt-1">
+          {item.joursRetard > 0
+            ? `En retard de ${item.joursRetard} jour${item.joursRetard > 1 ? 's' : ''}`
+            : "À traiter aujourd'hui"}
+        </p>
+        {item.libelle && <p className="text-sm text-texte-doux mt-0.5 truncate">{item.libelle}</p>}
+      </button>
+      <div className="flex gap-2 mt-3">
+        <button
+          onClick={() => onAppeler(item)}
+          className="flex-1 h-11 rounded-imbrique bg-accent text-white text-sm font-semibold"
+        >
+          Appeler
+        </button>
+        <button
+          onClick={() => onPlusTard(item.cle)}
+          className="flex-1 h-11 rounded-imbrique bg-carte text-texte-doux text-sm font-semibold"
+        >
+          Plus tard
+        </button>
+      </div>
+    </section>
+  )
+}
+
+export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPipeline, onCapture }) {
   const [dossiers, setDossiers] = useState([])
   // Sous-tâches de note en retard, tous dossiers confondus : chargées à part
   // de `dossiers` (table séparée), rejointes à leur dossier localement dans
@@ -164,6 +241,24 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   const [erreur, setErreur] = useState(null)
   const [tentative, setTentative] = useState(0)
   const [demanderTexte, boîtePrompt] = usePrompt()
+
+  // Écran d'entrée de l'app (depuis son passage en écran de démarrage) :
+  // même secours hors-ligne que ClientList.jsx avait auparavant — sans lui,
+  // une coupure réseau à l'ouverture (cave, ascenseur, parking) affichait
+  // directement l'écran d'erreur, la toute première chose vue.
+  const [depuisCache, setDepuisCache] = useState(false)
+
+  // Recherche rapide (point 1 du board) : liste légère de clients chargée à
+  // part, filtrée en local — même principe que ChoixClient.jsx, pas besoin
+  // de temps réel pour un simple raccourci « sauter à une fiche ».
+  const [rechercheTexte, setRechercheTexte] = useState('')
+  const [clientsRecherche, setClientsRecherche] = useState([])
+
+  // « Plus tard » (bouton de la carte Priorité du jour) : ignore l'élément
+  // pour cette session seulement, jamais persisté — remonter l'app (ou
+  // simplement revenir sur cet écran) le refait réapparaître naturellement,
+  // puisque BriefSoir se démonte à chaque navigation ailleurs.
+  const [ignores, setIgnores] = useState(() => new Set())
 
   // Jauge Objectif puis pastilles de navigation tout en haut ; les pastilles
   // sautent directement à la section concernée plus bas via ces mêmes refs.
@@ -209,6 +304,49 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
     )
   }
 
+  // Coche d'une sous-tâche de note directement depuis « Aussi à traiter » —
+  // même logique que `basculerTache` dans DossierDetail.jsx (écriture
+  // optimiste avec repli sur la file d'attente, synchro Todoist en tâche de
+  // fond si la tâche avait été escaladée).
+  const tacheFaite = async (tache) => {
+    setTaches((cur) => cur.filter((t) => t.id !== tache.id))
+    const { error } = await supabase.from('dossier_note_taches').update({ fait: true }).eq('id', tache.id)
+    if (error) {
+      mettreEnFile({ type: 'update', table: 'dossier_note_taches', rowId: tache.id, champs: { fait: true } })
+    } else if (tache.todoist_task_id) {
+      synchroniserTache(tache.id)
+    }
+  }
+
+  // Clôture rapide d'un SAV depuis « Aussi à traiter » — même geste que
+  // cocher un rappel ou une tâche, réversible depuis la fiche si besoin
+  // (pas de confirmation : ce n'est pas une suppression, juste un statut).
+  const savCloture = async (dossier) => {
+    setDossiers((cur) => cur.map((d) => (d.id === dossier.id ? { ...d, statut: 'clos' } : d)))
+    const { error } = await supabase.from('dossiers').update({ statut: 'clos' }).eq('id', dossier.id)
+    if (error) {
+      mettreEnFile({ type: 'update', table: 'dossiers', rowId: dossier.id, champs: { statut: 'clos' } })
+    }
+  }
+
+  // Aiguille vers le bon traitement selon le type de l'élément fusionné. Le
+  // devis n'a pas de bouton ✓ (voir `aussiATraiter` plus bas) : rien
+  // n'équivaut à « clore un devis » en un geste, ça se décide en fiche.
+  const traiterElement = (item) => {
+    if (item.type === 'rappel') return rappelFait(item.dossier)
+    if (item.type === 'tache') return tacheFaite(item.tache)
+    if (item.type === 'sav') return savCloture(item.dossier)
+  }
+
+  const appeler = (item) => {
+    const tel = item.dossier.clients?.telephone_portable || item.dossier.clients?.telephone_cabinet
+    if (tel) {
+      window.location.href = `tel:${tel}`
+    } else {
+      onOpenDossier(item.dossier)
+    }
+  }
+
   useEffect(() => {
     let actif = true
     setChargement(true)
@@ -219,18 +357,22 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
     // ferait perdre la confiance dans la liste entière.
     reconcilierRappels()
       .then(() =>
-        supabase
-          .from('dossiers')
-          .select('*, clients(id, prenom_praticien, nom_praticien, nom_cabinet, ville)')
+        lireAvecCache('brief-dossiers', () =>
+          supabase
+            .from('dossiers')
+            .select(
+              '*, clients(id, prenom_praticien, nom_praticien, nom_cabinet, ville, telephone_portable, telephone_cabinet)'
+            )
+            .then(({ data, error }) => {
+              if (error) throw new Error(error.message)
+              return data ?? []
+            })
+        )
       )
-      .then(({ data, error }) => {
+      .then(({ valeur, depuisCache }) => {
         if (!actif) return
-        if (error) {
-          setErreur('Impossible de charger le brief.')
-          setChargement(false)
-          return
-        }
-        setDossiers(data ?? [])
+        setDossiers(valeur)
+        setDepuisCache(depuisCache)
         setChargement(false)
       })
       .catch(() => {
@@ -290,14 +432,20 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
     // celles qui sont dépassées.
     reconcilierTaches()
       .then(() =>
-        supabase
-          .from('dossier_note_taches')
-          .select('*')
-          .eq('fait', false)
-          .not('echeance', 'is', null)
+        lireAvecCache('brief-taches', () =>
+          supabase
+            .from('dossier_note_taches')
+            .select('*')
+            .eq('fait', false)
+            .not('echeance', 'is', null)
+            .then(({ data, error }) => {
+              if (error) throw new Error(error.message)
+              return data ?? []
+            })
+        )
       )
-      .then(({ data, error }) => {
-        if (actif && !error) setTaches(data ?? [])
+      .then(({ valeur }) => {
+        if (actif) setTaches(valeur)
       })
       .catch(() => {})
 
@@ -337,6 +485,43 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
     }
   }, [tentative])
 
+  // Recherche rapide : liste complète des clients, chargée une fois avec le
+  // même secours hors-ligne que le reste de l'écran d'accueil. Pas de canal
+  // temps réel : un résultat vieux de quelques minutes est sans conséquence
+  // pour un simple raccourci de navigation.
+  useEffect(() => {
+    let actif = true
+    lireAvecCache('brief-clients-recherche', () =>
+      supabase
+        .from('clients')
+        .select('id, prenom_praticien, nom_praticien, nom_cabinet, ville')
+        .order('nom_praticien', { ascending: true })
+        .then(({ data, error }) => {
+          if (error) throw new Error(error.message)
+          return data ?? []
+        })
+    )
+      .then(({ valeur }) => {
+        if (actif) setClientsRecherche(valeur)
+      })
+      .catch(() => {})
+    return () => {
+      actif = false
+    }
+  }, [])
+
+  const resultatsRecherche = useMemo(() => {
+    const q = normaliser(rechercheTexte).trim()
+    if (!q) return []
+    return clientsRecherche
+      .filter((c) =>
+        normaliser(
+          [c.prenom_praticien, c.nom_praticien, c.nom_cabinet, c.ville].filter(Boolean).join(' ')
+        ).includes(q)
+      )
+      .slice(0, 8)
+  }, [clientsRecherche, rechercheTexte])
+
   const bilan = useMemo(() => {
     // Date locale (versISO via rappel.js), pas toISOString() : sinon un
     // rappel du jour classé « à venir » au lieu d'« à rappeler » entre
@@ -351,6 +536,11 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
     const actifs = projets.filter(
       (d) => d.statut !== 'perdu' && exerciceDe(d, annee) === annee
     )
+
+    // Un plan livré ou en cours de règlement n'a plus de travail dû : seul
+    // « soldé » ferme réellement le dossier — sert au KPI « Dossiers actifs »
+    // (Projet + Plan + SAV), pas au détail « Plans à produire » plus bas.
+    const plansActifs = dossiers.filter((d) => d.type === 'plan' && d.statut !== 'solde')
 
     // Un SAV ouvert, c'est un praticien qui ne peut pas travailler. Ça passe
     // avant un rappel commercial, et ça n'a pas besoin d'un écran à soi : un
@@ -409,6 +599,61 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
     const signes = actifs.filter((d) => ETAPES_SIGNEES.includes(d.statut))
     const factures = actifs.filter((d) => ETAPES_FACTUREES.includes(d.statut))
 
+    // Score commun « jours de retard équivalent » : chaque famille a sa
+    // propre référence de retard (une deadline explicite pour rappel/tâche,
+    // le franchissement d'un seuil pour le devis, l'ouverture pour un SAV
+    // actionnable), mais le résultat se compare en jours, quel que soit le
+    // type — c'est ce qui permet un tri unique « tous types confondus ».
+    const joursDepuisJour = (dateISO) =>
+      Math.round((new Date(aujourdhui + 'T00:00:00') - new Date(dateISO + 'T00:00:00')) / 86_400_000)
+    const joursDepuisHorodatage = (ts) => Math.floor((Date.now() - new Date(ts).getTime()) / 86_400_000)
+
+    const elementsUrgents = [
+      ...aRappeler.map((d) => ({
+        cle: `rappel-${d.id}`,
+        type: 'rappel',
+        dossier: d,
+        joursRetard: joursDepuisJour(d.rappel_date),
+        libelle: d.rappel_note || d.titre || TYPE_LABELS[d.type],
+        droite: etatRappel(d.rappel_date, d.rappel_heure)?.texte,
+      })),
+      ...savOuverts
+        // Un SAV « en_attente » patiente sur un tiers (pièce, fournisseur) —
+        // ce n'est pas un oubli de Bruce, il ne concourt donc pas ici (même
+        // logique que `alerte={statut !== 'en_attente'}` dans la section
+        // détaillée plus bas).
+        .filter((d) => d.statut !== 'en_attente')
+        .map((d) => ({
+          cle: `sav-${d.id}`,
+          type: 'sav',
+          dossier: d,
+          joursRetard: joursDepuisHorodatage(d.created_at),
+          libelle: d.titre || 'SAV',
+          droite: STATUTS_SAV_LABELS[d.statut] ?? d.statut,
+        })),
+      ...tachesEnRetard.map((t) => ({
+        cle: `tache-${t.id}`,
+        type: 'tache',
+        dossier: t.dossier,
+        tache: t,
+        joursRetard: joursDepuisJour(t.echeance),
+        libelle: t.texte,
+        droite: etatEcheanceTache(t.echeance)?.texte,
+      })),
+      ...devisSansReponse.map((d) => ({
+        cle: `devis-${d.id}`,
+        type: 'devis',
+        dossier: d,
+        // Jours au-delà du seuil de 30j, pas le total depuis le changement
+        // de statut : sinon un devis à J+31 (1 jour de vrai retard) battrait
+        // à tort un rappel vieux de 2 jours, alors que les 30 premiers jours
+        // sont un délai normal, pas un retard.
+        joursRetard: joursDevisSansReponse(d) - SEUIL_DEVIS_SANS_REPONSE_JOURS,
+        libelle: d.titre || TYPE_LABELS[d.type],
+        droite: `${joursDevisSansReponse(d)} j sans réponse`,
+      })),
+    ].sort((a, b) => b.joursRetard - a.joursRetard)
+
     return {
       savOuverts,
       devisSansReponse,
@@ -417,10 +662,15 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       tachesEnRetard,
       plansAProduire,
       reglements,
+      elementsUrgents,
       duParPlans: reglements.length * 500,
       projection: somme(actifs),
       signe: somme(signes),
       facture: somme(factures),
+      pourcentageObjectif: Math.round((somme(signes) / OBJECTIF_ANNUEL) * 100),
+      totalActifsTousTypes: actifs.length + plansActifs.length + savOuverts.length,
+      totalATraiter: aRappeler.length + savOuverts.length + tachesEnRetard.length,
+      savEnRetard: savOuverts.filter((d) => d.statut !== 'en_attente').length,
       // Le trou le plus coûteux n'est pas dans le pipeline lointain : c'est une
       // commande signée sans montant, qui manque à l'objectif sans se voir.
       signesSansMontant: signes.filter((d) => d.montant_estime == null).length,
@@ -436,6 +686,19 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
       ).length,
     }
   }, [dossiers, taches])
+
+  // Priorité du jour = le premier élément non ignoré (« Plus tard ») du tri
+  // unique ; « Aussi à traiter » garde tout le monde, y compris les ignorés
+  // — ignorer ne fait que céder la place en haut, pas disparaître de la
+  // liste complète.
+  const board = useMemo(() => {
+    const disponibles = bilan.elementsUrgents.filter((e) => !ignores.has(e.cle))
+    const prioriteJour = disponibles[0] ?? null
+    const aussiATraiter = bilan.elementsUrgents.filter((e) => e.cle !== prioriteJour?.cle)
+    return { prioriteJour, aussiATraiter }
+  }, [bilan.elementsUrgents, ignores])
+
+  const plusTard = (cle) => setIgnores((cur) => new Set(cur).add(cle))
 
   // Aller Todoist immédiat pour les tâches fraîchement en retard, en plus du
   // job planifié (pg_cron, la garantie qui ne dépend pas de l'ouverture de
@@ -472,11 +735,77 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
   return (
     <div className="min-h-screen bg-fond">
       <div className="sticky top-0 z-10 bg-fond/90 backdrop-blur">
-        <header className="px-4 pt-6 pb-3 flex items-center gap-3">
-          <button onClick={onBack} className="text-accent text-sm font-medium h-11 -ml-2 pl-2 pr-1 flex items-center">
-            ← Clients
-          </button>
-          <h1 className="text-lg font-semibold text-texte">Brief soir</h1>
+        <header className="px-4 pt-6 pb-3 overflow-x-hidden">
+          <div className="relative">
+            {/* Même halo que ClientList.jsx (porté par le div, pas l'input —
+                voir son commentaire pour la raison iOS/Safari). */}
+            <div className="rounded-carte shadow-halo-recherche focus-within:shadow-halo-recherche-focus transition-shadow duration-200">
+              <input
+                value={rechercheTexte}
+                onChange={(e) => setRechercheTexte(e.target.value)}
+                type="search"
+                placeholder="Rechercher un praticien, une ville…"
+                aria-label="Rechercher un client"
+                className="w-full bg-carte rounded-carte pl-5 pr-10 py-4 text-texte outline-none placeholder:text-texte-faible"
+              />
+            </div>
+            {rechercheTexte && (
+              <button
+                onClick={() => setRechercheTexte('')}
+                aria-label="Effacer la recherche"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-texte-fantome text-lg leading-none"
+              >
+                ×
+              </button>
+            )}
+            {rechercheTexte && (
+              <ul className="absolute left-0 right-0 mt-1 bg-carte rounded-xl shadow-lg overflow-hidden z-20 max-h-72 overflow-y-auto">
+                {resultatsRecherche.length === 0 ? (
+                  <li className="px-4 py-3 text-sm text-texte-faible">Aucun client pour « {rechercheTexte} ».</li>
+                ) : (
+                  resultatsRecherche.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        onClick={() => {
+                          onOpenClient(c)
+                          setRechercheTexte('')
+                        }}
+                        className="w-full text-left px-4 py-3 active:bg-carte-douce"
+                      >
+                        <p className="text-texte font-medium truncate">{nomClient(c) ?? 'Client'}</p>
+                        {(c.nom_cabinet || c.ville) && (
+                          <p className="text-xs text-texte-doux truncate">
+                            {[c.nom_cabinet, c.ville].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 mt-3">
+            <button
+              onClick={onClients}
+              className="flex-shrink-0 px-3 h-9 rounded-full bg-carte text-accent text-xs font-semibold shadow"
+            >
+              Clients
+            </button>
+            <button
+              onClick={onPipeline}
+              className="flex-shrink-0 px-3 h-9 rounded-full bg-carte text-accent text-xs font-semibold shadow"
+            >
+              Pipeline
+            </button>
+            <button
+              onClick={onCapture}
+              className="flex-shrink-0 px-3 h-9 rounded-full bg-carte text-accent text-xs font-semibold shadow"
+            >
+              Capture
+            </button>
+          </div>
         </header>
       </div>
 
@@ -489,6 +818,64 @@ export default function BriefSoir({ onBack, onOpenDossier }) {
 
         {!chargement && !erreur && (
           <>
+            {depuisCache && (
+              <p className="text-xs text-alerte mb-2 px-1">
+                ⚠ Version hors ligne — peut ne pas refléter les derniers changements
+              </p>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <TuileKPI titre="Dossiers actifs" valeur={bilan.totalActifsTousTypes} />
+              <TuileKPI
+                titre={`Objectif ${bilan.annee}`}
+                valeur={`${bilan.pourcentageObjectif} %`}
+                sousTitre={euros(bilan.signe)}
+              />
+              <TuileKPI titre="À traiter" valeur={bilan.totalATraiter} urgent={bilan.totalATraiter > 0} />
+              <TuileKPI
+                titre="SAV ouverts"
+                valeur={bilan.savOuverts.length}
+                sousTitre={bilan.savEnRetard > 0 ? `dont ${bilan.savEnRetard} en retard` : null}
+                urgent={bilan.savEnRetard > 0}
+              />
+            </div>
+
+            {board.prioriteJour && (
+              <CartePriorite
+                item={board.prioriteJour}
+                onOuvrir={onOpenDossier}
+                onAppeler={appeler}
+                onPlusTard={plusTard}
+              />
+            )}
+
+            <section className="mt-6">
+              <div className="flex items-center gap-2 px-1 mb-2">
+                <h2 className="text-xs text-texte-faible uppercase tracking-wider flex-1">Aussi à traiter</h2>
+                <span className={`text-sm font-semibold ${board.aussiATraiter.length > 0 ? 'text-alerte' : 'text-texte-doux'}`}>
+                  {board.aussiATraiter.length}
+                </span>
+              </div>
+              {board.aussiATraiter.length === 0 ? (
+                <p className="text-texte-faible text-sm px-1">Rien d'autre en attente.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {board.aussiATraiter.map((item) => (
+                    <Ligne
+                      key={item.cle}
+                      dossier={item.dossier}
+                      onOuvrir={onOpenDossier}
+                      tag={TAG_LABELS[item.type]}
+                      ligneSecondaire={item.libelle}
+                      droite={item.droite}
+                      alerte
+                      onFait={item.type === 'devis' ? undefined : () => traiterElement(item)}
+                    />
+                  ))}
+                </ul>
+              )}
+            </section>
+
             <section className="mt-6">
               <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mb-2">
                 Objectif {bilan.annee}
