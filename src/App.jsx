@@ -14,6 +14,8 @@ const DossierDetail = React.lazy(() => import('./screens/DossierDetail'))
 const Pipeline = React.lazy(() => import('./screens/Pipeline'))
 const Catalogue = React.lazy(() => import('./screens/Catalogue'))
 import useConfirm from './hooks/useConfirm'
+import { useSession } from './hooks/useSession'
+import Login from './screens/Login'
 import { tailleFile, ecouterTailleFile, viderFile } from './lib/fileAttente'
 import { supabase } from './lib/supabaseClient'
 import { assurerRappelDeRelance } from './lib/rappel'
@@ -248,6 +250,11 @@ function useFileAttente(enLigne) {
 }
 
 export default function App() {
+  // Chantier sécurité (RLS) : tant que la connexion n'est pas validée en
+  // usage réel (Mac + PWA iPhone), le RLS reste désactivé côté base — cet
+  // écran de connexion n'empêche donc encore rien techniquement, il se
+  // teste en amont, sans risque sur les données.
+  const session = useSession()
   const enLigne = useEnLigne()
   const tailleFileAttente = useFileAttente(enLigne)
 
@@ -416,6 +423,15 @@ export default function App() {
   const largeurLibre = view.name === 'pipeline'
 
   const attente = <p className="text-texte-faible text-sm p-4">Chargement…</p>
+
+  // undefined = vérification de session pas encore terminée (évite un
+  // flash de l'écran de connexion à chaque ouverture) ; null = pas connecté.
+  if (session === undefined) {
+    return <div className="min-h-screen bg-fond">{attente}</div>
+  }
+  if (session === null) {
+    return <Login />
+  }
 
   return (
     <>
