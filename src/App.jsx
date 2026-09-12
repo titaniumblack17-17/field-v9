@@ -370,6 +370,7 @@ export default function App() {
         onBack={back}
         onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
         onCreate={() => push({ name: 'create' })}
+        vueInitiale={view.vueInitiale}
       />
     )
   } else if (view.name === 'catalogue') {
@@ -402,7 +403,7 @@ export default function App() {
         onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
         onOpenClient={(client) => push({ name: 'detail', client })}
         onClients={() => push({ name: 'list' })}
-        onPipeline={() => push({ name: 'pipeline' })}
+        onPipeline={(vueInitiale) => push({ name: 'pipeline', vueInitiale })}
         onCapture={() => push({ name: 'capture' })}
       />
     )

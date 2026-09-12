@@ -65,6 +65,12 @@ const normaliser = (s) =>
 
 const TAG_LABELS = { rappel: 'Rappel', sav: 'SAV', tache: 'Tâche', devis: 'Devis' }
 
+// Au-delà de ce nombre, « Aussi à traiter » se replie derrière un lien
+// « Voir les N autres » — un board qui force un défilement marathon avant
+// d'atteindre les 7 sections détaillées en dessous rate son objectif
+// (constaté en vidéo réelle sur iPhone, 25 éléments affichés à plat).
+const LIMITE_AUSSI_A_TRAITER = 6
+
 function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTitre, ligneSecondaire, tag }) {
   const s = styleDossier(dossier)
   const [enCours, setEnCours] = useState(false)
@@ -180,13 +186,16 @@ function Section({ sectionRef, titre, compte, urgent, vide, ouverte, onToggle, c
 
 // Tuile compacte de la grille 2x2 : un chiffre à lire d'un coup d'œil, pas de
 // détail — le détail, c'est le board et les 7 sections juste en dessous.
-function TuileKPI({ titre, valeur, sousTitre, urgent }) {
+function TuileKPI({ titre, valeur, sousTitre, urgent, onClick }) {
   return (
-    <div className="bg-carte rounded-xl shadow-sm px-3 py-3">
+    <button
+      onClick={onClick}
+      className="bg-carte rounded-xl shadow-sm px-3 py-3 text-left active:scale-[0.98] transition"
+    >
       <p className="text-xs text-texte-doux truncate">{titre}</p>
       <p className={`text-2xl font-bold tabular-nums mt-1 ${urgent ? 'text-alerte' : 'text-texte'}`}>{valeur}</p>
       {sousTitre && <p className="text-xs text-texte-faible mt-0.5 truncate">{sousTitre}</p>}
-    </div>
+    </button>
   )
 }
 
@@ -260,6 +269,13 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
   // puisque BriefSoir se démonte à chaque navigation ailleurs.
   const [ignores, setIgnores] = useState(() => new Set())
 
+  // « Aussi à traiter » replié par défaut au-delà de LIMITE_AUSSI_A_TRAITER
+  // (voir son commentaire) — une fois déplié via le lien ou la tuile KPI
+  // « À traiter », reste déplié pour le reste de la session.
+  const [aussiATraiterDeplie, setAussiATraiterDeplie] = useState(false)
+  const aussiATraiterRef = useRef(null)
+  const objectifRef = useRef(null)
+
   // Jauge Objectif puis pastilles de navigation tout en haut ; les pastilles
   // sautent directement à la section concernée plus bas via ces mêmes refs.
   const sectionRefs = useRef({})
@@ -285,6 +301,19 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
     // dessous : pas besoin d'attendre le re-rendu avant de lancer le scroll.
     setSectionsOuvertes((s) => (s[cle] ? s : { ...s, [cle]: true }))
     sectionRefs.current[cle]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  // Tuile KPI « À traiter » : contourne le lien « Voir les N autres » — un
+  // tap sur le chiffre doit montrer tout ce qu'il représente sans étape
+  // intermédiaire, même mécanisme scrollIntoView que les pastilles.
+  const allerAAussiATraiter = () => {
+    setAussiATraiterDeplie(true)
+    aussiATraiterRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  // Tuile KPI « Objectif » : défile jusqu'à la jauge détaillée plus bas.
+  const allerAObjectif = () => {
+    objectifRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   // Retrait immédiat plutôt qu'attendre une relecture : on vient de le faire,
@@ -825,18 +854,29 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
             )}
 
             <div className="grid grid-cols-2 gap-3 mt-2">
-              <TuileKPI titre="Dossiers actifs" valeur={bilan.totalActifsTousTypes} />
+              <TuileKPI
+                titre="Dossiers actifs"
+                valeur={bilan.totalActifsTousTypes}
+                onClick={() => onPipeline()}
+              />
               <TuileKPI
                 titre={`Objectif ${bilan.annee}`}
                 valeur={`${bilan.pourcentageObjectif} %`}
                 sousTitre={euros(bilan.signe)}
+                onClick={allerAObjectif}
               />
-              <TuileKPI titre="À traiter" valeur={bilan.totalATraiter} urgent={bilan.totalATraiter > 0} />
+              <TuileKPI
+                titre="À traiter"
+                valeur={bilan.totalATraiter}
+                urgent={bilan.totalATraiter > 0}
+                onClick={allerAAussiATraiter}
+              />
               <TuileKPI
                 titre="SAV ouverts"
                 valeur={bilan.savOuverts.length}
                 sousTitre={bilan.savEnRetard > 0 ? `dont ${bilan.savEnRetard} en retard` : null}
                 urgent={bilan.savEnRetard > 0}
+                onClick={() => onPipeline('sav')}
               />
             </div>
 
@@ -849,7 +889,7 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               />
             )}
 
-            <section className="mt-6">
+            <section ref={aussiATraiterRef} className="mt-6 scroll-mt-32">
               <div className="flex items-center gap-2 px-1 mb-2">
                 <h2 className="text-xs text-texte-faible uppercase tracking-wider flex-1">Aussi à traiter</h2>
                 <span className={`text-sm font-semibold ${board.aussiATraiter.length > 0 ? 'text-alerte' : 'text-texte-doux'}`}>
@@ -859,24 +899,37 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               {board.aussiATraiter.length === 0 ? (
                 <p className="text-texte-faible text-sm px-1">Rien d'autre en attente.</p>
               ) : (
-                <ul className="space-y-2">
-                  {board.aussiATraiter.map((item) => (
-                    <Ligne
-                      key={item.cle}
-                      dossier={item.dossier}
-                      onOuvrir={onOpenDossier}
-                      tag={TAG_LABELS[item.type]}
-                      ligneSecondaire={item.libelle}
-                      droite={item.droite}
-                      alerte
-                      onFait={item.type === 'devis' ? undefined : () => traiterElement(item)}
-                    />
-                  ))}
-                </ul>
+                <>
+                  <ul className="space-y-2">
+                    {(aussiATraiterDeplie
+                      ? board.aussiATraiter
+                      : board.aussiATraiter.slice(0, LIMITE_AUSSI_A_TRAITER)
+                    ).map((item) => (
+                      <Ligne
+                        key={item.cle}
+                        dossier={item.dossier}
+                        onOuvrir={onOpenDossier}
+                        tag={TAG_LABELS[item.type]}
+                        ligneSecondaire={item.libelle}
+                        droite={item.droite}
+                        alerte
+                        onFait={item.type === 'devis' ? undefined : () => traiterElement(item)}
+                      />
+                    ))}
+                  </ul>
+                  {!aussiATraiterDeplie && board.aussiATraiter.length > LIMITE_AUSSI_A_TRAITER && (
+                    <button
+                      onClick={() => setAussiATraiterDeplie(true)}
+                      className="w-full text-center text-sm text-accent font-semibold py-3"
+                    >
+                      Voir les {board.aussiATraiter.length - LIMITE_AUSSI_A_TRAITER} autres
+                    </button>
+                  )}
+                </>
               )}
             </section>
 
-            <section className="mt-6">
+            <section ref={objectifRef} className="mt-6 scroll-mt-32">
               <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mb-2">
                 Objectif {bilan.annee}
               </h2>

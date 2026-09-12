@@ -237,12 +237,15 @@ let etapeVueMemorisee = null
 // annulable avant que l'écriture réelle ne parte (voir armerDeplacement).
 const DUREE_ANNULATION_MS = 5000
 
-export default function Pipeline({ onBack, onOpenDossier, onCreate }) {
+export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale }) {
   const [dossiers, setDossiers] = useState([])
   // Les deux pipelines n'ont ni le même vocabulaire d'étapes ni le même
   // volume : les montrer bout à bout obligeait à faire défiler loin pour
   // atteindre le SAV. Un seul kanban à l'écran à la fois, choisi ici.
-  const [vue, setVue] = useState(() => vueMemorisee)
+  // vueInitiale (depuis la tuile « SAV ouverts » du Brief, par exemple)
+  // l'emporte sur la mémoire de la dernière visite — une navigation ciblée
+  // ne doit pas retomber sur l'onglet consulté la fois d'avant.
+  const [vue, setVue] = useState(() => vueInitiale ?? vueMemorisee)
   const [activeDrag, setActiveDrag] = useState(null)
   const [aDeplacer, setADeplacer] = useState(null)
   // Un glisser-déposer touché par erreur (pouce qui frôle une carte en
