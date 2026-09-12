@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 // Accès mono-utilisateur : un seul email autorisé, pas de formulaire de
