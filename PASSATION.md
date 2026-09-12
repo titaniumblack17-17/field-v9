@@ -207,10 +207,16 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
    création du dossier lui-même (reprise telle quelle de la date de suivi de
    l'ancien système, jamais actualisée). 6 rappels identifiés par une requête
    ponctuelle (`date(rappels.created_at) = date(dossiers.created_at) AND
-   rappels.date < date(dossiers.created_at)`) : Gahnassia-Lewin (clos le
-   12/09, confirmé artefact), Mamouni, Anca Pricop, Mr Farge (dossier perdu),
-   Janier / Benhacoun, Elhaik — restent à trancher un par un (clore sans
-   recréer, ou reposer une date réelle si le devis est toujours d'actualité).
+   rappels.date < date(dossiers.created_at)`) : Gahnassia-Lewin, Mamouni,
+   Anca Pricop, Mr Farge (dossier perdu), Janier / Benhacoun, Elhaik.
+   **Vérifié le 12/09 : aucune décision en attente.** Gahnassia-Lewin était
+   le seul encore ouvert (clos ce jour-là, sans commentaire, rien recréé —
+   devis non reconfirmé d'actualité). Les 5 autres s'étaient déjà refermés
+   d'eux-mêmes via l'usage normal de Bruce (Janier/Benhacoun même remplacé
+   par un vrai rappel le 24/08, avec commentaire) — colonnes reflet
+   `dossiers.rappel_date` vérifiées cohérentes sur les 5, aucun bug annexe.
+   Reste utile pour la Phase 7 : détecter ce pattern d'import à l'avenir,
+   pas un correctif à faire aujourd'hui.
 1. **Décisions qui appartiennent à Bruce**
    - Doublons `Matheu` / `Matheu-Cohen` et `Alakian` / `Patrice Alakian` — l'outil
      de fusion existe désormais, l'appariement reste à valider cas par cas
