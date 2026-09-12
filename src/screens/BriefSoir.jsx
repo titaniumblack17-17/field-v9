@@ -203,6 +203,32 @@ function TuileKPI({ titre, valeur, sousTitre, urgent, onClick }) {
 // retard le plus long. Accent ambre = le token `alerte` existant de l'app
 // (déjà l'orange du code couleur des échéances), pas une couleur importée —
 // cohérent avec le reste de l'interface plutôt qu'une nouvelle teinte.
+// Rapport hebdo (loupe-rapport-hebdo) : même carte repliable que les 7
+// sections détaillées (EnTeteCarte réutilisé tel quel), simplement avec un
+// contenu texte préformaté au lieu d'une liste de dossiers — la synthèse
+// n'a pas de « ligne » à afficher une par une.
+function CarteRapportHebdo({ rapport, ouverte, onToggle }) {
+  const dateLabel = rapport
+    ? new Date(rapport.semaine + 'T00:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+    : '—'
+  return (
+    <section className="mt-6 bg-carte rounded-xl overflow-hidden">
+      <EnTeteCarte titre="Rapport hebdo" compte={dateLabel} urgent={false} ouverte={ouverte} onToggle={onToggle} />
+      {ouverte && (
+        <div className="px-4 pb-4">
+          {rapport ? (
+            <pre className="text-sm text-texte-doux whitespace-pre-wrap font-sans leading-relaxed">
+              {rapport.contenu}
+            </pre>
+          ) : (
+            <p className="text-texte-faible text-sm">Aucun rapport disponible pour l'instant.</p>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function CartePriorite({ item, onOuvrir, onAppeler, onPlusTard }) {
   return (
     <section className="mt-4 bg-alerte/10 border border-alerte/40 rounded-xl px-4 py-4">
@@ -275,6 +301,11 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
   const [aussiATraiterDeplie, setAussiATraiterDeplie] = useState(false)
   const aussiATraiterRef = useRef(null)
   const objectifRef = useRef(null)
+
+  // Rapport hebdo (loupe-rapport-hebdo, table rapport_hebdo) : dernière ligne
+  // seulement, pas de temps réel — une synthèse hebdomadaire vieille de
+  // quelques minutes n'a aucune conséquence.
+  const [rapportHebdo, setRapportHebdo] = useState(null)
 
   // Jauge Objectif puis pastilles de navigation tout en haut ; les pastilles
   // sautent directement à la section concernée plus bas via ces mêmes refs.
@@ -532,6 +563,31 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
     )
       .then(({ valeur }) => {
         if (actif) setClientsRecherche(valeur)
+      })
+      .catch(() => {})
+    return () => {
+      actif = false
+    }
+  }, [])
+
+  // Rapport hebdo : dernière ligne écrite par la loupe (pg_cron, lundi matin).
+  // Même secours hors-ligne que le reste de l'écran d'accueil.
+  useEffect(() => {
+    let actif = true
+    lireAvecCache('brief-rapport-hebdo', () =>
+      supabase
+        .from('rapport_hebdo')
+        .select('semaine, contenu, cree_le')
+        .order('cree_le', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then(({ data, error }) => {
+          if (error) throw new Error(error.message)
+          return data ?? null
+        })
+    )
+      .then(({ valeur }) => {
+        if (actif) setRapportHebdo(valeur)
       })
       .catch(() => {})
     return () => {
@@ -1157,6 +1213,12 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
                 />
               ))}
             </Section>
+
+            <CarteRapportHebdo
+              rapport={rapportHebdo}
+              ouverte={!!sectionsOuvertes.rapport}
+              onToggle={() => toggleSection('rapport')}
+            />
           </>
         )}
       </main>
