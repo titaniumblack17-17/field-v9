@@ -203,6 +203,76 @@ function TuileKPI({ titre, valeur, sousTitre, urgent, onClick }) {
 // retard le plus long. Accent ambre = le token `alerte` existant de l'app
 // (déjà l'orange du code couleur des échéances), pas une couleur importée —
 // cohérent avec le reste de l'interface plutôt qu'une nouvelle teinte.
+// Anomalies détectées (loupe-audit-integrite, table loupe_memoire) : une
+// ligne par anomalie non résolue, avec un bouton pour la marquer traitée une
+// fois vérifiée à la main — jamais de correction automatique, cette loupe ne
+// fait que journaliser.
+const LIBELLES_ANOMALIE = {
+  rappel_fk_invalide: 'Rappel sans dossier valide',
+  dossier_todoist_zombie: 'Tâche Todoist disparue',
+  capture_suggestion_orpheline: 'Suggestion de capture jamais rattachée',
+  plan_remuneration_manquante: 'Plan sans rémunération valide',
+  rappel_date_anterieure_import: 'Rappel antérieur à son dossier',
+}
+
+const resumeAnomalie = (a) => {
+  const c = a.contexte || {}
+  switch (a.type_erreur) {
+    case 'rappel_fk_invalide':
+      return `Rappel ${c.rappel_id} — dossier introuvable (${c.dossier_id_manquant})`
+    case 'dossier_todoist_zombie':
+      return `${c.titre || 'Sans titre'} — tâche ${c.todoist_task_id} absente de Todoist`
+    case 'capture_suggestion_orpheline':
+      return `Capture « ${(c.texte || '').slice(0, 60) || '—'} » — suggestion ${c.type} jamais rattachée`
+    case 'plan_remuneration_manquante':
+      return `${c.titre || 'Sans titre'} — rémunération : ${c.remuneration_type ?? '—'}`
+    case 'rappel_date_anterieure_import':
+      return `${c.titre || 'Sans titre'} — rappel du ${c.rappel_date}, dossier créé le ${String(c.dossier_created_at).slice(0, 10)}`
+    default:
+      return JSON.stringify(c)
+  }
+}
+
+function CarteAnomalies({ anomalies, ouverte, onToggle, onResoudre }) {
+  return (
+    <section className="mt-6 bg-carte rounded-xl overflow-hidden">
+      <EnTeteCarte
+        titre="Anomalies détectées"
+        compte={anomalies.length}
+        urgent={anomalies.length > 0}
+        ouverte={ouverte}
+        onToggle={onToggle}
+      />
+      {ouverte && (
+        <div className="px-4 pb-3">
+          {anomalies.length === 0 ? (
+            <p className="text-texte-faible text-sm">Aucune anomalie en attente.</p>
+          ) : (
+            <ul className="space-y-2">
+              {anomalies.map((a) => (
+                <li key={a.id} className="bg-carte-douce rounded-xl px-4 py-3 flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-alerte">
+                      {LIBELLES_ANOMALIE[a.type_erreur] ?? a.type_erreur}
+                    </p>
+                    <p className="text-sm text-texte-doux mt-0.5 break-words">{resumeAnomalie(a)}</p>
+                  </div>
+                  <button
+                    onClick={() => onResoudre(a.id)}
+                    className="flex-shrink-0 text-xs text-accent font-semibold h-9 px-3 rounded-full bg-carte"
+                  >
+                    Traité
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
 // Rapport hebdo (loupe-rapport-hebdo) : même carte repliable que les 7
 // sections détaillées (EnTeteCarte réutilisé tel quel), simplement avec un
 // contenu texte préformaté au lieu d'une liste de dossiers — la synthèse
@@ -306,6 +376,12 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
   // seulement, pas de temps réel — une synthèse hebdomadaire vieille de
   // quelques minutes n'a aucune conséquence.
   const [rapportHebdo, setRapportHebdo] = useState(null)
+
+  // Anomalies détectées (loupe-audit-integrite) : lignes non résolues de
+  // loupe_memoire. RLS n'autorise que la lecture côté client — passer une
+  // anomalie à « traité » passe par la fonction Edge loupe-memoire-resoudre
+  // (clé service_role), jamais une écriture directe depuis l'app.
+  const [anomalies, setAnomalies] = useState([])
 
   // Jauge Objectif puis pastilles de navigation tout en haut ; les pastilles
   // sautent directement à la section concernée plus bas via ces mêmes refs.
@@ -594,6 +670,37 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
       actif = false
     }
   }, [])
+
+  // Anomalies détectées : uniquement celles non résolues.
+  useEffect(() => {
+    let actif = true
+    lireAvecCache('brief-anomalies', () =>
+      supabase
+        .from('loupe_memoire')
+        .select('id, type_erreur, contexte, date')
+        .is('correction_appliquee', null)
+        .order('date', { ascending: false })
+        .then(({ data, error }) => {
+          if (error) throw new Error(error.message)
+          return data ?? []
+        })
+    )
+      .then(({ valeur }) => {
+        if (actif) setAnomalies(valeur)
+      })
+      .catch(() => {})
+    return () => {
+      actif = false
+    }
+  }, [])
+
+  // Optimiste : l'anomalie disparaît tout de suite de la liste, l'écriture
+  // réelle passe par la fonction Edge (RLS ferme l'écriture directe sur
+  // loupe_memoire — voir son commentaire plus haut).
+  const resoudreAnomalie = async (id) => {
+    setAnomalies((cur) => cur.filter((a) => a.id !== id))
+    await supabase.functions.invoke('loupe-memoire-resoudre', { body: { id } }).catch(() => {})
+  }
 
   const resultatsRecherche = useMemo(() => {
     const q = normaliser(rechercheTexte).trim()
@@ -1213,6 +1320,13 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
                 />
               ))}
             </Section>
+
+            <CarteAnomalies
+              anomalies={anomalies}
+              ouverte={!!sectionsOuvertes.anomalies}
+              onToggle={() => toggleSection('anomalies')}
+              onResoudre={resoudreAnomalie}
+            />
 
             <CarteRapportHebdo
               rapport={rapportHebdo}
