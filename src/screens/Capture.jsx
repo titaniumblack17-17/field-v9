@@ -198,14 +198,14 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
   return (
     <div className="min-h-screen bg-fond">
       <header className="sticky top-0 bg-fond/90 backdrop-blur px-4 pt-6 pb-4 flex items-center gap-3">
-        <button onClick={onBack} className="text-accent text-sm font-medium h-11 -ml-2 pl-2 pr-1 flex items-center">
+        <button onClick={onBack} className="text-accent text-sm font-semibold h-11 -ml-2 pl-2 pr-1 flex items-center">
           ← Brief
         </button>
-        <h1 className="text-lg font-semibold text-texte">Capture rapide</h1>
+        <h1 className="text-lg font-bold text-texte">Capture rapide</h1>
       </header>
 
       <main className="px-4 pb-8">
-        <form onSubmit={submit} className="bg-carte rounded-xl shadow-sm p-4">
+        <form onSubmit={submit} className="bg-carte rounded-carte shadow-sm p-4">
           <textarea
             value={texte}
             onChange={(e) => setTexte(e.target.value)}
@@ -218,7 +218,7 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
           <button
             type="submit"
             disabled={sending || !texte.trim()}
-            className="w-full mt-3 bg-accent text-white font-medium rounded-xl py-3 shadow disabled:opacity-50"
+            className="w-full mt-3 bg-accent text-white font-semibold rounded-imbrique py-3 shadow disabled:opacity-50"
           >
             {sending ? 'Analyse en cours…' : 'Envoyer'}
           </button>
@@ -227,7 +227,7 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
         {error && <p className="text-erreur text-sm mt-3">{error}</p>}
 
         {lastResult && (
-          <div className="bg-carte rounded-xl shadow-sm mt-4 px-4 py-3">
+          <div className="bg-carte rounded-carte shadow-sm mt-4 px-4 py-3">
             <p className="text-xs text-texte-faible mb-1">Retenu</p>
             <p className="text-texte">{lastResult.resume}</p>
             {lastResult.date_evenement && (
@@ -239,7 +239,7 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
             {clientTouche && (
               <button
                 onClick={() => onOpenClient?.(clientTouche)}
-                className="text-sm text-accent mt-2 font-medium text-left"
+                className="text-sm text-accent mt-2 font-semibold text-left"
               >
                 {lastResult.client_created
                   ? '✓ Fiche créée'
@@ -285,7 +285,7 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
             <p className="text-xs text-texte-faible mb-2 px-1">À relier à un client ({unclassified.length})</p>
             <ul className="space-y-2">
               {unclassified.map((c) => (
-                <li key={c.id} className="bg-carte rounded-xl px-4 py-3 shadow-sm">
+                <li key={c.id} className="bg-carte rounded-carte px-4 py-3 shadow-sm">
                   <p className="text-texte text-sm">{c.resume || c.texte}</p>
                   {c.info_manquante && (
                     <p className="text-xs text-alerte mt-1">⚠ {c.info_manquante}</p>
@@ -314,7 +314,7 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
                     </p>
                     <button
                       onClick={() => setARelier(c)}
-                      className="text-accent text-xs font-medium h-9 px-1"
+                      className="text-accent text-xs font-semibold h-9 px-1"
                     >
                       Relier à un client
                     </button>
