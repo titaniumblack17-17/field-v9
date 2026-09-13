@@ -264,3 +264,30 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
 - Les variables Vercel marquées « Sensitive » ne sont pas injectées au build.
 - Les dictées iOS se coupent : régler « Arrêter d'écouter » sur « Sur pression »
   dans le raccourci.
+- **Rotation de l'écran pendant une dictée (Capture rapide) — limitation iOS,
+  pas un bug Field, distincte du Wake Lock déjà corrigé.** Signalé le 13/09 :
+  la dictée s'arrête dès le premier changement d'orientation (pas seulement
+  au second comme observé avant). Audit du code (13/09) : aucun écouteur
+  `resize`/`orientationchange`, aucune hauteur en `vh`/`vw` recalculée,
+  aucune media query CSS qui basculerait de composant selon l'orientation —
+  confirmé inchangé depuis les derniers commits touchant `Capture.jsx`/
+  `useWakeLock.js`, donc pas une régression de code. La dictée native iOS
+  n'étant pas pilotable en JS (voir commentaire en tête de `Capture.jsx`),
+  impossible de reproduire ou d'instrumenter le mécanisme depuis Field —
+  confirmé à la place par une recherche externe : iOS interrompt la saisie
+  vocale (dictée comme Mémos vocaux) au changement d'orientation, un
+  comportement système documenté qui touche aussi des apps natives avec
+  plein accès à `AVAudioSession` (ex. Signal iOS
+  [#4359](https://github.com/signalapp/Signal-iOS/issues/4359),
+  [#5692](https://github.com/signalapp/Signal-iOS/issues/5692)) — donc
+  indépendant de toute app tierce, Field inclus. « Premier changement cette
+  fois, second la fois précédente » s'explique probablement par un test
+  précédent qui n'exerçait pas vraiment le cas (rotation partielle,
+  dictée pas encore démarrée), pas par une régression : aucun code
+  susceptible de causer ça n'a changé entre les deux observations. Aucun
+  correctif possible côté Field (le texte déjà dicté n'est jamais perdu,
+  seule la suite l'est) — seule parade utilisateur : verrouiller
+  l'orientation avant de dicter. Amélioration UX possible mais non
+  implémentée : détecter la perte de focus du champ juste après une
+  rotation et prévenir Bruce visuellement plutôt que de le laisser parler
+  dans le vide — à faire s'il la juge utile.
