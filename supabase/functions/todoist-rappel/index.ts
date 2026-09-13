@@ -91,6 +91,13 @@ Deno.serve(async (req) => {
         if (rep.status === 404) return { r, sort: 'retire' as const }
         if (!rep.ok) return null
         const t = await rep.json()
+        // L'API ne renvoie jamais 404 pour une tâche supprimée : elle répond
+        // 200 avec is_deleted:true (soft delete) — piège déjà corrigé le
+        // 12/09 sur le contrôle zombie de loupe-audit-integrite et sur la
+        // fermeture ci-dessous, mais pas encore ici : sans ce test, un rappel
+        // dont la tâche est supprimée (et non cochée) dans Todoist restait
+        // ouvert indéfiniment côté Field.
+        if (t.is_deleted) return { r, sort: 'retire' as const }
         if (t.checked || t.is_completed || t.completed_at) return { r, sort: 'fait' as const }
         return null
       })

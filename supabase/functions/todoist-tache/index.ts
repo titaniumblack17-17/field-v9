@@ -134,7 +134,10 @@ Deno.serve(async (req) => {
         if (rep.status === 404) return t
         if (!rep.ok) return null
         const j = await rep.json()
-        if (j.checked || j.is_completed || j.completed_at) return t
+        // Todoist ne renvoie jamais 404 pour une tâche supprimée : elle
+        // répond 200 avec is_deleted:true (soft delete) — même piège que le
+        // contrôle zombie de loupe-audit-integrite, corrigé le 12/09.
+        if (j.checked || j.is_completed || j.completed_at || j.is_deleted) return t
         return null
       })
     )
@@ -191,9 +194,44 @@ Deno.serve(async (req) => {
   // Cochée : la tâche Todoist n'a plus lieu d'être.
   if (t.fait) {
     if (t.todoist_task_id) {
-      // 404 = déjà disparue ; le résultat voulu est atteint.
-      await todoist(`/tasks/${t.todoist_task_id}`, { method: 'DELETE' }).catch(() => {})
-      await db.from('dossier_note_taches').update({ todoist_task_id: null }).eq('id', tacheId)
+      let statutSuppression: number | null = null
+      try {
+        const repSuppr = await todoist(`/tasks/${t.todoist_task_id}`, { method: 'DELETE' })
+        statutSuppression = repSuppr.status
+      } catch {
+        statutSuppression = null // échec réseau — distinct d'un vrai code HTTP
+      }
+
+      // 200/204 = supprimée ; 404 = déjà disparue : le résultat voulu est
+      // atteint dans les deux cas.
+      if (statutSuppression === 200 || statutSuppression === 204 || statutSuppression === 404) {
+        await db.from('dossier_note_taches').update({ todoist_task_id: null }).eq('id', tacheId)
+        return json({ etat: 'supprime' })
+      }
+
+      // Échec réel (réseau, 5xx, jeton expiré...) : ne plus l'avaler
+      // silencieusement, même correctif que todoist-rappel le 12/09. On NE
+      // nettoie PAS todoist_task_id : la référence reste pour permettre un
+      // nouveau passage, et l'anomalie est journalisée dans loupe_memoire —
+      // dédupliquée par tâche.
+      const { data: dejaConnue } = await db
+        .from('loupe_memoire')
+        .select('id')
+        .eq('type_erreur', 'todoist_delete_echoue')
+        .is('correction_appliquee', null)
+        .contains('contexte', { tache_id: tacheId })
+        .maybeSingle()
+      if (!dejaConnue) {
+        await db.from('loupe_memoire').insert({
+          loupe_nom: 'todoist-tache',
+          type_erreur: 'todoist_delete_echoue',
+          contexte: { tache_id: tacheId, todoist_task_id: t.todoist_task_id, statut_http: statutSuppression },
+        })
+      }
+      return json(
+        { erreur: `Suppression Todoist échouée (statut ${statutSuppression ?? 'réseau'}).`, etat: 'echec_suppression' },
+        502
+      )
     }
     return json({ etat: 'supprime' })
   }
