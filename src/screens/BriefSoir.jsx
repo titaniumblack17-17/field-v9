@@ -372,6 +372,21 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
   const aussiATraiterRef = useRef(null)
   const objectifRef = useRef(null)
 
+  // Bouton flottant « retour en haut » : apparaît une fois la grille KPI
+  // défilée hors champ (repère fiable indépendant de la hauteur des
+  // sections au-dessus, qui varie selon ce qu'il y a à traiter ce soir-là).
+  const kpiRef = useRef(null)
+  const [montrerRetourHaut, setMontrerRetourHaut] = useState(false)
+  useEffect(() => {
+    const surScroll = () => {
+      const rect = kpiRef.current?.getBoundingClientRect()
+      setMontrerRetourHaut(!!rect && rect.bottom < 0)
+    }
+    window.addEventListener('scroll', surScroll, { passive: true })
+    return () => window.removeEventListener('scroll', surScroll)
+  }, [])
+  const retourEnHaut = () => window.scrollTo({ top: 0, behavior: 'smooth' })
+
   // Rapport hebdo (loupe-rapport-hebdo, table rapport_hebdo) : dernière ligne
   // seulement, pas de temps réel — une synthèse hebdomadaire vieille de
   // quelques minutes n'a aucune conséquence.
@@ -1016,7 +1031,7 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               </p>
             )}
 
-            <div className="grid grid-cols-2 gap-3 mt-2">
+            <div ref={kpiRef} className="grid grid-cols-2 gap-3 mt-2">
               <TuileKPI
                 titre="Dossiers actifs"
                 valeur={bilan.totalActifsTousTypes}
@@ -1337,6 +1352,16 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
         )}
       </main>
       {boîtePrompt}
+
+      {montrerRetourHaut && (
+        <button
+          onClick={retourEnHaut}
+          aria-label="Retour en haut"
+          className="fixed bottom-6 right-4 z-30 w-12 h-12 rounded-full bg-accent-vif text-[#0A2E33] shadow-lg flex items-center justify-center active:scale-90 transition"
+        >
+          <span className="text-xl leading-none">↑</span>
+        </button>
+      )}
     </div>
   )
 }
