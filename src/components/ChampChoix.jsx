@@ -49,10 +49,10 @@ export default function ChampChoix({
           onClick={() => setOuvert(false)}
         >
           <div
-            className="bg-carte w-full rounded-t-2xl p-4 max-h-[75vh] overflow-y-auto"
+            className="bg-carte w-full rounded-t-carte p-4 max-h-[75vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-xs text-texte-faible mb-3">{label}</p>
+            <p className="text-sm font-bold text-texte mb-3">{label}</p>
             <div className="flex flex-col gap-2">
               {choix.map(([valeur, libelle]) => {
                 const actif = valeur === (value ?? '')
@@ -64,9 +64,9 @@ export default function ChampChoix({
                       onChange(valeur)
                       setOuvert(false)
                     }}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left text-sm ${
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-imbrique border text-left text-sm ${
                       actif
-                        ? 'border-accent bg-accent/15 text-accent font-medium'
+                        ? 'border-accent bg-accent/15 text-accent font-semibold'
                         : 'border-bordure text-texte-doux'
                     }`}
                   >
@@ -79,7 +79,7 @@ export default function ChampChoix({
             <button
               type="button"
               onClick={() => setOuvert(false)}
-              className="w-full mt-3 py-3 rounded-xl bg-carte-douce text-texte-doux text-sm font-medium"
+              className="w-full mt-3 py-3 rounded-imbrique bg-carte-douce text-texte-doux text-sm font-semibold"
             >
               Annuler
             </button>
