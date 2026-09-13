@@ -79,7 +79,7 @@ export default function PersonListField({ label, people, onChange }) {
         </div>
       ))}
 
-      <button type="button" onClick={add} className="text-accent text-sm mt-2 h-11 px-2 -ml-2 inline-flex items-center">
+      <button type="button" onClick={add} className="text-accent text-sm font-semibold mt-2 h-11 px-2 -ml-2 inline-flex items-center">
         + Ajouter
       </button>
 
