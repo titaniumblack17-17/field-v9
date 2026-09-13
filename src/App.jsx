@@ -16,7 +16,7 @@ const Catalogue = React.lazy(() => import('./screens/Catalogue'))
 import useConfirm from './hooks/useConfirm'
 import { tailleFile, ecouterTailleFile, viderFile } from './lib/fileAttente'
 import { supabase } from './lib/supabaseClient'
-import { assurerRappelDeRelance } from './lib/rappel'
+import { assurerRappelDeRelance, synchroniserRappel } from './lib/rappel'
 import { verifierConnexionReelle } from './lib/reseau'
 import { diagnosticActif, journaliser } from './lib/diagnosticReseau'
 import DiagnosticReseau from './components/DiagnosticReseau'
@@ -127,6 +127,28 @@ async function executerActionEnFile(action) {
         .eq('id', action.dossierId)
       if (error) throw error
       await assurerRappelDeRelance(action.dossierId, action.statut)
+      return
+    }
+    case 'rappel-cloture': {
+      // Compound : les deux écritures de cloreRappel (rappel.js) n'ont pas pu
+      // partir du tout (échec dès la première) — on les rejoue toutes les
+      // deux dans le même ordre. fait_at est celui capturé au moment du
+      // geste, pas recalculé ici : rejouer plus tard ne doit pas décaler
+      // l'horodatage de clôture.
+      const { error } = await supabase
+        .from('rappels')
+        .update({ fait_at: action.faitAt, commentaire: action.commentaire })
+        .eq('id', action.rappelId)
+      if (error) throw error
+      if (action.commentaire) {
+        const { error: erreurNote } = await supabase
+          .from('dossier_notes')
+          .insert({ dossier_id: action.dossierId, texte: action.commentaire })
+        if (erreurNote) throw erreurNote
+      }
+      // Todoist n'est informé qu'une fois la clôture réellement posée en
+      // base — l'appeler avant aurait lu un rappel encore ouvert.
+      synchroniserRappel(action.rappelId)
       return
     }
     case 'capture': {

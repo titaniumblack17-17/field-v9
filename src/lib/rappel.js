@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { mettreEnFile } from './fileAttente'
 
 // Date locale, pas `toISOString()` : minuit à Paris tombe la veille en UTC
 // (23h ou 22h selon la saison) — passer par l'ISO ferait glisser la date
@@ -216,21 +217,52 @@ export async function ajouterRappel(dossierId, date, note, heure) {
  * imposée) que n'importe quelle autre note. Double écriture assumée : les
  * deux lectures (historique des rappels, journal du dossier) servent des
  * usages différents.
+ *
+ * `dossierId` fourni par l'appelant plutôt que relu via `.select()` sur la
+ * première écriture : une coupure réseau pendant cette écriture aurait aussi
+ * empêché la lecture de retour, laissant la seconde écriture sans le
+ * dossier_id nécessaire — les deux appelants (Rappels.jsx, cloreProchainRappel
+ * ci-dessous) le connaissent déjà, sans coût à le demander.
+ *
+ * Robustesse hors-ligne (comme ajouterNote/ajouterTacheManuelle) : chacune
+ * des deux écritures est protégée par la file d'attente, pas seulement l'une
+ * des deux.
  */
-export async function cloreRappel(rappelId, commentaire) {
+export async function cloreRappel(rappelId, commentaire, dossierId) {
   const texte = commentaire?.trim() || null
-  const { data, error } = await supabase
+  const faitAt = new Date().toISOString()
+
+  const { error } = await supabase
     .from('rappels')
-    .update({ fait_at: new Date().toISOString(), commentaire: texte })
+    .update({ fait_at: faitAt, commentaire: texte })
     .eq('id', rappelId)
-    .select('dossier_id')
-    .single()
-  if (error) return { erreur: error.message }
-  if (texte) {
-    await supabase.from('dossier_notes').insert({ dossier_id: data.dossier_id, texte })
+
+  if (error) {
+    // Ni la clôture ni la note n'ont pu partir : les deux sont rejouées
+    // ensemble au retour du réseau (voir le cas 'rappel-cloture' dans
+    // App.jsx), avec l'horodatage figé ici — pas recalculé au moment du
+    // rejeu, qui daterait la clôture de l'instant du retour réseau plutôt
+    // que du geste réel de Bruce.
+    mettreEnFile({ type: 'rappel-cloture', rappelId, dossierId, faitAt, commentaire: texte })
+    return {}
   }
+
+  if (texte) {
+    const { error: erreurNote } = await supabase
+      .from('dossier_notes')
+      .insert({ dossier_id: dossierId, texte })
+    if (erreurNote) {
+      // La clôture, elle, est bien passée — seule la note manque : pas besoin
+      // de reposer fait_at/commentaire, déjà corrects en base. Même type
+      // 'note' que les autres écritures dans dossier_notes (DossierDetail.jsx).
+      mettreEnFile({ type: 'note', table: 'dossier_notes', payload: { dossier_id: dossierId, texte } })
+    }
+  }
+
   // fait_at est posé : la fonction supprime la tâche au lieu d'en créer une.
-  // Là aussi en tâche de fond, même raison que ajouterRappel ci-dessus.
+  // Appelé même si la note a dû être mise en file : la clôture elle-même,
+  // ce qui compte pour Todoist, a réussi. Là aussi en tâche de fond, même
+  // raison que ajouterRappel ci-dessus.
   synchroniserRappel(rappelId)
   return {}
 }
@@ -247,7 +279,7 @@ export async function cloreProchainRappel(dossierId, commentaire) {
     .limit(1)
     .maybeSingle()
   if (!data) return { erreur: 'Aucun rappel ouvert.' }
-  return cloreRappel(data.id, commentaire)
+  return cloreRappel(data.id, commentaire, dossierId)
 }
 
 /**

@@ -131,7 +131,7 @@ export default function Rappels({ dossierId, statut }) {
     })
     if (commentaire === null) return
     setEnCours(rappel.id)
-    const r = await cloreRappel(rappel.id, commentaire)
+    const r = await cloreRappel(rappel.id, commentaire, dossierId)
     if (r?.erreur) setErreur(r.erreur)
     setEnCours(null)
   }
