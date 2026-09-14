@@ -166,6 +166,16 @@ dry-run avec les clients existants) :
   domaine d'envoi et la signature complète du corps du message, jamais
   seulement le display-name de l'en-tête.
 
+## Fonctions RPC
+
+| Nom | Rôle | Appelable avec |
+|---|---|---|
+| `widget_chiffres_board()` | Sans paramètre, renvoie **uniquement** les 4 agrégats déjà affichés en tête de BriefSoir.jsx (`dossiers_actifs`, `objectif_pourcent`, `a_traiter`, `sav_ouverts`) — jamais de nom de praticien, de montant par dossier, ni aucune autre donnée nominative. Créée le 14/09 pour le widget iPhone/Mac (Scriptable + Raccourcis, voir plus bas). Logique **recopiée à dessein** depuis `bilan` (BriefSoir.jsx) en SQL plutôt qu'appelée depuis le client : dupliquer ici évite d'exposer une fonction générique qui pourrait un jour renvoyer plus que ces 4 nombres. `SECURITY DEFINER`, `search_path` fixé (pratique standard pour ce type de fonction). Vérifié le 14/09 : RLS désactivée sur `dossiers`/`dossier_note_taches`/`clients` (`relrowsecurity = false` sur les trois) — sans effet aujourd'hui, mais si le chantier RLS documenté plus bas active un jour des policies restrictives sur ces tables, cette fonction continue de fonctionner sans qu'il faille lui ajouter une policy `anon` par table. Testé en conditions réelles via `POST /rest/v1/rpc/widget_chiffres_board` avec la clé `anon` publique (aucune session requise) : résultat comparé chiffre par chiffre au Board affiché en production, identique (92 / 12 % / 21 / 7 au moment du test). | clé `anon` publique (`grant execute ... to anon, authenticated`) — safe : l'output ne contient aucune donnée sensible, contrairement à un accès direct aux tables (déjà possible aujourd'hui avec la même clé, voir chantier RLS) |
+
+## Widget iPhone/Mac (Scriptable + Raccourcis)
+
+Board résumé en 4 chiffres, en widget natif — pas d'app tierce à ouvrir pour voir où en est la journée. Appelle `widget_chiffres_board()` (ci-dessus) en lecture seule, rafraîchi périodiquement (30-60 min), tap → ouvre la PWA installée (pas Safari, via un Raccourci "Ouvrir l'app" plutôt qu'un lien https direct). Livré à Bruce en document séparé (script Scriptable + étapes d'installation iPhone/Mac) — configuration côté appareil, rien à déployer ici. Si les 4 chiffres du Board changent un jour de définition (nouveau statut, nouveau type de dossier...), `widget_chiffres_board()` doit être mise à jour en miroir de `bilan` dans BriefSoir.jsx — les deux logiques sont dupliquées par choix, pas synchronisées automatiquement.
+
 > Les règles de travail avec Bruce et les décisions structurantes du produit
 > vivent désormais dans `CLAUDE.md` (chargé automatiquement à chaque session),
 > pas ici — pour ne pas les maintenir à deux endroits.
