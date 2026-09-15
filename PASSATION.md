@@ -301,3 +301,48 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
   implémentée : détecter la perte de focus du champ juste après une
   rotation et prévenir Bruce visuellement plutôt que de le laisser parler
   dans le vide — à faire s'il la juge utile.
+- **Collage de pièce jointe (Cmd+V / Coller iOS) — implémenté le 15/09,
+  parité Mac/iPhone réelle seulement pour une image.** Demandé plus tôt
+  dans le projet mais jamais construit (vérifié le 15/09 : aucune trace
+  dans le code ni dans l'historique git avant ce jour). `src/lib/fichiers.js`
+  centralise l'envoi (mêmes chemin de stockage et rattrapage anti-orphelin
+  que le bouton « + Ajouter » existant) et l'extraction d'un fichier depuis
+  un événement `paste`. Deux points d'entrée : `PiecesJointes.jsx` (champ
+  dédié, focusable, dans la section Pièces jointes d'un dossier ou d'une
+  fiche client — nécessaire pour qu'iOS propose « Coller », qui n'apparaît
+  que sur un élément éditable/focalisé, jamais sur une simple zone de
+  dépôt) et `Capture.jsx` (collage direct dans le champ de saisie ; si un
+  fichier est détecté, ouvre `ChoixClient` pour choisir à qui le rattacher
+  avant l'envoi — texte normal laissé au comportement par défaut du champ).
+  Compatibilité vérifiée avant d'écrire le code (recherche externe, pas
+  supposée) :
+  - `navigator.clipboard.read()` (API Clipboard asynchrone) n'accepte
+    qu'un ensemble restreint de types — `text/plain`, `text/html`,
+    `image/png` (+ `text/uri-list` sur Safari seulement) — **aucun type de
+    fichier générique** (PDF, etc.) n'y est autorisé, sur aucun
+    navigateur. D'où le choix de l'événement `paste` classique
+    (`clipboardData.items`) plutôt que cette API : plus ancien, mais seul
+    à transmettre un vrai fichier générique.
+  - Sur iOS Safari, le geste « Coller » natif n'apparaît que sur un
+    élément éditable/focalisé (texte sélectionné → bulle « Coller », ou
+    suggestion au-dessus du clavier) — jamais sur une zone non éditable.
+    D'où le champ texte dédié dans `PiecesJointes.jsx`, pas un simple
+    `<div>` de dépôt.
+  - **Coller une image (photo, capture d'écran) : fiable sur Mac et
+    iPhone** — c'est le cas d'usage principal, testé bout-en-bout (voir
+    plus bas).
+  - **Coller un fichier générique copié ailleurs (ex. un PDF copié dans
+    Fichiers/Finder) : fiable sur Mac, mais pas garanti sur iPhone** — le
+    mécanisme de copier-coller de fichier natif d'iOS ne transmet pas de
+    façon fiable un vrai objet `File` exploitable au `paste` d'une page
+    web pour un type non-image (limitation de plateforme documentée, pas
+    un bug de ce code). **Non vérifiable en conditions réelles** : cette
+    session n'a accès ni à un iPhone ni à Safari iOS — testé uniquement
+    dans un navigateur de type Chromium (représentatif du comportement
+    Mac), avec un événement `paste` synthétique reproduisant fidèlement
+    ce qu'envoie un vrai clipboard (image PNG et PDF généré). Les deux
+    chemins (image → dossier, fichier → client via Capture) confirmés en
+    base et dans le dépôt de stockage : fichier bien créé, une seule fois,
+    avec le bon `dossier_id`/`client_id`, nom auto-généré à partir du type
+    MIME quand le presse-papiers ne fournit pas de nom exploitable. À
+    valider par Bruce sur son iPhone réel pour le cas fichier générique.

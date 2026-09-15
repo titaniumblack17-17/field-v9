@@ -5,6 +5,7 @@ import ChoixClient from '../components/ChoixClient'
 import { SuggestionSav, SuggestionProjet, SuggestionPlan } from '../components/SuggestionCapture'
 import { creerDossierDepuisSuggestion, ignorerSuggestion } from '../lib/suggestions'
 import { mettreEnFile } from '../lib/fileAttente'
+import { envoyerFichier, fichierColle } from '../lib/fichiers'
 import useWakeLock from '../hooks/useWakeLock'
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/capture-intake`
@@ -29,6 +30,41 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
   // à la suite, entre deux cabinets, sans revalider à chaque fois).
   const [saisieActive, setSaisieActive] = useState(false)
   useWakeLock(saisieActive)
+
+  // Fichier collé (image/capture d'écran — voir PASSATION.md pour les
+  // limites de compatibilité) sans dossier ouvert au préalable : il attend
+  // qu'on lui désigne un client avant l'envoi, même geste que « Relier à un
+  // client » pour une capture non rattachée (aRelier ci-dessus), sur son
+  // propre état pour ne pas mélanger les deux feuilles de sélection.
+  const [fichierAEnvoyer, setFichierAEnvoyer] = useState(null)
+  const [envoiFichier, setEnvoiFichier] = useState(false)
+  const [erreurFichier, setErreurFichier] = useState(null)
+  const [fichierEnvoyeVers, setFichierEnvoyeVers] = useState(null)
+
+  const collerDansCapture = (e) => {
+    const fichier = fichierColle(e)
+    if (!fichier) return // texte normal : laisser le comportement par défaut du champ
+    e.preventDefault()
+    setErreurFichier(null)
+    setFichierAEnvoyer(fichier)
+  }
+
+  const rattacherFichierColle = async (client) => {
+    const fichier = fichierAEnvoyer
+    setFichierAEnvoyer(null)
+    setEnvoiFichier(true)
+    setFichierEnvoyeVers(null)
+    const { erreur } = await envoyerFichier({ clientId: client.id, fichier })
+    setEnvoiFichier(false)
+    if (erreur) {
+      setErreurFichier(erreur)
+      return
+    }
+    // Confirmation dédiée, distincte de la carte « Retenu » de la dictée :
+    // un collage n'a pas de résumé à afficher, juste besoin de confirmer où
+    // c'est parti.
+    setFichierEnvoyeVers(client)
+  }
 
   // Le dossier n'est jamais créé tout seul : la dictée ne fait que le
   // proposer. C'est Bruce qui confirme, comme pour un rappel ou une fusion.
@@ -211,6 +247,7 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
             onChange={(e) => setTexte(e.target.value)}
             onFocus={() => setSaisieActive(true)}
             onBlur={() => setSaisieActive(false)}
+            onPaste={collerDansCapture}
             rows={5}
             placeholder="Client, qu'est-ce qui se passe ?"
             className="w-full text-texte outline-none bg-transparent resize-none"
@@ -225,6 +262,23 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
         </form>
 
         {error && <p className="text-erreur text-sm mt-3">{error}</p>}
+
+        {erreurFichier && <p className="text-erreur text-sm mt-3">{erreurFichier}</p>}
+
+        {envoiFichier && (
+          <p className="text-texte-faible text-sm mt-3">Envoi du fichier collé…</p>
+        )}
+
+        {fichierEnvoyeVers && (
+          <div className="bg-carte rounded-carte shadow-sm mt-4 px-4 py-3">
+            <button
+              onClick={() => onOpenClient?.(fichierEnvoyeVers)}
+              className="text-sm text-accent font-semibold text-left"
+            >
+              ✓ Fichier ajouté · {nomClient(fichierEnvoyeVers) ?? 'Client'} →
+            </button>
+          </div>
+        )}
 
         {lastResult && (
           <div className="bg-carte rounded-carte shadow-sm mt-4 px-4 py-3">
@@ -330,6 +384,14 @@ export default function Capture({ onBack, onOpenClient, onOpenDossier }) {
         <ChoixClient
           onChoisir={(client) => relier(aRelier, client)}
           onFermer={() => setARelier(null)}
+        />
+      )}
+
+      {fichierAEnvoyer && (
+        <ChoixClient
+          titre="Rattacher le fichier à quel client ?"
+          onChoisir={rattacherFichierColle}
+          onFermer={() => setFichierAEnvoyer(null)}
         />
       )}
     </div>

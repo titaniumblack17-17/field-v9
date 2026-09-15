@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { mettreEnFile } from '../lib/fileAttente'
+import { envoyerFichier, fichierColle } from '../lib/fichiers'
 import TexteModifiable from './TexteModifiable'
 import useConfirm from '../hooks/useConfirm'
 import Rubrique from './Rubrique'
-
-const TAILLE_MAX = 25 * 1024 * 1024
 
 const lisible = (o) => {
   if (o == null) return ''
@@ -45,6 +44,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   const [erreur, setErreur] = useState(null)
   const [confirmer, boîteConfirmation] = useConfirm()
   const champFichier = useRef(null)
+  const champCollage = useRef(null)
 
   // Devis chiffrés en mode remplacement, du plus récent au plus ancien : le
   // premier est celui qui donne son montant au dossier.
@@ -95,54 +95,43 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
     }
   }, [colonne, valeur])
 
+  // Chemin commun au sélecteur de fichiers et au collage (ci-dessous) :
+  // même envoi, même suivi d'état, seule la provenance du fichier diffère.
+  const envoyerEtSuivre = async (fichier) => {
+    setEnvoi(true)
+    setErreur(null)
+    const { ligne, erreur: err } = await envoyerFichier({ clientId, dossierId, fichier })
+    setEnvoi(false)
+    if (err) {
+      setErreur(err)
+      return
+    }
+    // Un devis déposé sur un dossier se lit tout de suite : c'est le moment où
+    // le chiffre est utile, et le seul où l'on pense à le vérifier.
+    if (ligne && estPdf(fichier.type || null)) lireDevis(ligne)
+  }
+
   const envoyer = async (e) => {
     const fichier = e.target.files?.[0]
     e.target.value = '' // permet de re-choisir le même fichier après une erreur
     if (!fichier) return
+    await envoyerEtSuivre(fichier)
+  }
 
-    if (fichier.size > TAILLE_MAX) {
-      setErreur(`« ${fichier.name} » fait ${lisible(fichier.size)}. La limite est de 25 Mo.`)
-      return
-    }
-
-    setEnvoi(true)
-    setErreur(null)
-
-    // Chemin non devinable, et extension conservée pour que l'ouverture depuis
-    // le lien signé reste correcte.
-    const ext = fichier.name.includes('.') ? `.${fichier.name.split('.').pop()}` : ''
-    const chemin = `${colonne}/${valeur}/${crypto.randomUUID()}${ext}`
-
-    const { error: errEnvoi } = await supabase.storage
-      .from('documents')
-      .upload(chemin, fichier, { contentType: fichier.type || undefined })
-
-    if (errEnvoi) {
-      setEnvoi(false)
-      setErreur(errEnvoi.message)
-      return
-    }
-
-    const { data: ligne, error: errBase } = await supabase.from('fichiers').insert({
-      [colonne]: valeur,
-      chemin,
-      nom: fichier.name,
-      taille: fichier.size,
-      type_mime: fichier.type || null,
-    }).select().single()
-
-    if (errBase) {
-      // Sans cette ligne, le fichier resterait dans le dépôt sans référence :
-      // invisible dans l'app et impossible à retrouver.
-      await supabase.storage.from('documents').remove([chemin])
-      setErreur(errBase.message)
-    }
-
-    setEnvoi(false)
-
-    // Un devis déposé sur un dossier se lit tout de suite : c'est le moment où
-    // le chiffre est utile, et le seul où l'on pense à le vérifier.
-    if (!errBase && ligne && estPdf(fichier.type || null)) lireDevis(ligne)
+  // Collage (Cmd+V sur Mac, geste « Coller » natif sur iPhone) — voir
+  // PASSATION.md pour les limites de compatibilité constatées (fiable pour
+  // une image copiée/capture d'écran sur les deux plateformes ; un fichier
+  // générique copié dans le Finder ne fonctionne de façon fiable que sur
+  // Mac, limitation de la plateforme iOS, pas de ce code).
+  const collerFichier = async (e) => {
+    const fichier = fichierColle(e)
+    // Toujours empêché : ce champ ne sert qu'à recevoir un collage de
+    // fichier, jamais à en garder le texte (image insérée par défaut par le
+    // navigateur, ou tout autre texte collé par erreur).
+    e.preventDefault()
+    if (champCollage.current) champCollage.current.value = ''
+    if (!fichier) return
+    await envoyerEtSuivre(fichier)
   }
 
   // Lecture du total TTC d'un devis. Réservée aux PDF d'un dossier : sur une
@@ -239,6 +228,20 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
         }
       >
       {erreur && <p className="text-erreur text-sm mb-2 px-1">{erreur}</p>}
+
+      {/* Champ toujours vide, jamais destiné à être lu : son seul rôle est
+          d'être une cible focusable pour Cmd+V (Mac) ou le geste « Coller »
+          natif d'iOS (appui long → Coller, ou la suggestion au-dessus du
+          clavier). Un texte collé sans fichier est ignoré silencieusement
+          (voir collerFichier) plutôt que de s'accumuler ici. */}
+      <input
+        ref={champCollage}
+        type="text"
+        defaultValue=""
+        onPaste={collerFichier}
+        placeholder="Coller une image ici (Cmd+V, ou Coller sur iPhone)"
+        className="w-full text-sm text-texte-faible placeholder:text-texte-faible bg-fond border border-dashed border-separateur rounded-imbrique px-3 py-2.5 mb-2 outline-none focus:border-accent"
+      />
 
       {/* Deux devis chiffrés qui se remplacent, c'est presque toujours deux
           affaires différentes plutôt qu'une révision : sans ce rappel, le
