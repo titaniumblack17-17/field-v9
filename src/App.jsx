@@ -435,7 +435,21 @@ export default function App() {
   // Mac — des lignes de champs et de listes larges de plus d'un mètre,
   // illisibles. Le Pipeline fait exception : son kanban défile
   // horizontalement et a besoin de toute la largeur disponible.
-  const largeurLibre = view.name === 'pipeline'
+  //
+  // Les écrans-formulaire (fiche, dossier, capture...) restent en colonne
+  // de lecture unique — une ligne de champ plus large ne se lit pas mieux,
+  // juste assez élargie pour réduire le vide sur un grand écran Mac. Le
+  // Board (BriefSoir) et le Catalogue exploitent davantage l'espace : leurs
+  // grilles (tuiles KPI, liste de produits) passent en plusieurs colonnes
+  // au-delà d'une certaine largeur (voir leurs propres breakpoints lg:/xl:),
+  // donc leur conteneur a besoin d'être plus généreux pour que ça serve à
+  // quelque chose.
+  const plafondLargeur =
+    view.name === 'pipeline'
+      ? null
+      : view.name === 'brief' || view.name === 'catalogue'
+        ? 'max-w-5xl'
+        : 'max-w-3xl'
 
   const attente = <p className="text-texte-faible text-sm p-4">Chargement…</p>
 
@@ -452,7 +466,7 @@ export default function App() {
         </div>
       )}
       <Suspense fallback={attente}>
-        {largeurLibre ? écran : <div className="max-w-2xl mx-auto">{écran}</div>}
+        {plafondLargeur ? <div className={`${plafondLargeur} mx-auto`}>{écran}</div> : écran}
       </Suspense>
       {boîteConfirmation}
       {diagReseauActif && <DiagnosticReseau />}

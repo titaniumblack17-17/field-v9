@@ -1031,7 +1031,7 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               </p>
             )}
 
-            <div ref={kpiRef} className="grid grid-cols-2 gap-3 mt-2">
+            <div ref={kpiRef} className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
               <TuileKPI
                 titre="Dossiers actifs"
                 valeur={bilan.totalActifsTousTypes}

@@ -195,7 +195,7 @@ export default function Catalogue({ onBack }) {
           </p>
         )}
 
-        <ul className="space-y-2">
+        <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
           {resultats.map((p) => (
             <li key={p.id}>
               <button
