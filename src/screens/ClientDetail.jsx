@@ -306,14 +306,43 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     setSaving(true)
     setError(null)
 
-    const update = Object.fromEntries(
-      FIELDS.map(([k]) => [k, (values[k] ?? '').trim() || null])
-    )
-    update.associes = cleanPeople(associes)
-    update.assistantes = cleanPeople(assistantes)
-    update.specialites = values.specialites ?? []
-    update.source_type = values.source_type || null
-    update.source_detail = (values.source_detail ?? '').trim() || null
+    // Seuls les champs réellement modifiés partent en écriture — pas
+    // l'intégralité du formulaire. Un envoi complet réaffirmerait la valeur
+    // encore chargée en mémoire pour un champ jamais touché ici, écrasant
+    // au passage un enrichissement automatique arrivé entre-temps en
+    // arrière-plan (client-web-lookup) : bug réel constaté le 17/09 sur
+    // plusieurs fiches (Ponsart, Rouach Sandra — voir PASSATION.md),
+    // corrigé aussi côté fonction Edge, mais ce composant ne doit de toute
+    // façon jamais réécrire une valeur qu'il n'a pas modifiée lui-même.
+    const different = (a, b) => (a ?? null) !== (b ?? null)
+    const update = {}
+    for (const [k] of FIELDS) {
+      const v = (values[k] ?? '').trim() || null
+      if (different(v, client[k])) update[k] = v
+    }
+    const sourceType = values.source_type || null
+    if (different(sourceType, client.source_type)) update.source_type = sourceType
+    const sourceDetail = (values.source_detail ?? '').trim() || null
+    if (different(sourceDetail, client.source_detail)) update.source_detail = sourceDetail
+    if (signaturePeople(associes) !== signaturePeople(client.associes)) {
+      update.associes = cleanPeople(associes)
+    }
+    if (signaturePeople(assistantes) !== signaturePeople(client.assistantes)) {
+      update.assistantes = cleanPeople(assistantes)
+    }
+    if (
+      [...(values.specialites ?? [])].sort().join(',') !==
+      [...(client.specialites ?? [])].sort().join(',')
+    ) {
+      update.specialites = values.specialites ?? []
+    }
+
+    // dirty garantit normalement qu'il y a toujours au moins un champ ici —
+    // filet de sécurité seulement, pour ne jamais appeler l'API pour rien.
+    if (!Object.keys(update).length) {
+      setSaving(false)
+      return
+    }
 
     const { data, error: dbError } = await supabase
       .from('clients')
@@ -325,6 +354,11 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     setSaving(false)
 
     if (dbError) {
+      // Remise en file comme le reste de l'app (mêmes causes probables :
+      // coupure réseau sur le terrain) — sans ça, Bruce doit s'apercevoir
+      // lui-même de l'échec et retaper Enregistrer plus tard. Ne porte que
+      // les champs réellement modifiés (update), jamais tout le formulaire.
+      mettreEnFile({ type: 'update', table: 'clients', rowId: client.id, champs: update })
       setError(dbError.message)
       return
     }
@@ -552,8 +586,17 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
         { event: 'UPDATE', schema: 'public', table: 'clients', filter: `id=eq.${client.id}` },
         (payload) => {
           const nouveau = payload.new
+          // `maj` recueille les champs effectivement appliqués (calculés dans
+          // le updater ci-dessous) pour être aussi reportés sur `client` plus
+          // bas — jamais l'intégralité du payload distant. `client` sert de
+          // référence à save() pour ne renvoyer que les champs que Bruce a
+          // lui-même modifiés : le désynchroniser en silence d'un champ que
+          // l'écran n'affiche pas ferait percevoir à tort ce champ comme
+          // modifié localement, et le referait écraser par l'ancienne valeur
+          // encore en mémoire — bug réel constaté le 17/09 (voir PASSATION.md).
+          let maj = {}
           setValues((v) => {
-            const maj = {}
+            maj = {}
             for (const [cle, val] of Object.entries(nouveau)) {
               if (cle === 'id' || cle === 'associes' || cle === 'assistantes') continue
               if (estVide(v[cle]) && !estVide(val)) maj[cle] = val
@@ -562,8 +605,9 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           })
           if (Array.isArray(nouveau.associes) && cleanPeople(associes).length === 0 && nouveau.associes.length > 0) {
             setAssocies(emptyPeople(nouveau.associes))
+            maj.associes = nouveau.associes
           }
-          Object.assign(client, nouveau)
+          if (Object.keys(maj).length) Object.assign(client, maj)
         }
       )
       .subscribe()
@@ -1249,20 +1293,29 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
       )}
 
       {dirty && (
-        <div className="fixed bottom-0 inset-x-0 bg-fond/95 backdrop-blur border-t border-bordure px-4 py-3 flex gap-2">
-          <button
-            onClick={annuler}
-            className="flex-1 bg-carte text-texte-doux font-semibold rounded-imbrique py-3 shadow"
-          >
-            Annuler
-          </button>
-          <button
-            onClick={save}
-            disabled={saving}
-            className="flex-1 bg-accent text-white font-semibold rounded-imbrique py-3 shadow disabled:opacity-50"
-          >
-            {saving ? 'Enregistrement…' : 'Enregistrer'}
-          </button>
+        <div className="fixed bottom-0 inset-x-0 bg-fond/95 backdrop-blur border-t border-bordure px-4 py-3">
+          {/* Répété ici plutôt que seulement plus haut sur la page : un
+              échec d'enregistrement doit se voir exactement là où le pouce
+              vient d'appuyer sur « Enregistrer », pas dans un paragraphe
+              qu'il faut remonter chercher plus haut dans une fiche longue —
+              c'est ce qui rendait un vrai échec facile à manquer (bug
+              constaté le 17/09, voir PASSATION.md). */}
+          {error && <p className="text-erreur text-sm mb-2">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              onClick={annuler}
+              className="flex-1 bg-carte text-texte-doux font-semibold rounded-imbrique py-3 shadow"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={save}
+              disabled={saving}
+              className="flex-1 bg-accent text-white font-semibold rounded-imbrique py-3 shadow disabled:opacity-50"
+            >
+              {saving ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </div>
         </div>
       )}
 

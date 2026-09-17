@@ -346,3 +346,56 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
     avec le bon `dossier_id`/`client_id`, nom auto-généré à partir du type
     MIME quand le presse-papiers ne fournit pas de nom exploitable. À
     valider par Bruce sur son iPhone réel pour le cas fichier générique.
+- **Adresse tapée puis disparue sur une fiche client (Ponsart, Rouach
+  Sandra) — course entre `client-web-lookup` et l'enregistrement manuel,
+  corrigée le 17/09.** Bruce avait d'abord signalé le cas Ponsart, puis
+  élargi (« toutes mes fiches semblent touchées »). Mesure en base : 64 %
+  des 98 clients ont une adresse, ~100 % pour tout ce qui date d'après le
+  24/08 — les 33 fiches sans adresse sont presque toutes l'import en masse
+  du 17-21/08, pas un symptôme du bug. Le problème n'est donc pas
+  systémique au sens où Bruce le craignait, mais bien réel et récurrent :
+  reconstitué par preuve dans les logs Edge (`edge_logs`, séquences PATCH
+  horodatées par User-Agent) sur Ponsart ET Rouach Sandra, avec l'ordre de
+  la course inversé entre les deux cas — même cause dans les deux sens.
+  Root cause : **TOCTOU (time-of-check-to-time-of-use)**. `client-web-lookup`
+  lit l'état des champs une seule fois au début, fait une recherche web
+  lente (Claude + `web_search`, 10-60+ s observées), puis écrit en se basant
+  sur cette lecture périmée — sans revérifier juste avant d'écrire. Une
+  sauvegarde manuelle de Bruce pendant cette fenêtre est écrasée (ou
+  l'inverse), en violation directe de la règle « enrichir sans écraser ».
+  Deux correctifs complémentaires, chacun ferme un sens de la course :
+  1. **`client-web-lookup` (Edge, hors dépôt, v5)** — relit les champs
+     juste avant d'écrire et n'écrit un champ que s'il est encore vide à ce
+     moment-là (`encoreVide.<champ>` en plus de `reponse.<champ>`). Testé
+     avec une fonction de debug déployée à part (délai fixe 15 s + réponse
+     inventée au lieu de l'appel Claude réel, pour un test déterministe) :
+     écriture manuelle injectée pendant la fenêtre → la fonction a bien vu
+     la valeur manuelle à la relecture et n'a rien écrasé
+     (`ecrit:false`). Fonction de debug neutralisée après test (stub
+     410, aucun outil de suppression de fonction Edge disponible).
+  2. **`ClientDetail.jsx` `save()`** — n'envoie plus le formulaire entier
+     mais seulement les champs qui diffèrent réellement de `client` (le
+     même diff que `dirty`). Un envoi complet réaffirmait la valeur encore
+     en mémoire pour un champ jamais touché, écrasant au passage un
+     enrichissement arrivé entre-temps. Découverte en testant ce
+     correctif : l'abonnement temps réel `client-${client.id}` (ligne
+     ~580) faisait `Object.assign(client, nouveau)` avec **tout** le
+     payload distant reçu, alors que `values` n'est mis à jour que pour
+     les champs vides localement — désynchronisant `client` (la référence
+     du diff) de `values`, ce qui faisait percevoir à tort un champ jamais
+     touché comme modifié et le renvoyait avec sa valeur locale périmée,
+     écrasant exactement la donnée concurrente que le diff devait
+     protéger. Corrigé en ne reportant sur `client` que les champs
+     effectivement appliqués à `values` (même filtre « encore vide »).
+  Deux lacunes demandées séparément par Bruce, aussi corrigées dans
+  `save()` : remise en file (`mettreEnFile`) si l'écriture échoue
+  (cohérent avec le reste de l'app, ne porte que les champs modifiés — pas
+  le formulaire entier), et message d'erreur affiché juste au-dessus du
+  bouton Enregistrer plutôt que seulement dans le bandeau sticky du bas,
+  facile à manquer. Testé en base avec un client dédié : édition d'un seul
+  champ pendant qu'un autre change en base en parallèle (simulation d'une
+  écriture concurrente) → le champ concurrent survit, seul le champ tapé
+  part en écriture ; coupure réseau simulée (fetch patché) → erreur
+  visible immédiatement, entrée en file avec les seuls champs modifiés,
+  rejouée correctement au retour du réseau. Client et données de test
+  supprimés après vérification.
