@@ -1001,7 +1001,7 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               Clients
             </button>
             <button
-              onClick={onPipeline}
+              onClick={() => onPipeline()}
               className="flex-shrink-0 px-3 h-9 rounded-full bg-carte text-accent text-xs font-semibold shadow"
             >
               Pipeline
