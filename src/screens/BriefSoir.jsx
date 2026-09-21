@@ -973,8 +973,22 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
                   resultatsRecherche.map((c) => (
                     <li key={c.id}>
                       <button
-                        onClick={() => {
-                          onOpenClient(c)
+                        onClick={async () => {
+                          // La recherche rapide ne charge que id/prénom/nom/
+                          // cabinet/ville (une liste complète, en une fois,
+                          // pour filtrer en local à chaque frappe) — sans
+                          // cette relecture complète, la fiche s'ouvrait sur
+                          // cet objet tronqué et affichait téléphone/e-mail
+                          // vides alors qu'ils existaient bien en base (bug
+                          // constaté le 21/09, voir PASSATION.md). Repli sur
+                          // l'objet tronqué si la relecture échoue (hors
+                          // ligne) plutôt que de bloquer la navigation.
+                          const { data } = await supabase
+                            .from('clients')
+                            .select('*')
+                            .eq('id', c.id)
+                            .maybeSingle()
+                          onOpenClient(data ?? c)
                           setRechercheTexte('')
                         }}
                         className="w-full text-left px-4 py-3 active:bg-carte-douce"

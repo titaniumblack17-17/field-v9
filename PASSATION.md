@@ -399,3 +399,37 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
   visible immédiatement, entrée en file avec les seuls champs modifiés,
   rejouée correctement au retour du réseau. Client et données de test
   supprimés après vérification.
+- **Téléphone/e-mail affichés vides sur une fiche ouverte depuis la
+  recherche rapide du Board — corrigé le 21/09, rien à voir avec le
+  prénom.** Bruce avait rapporté le symptôme comme lié au prénom (vide →
+  champs disparus, retapé → réapparus sans recharger), mais l'audit a
+  montré que ce n'est qu'une coïncidence de calendrier : la vraie cause
+  est la recherche rapide de `BriefSoir.jsx`, qui charge la liste
+  complète des clients en une fois avec un `select` volontairement
+  restreint (`id, prenom_praticien, nom_praticien, nom_cabinet, ville`
+  — nécessaire pour filtrer en local à chaque frappe sans réinterroger
+  la base) et passait cet objet tronqué **directement** à `ClientDetail`
+  au clic, sans jamais relire la fiche complète. `values` héritait donc
+  de cet objet incomplet : téléphone, e-mail, adresse, associés — tout
+  champ hors de ce `select` — s'affichait vide en ouverture, quel que
+  soit l'état du prénom. Confirmé faux négatif en base à chaque étape
+  (`execute_sql` direct) : les données n'ont jamais bougé de
+  `clients`, seul l'écran mentait. La « réapparition sans recharger »
+  que Bruce observait tenait à un autre mécanisme déjà en place :
+  l'abonnement temps réel de la fiche (`client-${id}`, voir l'entrée du
+  17/09 plus haut) ne comble que les champs *vides localement* à partir
+  du payload distant reçu à chaque UPDATE — un simple enregistrement
+  (retaper le prénom, ou n'importe quel autre champ) renvoie la ligne
+  complète par ce canal et comble alors après coup téléphone/e-mail,
+  faisant croire à un lien de cause à effet avec le prénom qui n'existe
+  pas. Corrigé en relisant la fiche complète (`select('*')`) au moment
+  du clic sur un résultat de recherche rapide, avant d'ouvrir
+  `ClientDetail` — repli sur l'objet tronqué si la relecture échoue
+  (hors ligne), pour ne jamais bloquer la navigation. La liste de
+  recherche elle-même reste sur son `select` restreint : élargir à `*`
+  là aurait alourdi pour rien le chargement initial de tous les
+  clients. Le prénom reste volontairement facultatif au niveau base et
+  fiche (`ClientDetail.save()` n'exige que nom du praticien OU nom du
+  cabinet) — un centre/SCM sans praticien nommé est un cas réel et
+  déjà géré ; `ClientForm.jsx` (création) suit la même règle, à
+  vérifier séparément si Bruce veut la resserrer côté création.
