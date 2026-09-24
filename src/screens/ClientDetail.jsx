@@ -569,6 +569,75 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
     }
   }, [client.id, tentativeDossiers])
 
+  // Même vocabulaire terminal que les compteurs du Pipeline : projet terminé
+  // ou perdu, plan soldé, SAV clos. Les noms ne se recoupent pas d'un type à
+  // l'autre, un simple ensemble suffit. Le filtre conserve l'ordre reçu
+  // (plus récent d'abord) dans chaque bloc — rien n'est retiré, seulement
+  // réparti entre « actifs » et « historique ».
+  const { dossiersActifs, dossiersHistorique } = useMemo(() => {
+    const terminaux = new Set(['termine', 'perdu', 'solde', 'clos'])
+    return {
+      dossiersActifs: dossiers.filter((d) => !terminaux.has(d.statut)),
+      dossiersHistorique: dossiers.filter((d) => terminaux.has(d.statut)),
+    }
+  }, [dossiers])
+  const [historiqueOuvert, setHistoriqueOuvert] = useState(false)
+
+  const renderDossier = (d) => {
+    const s = styleDossier(d)
+    return (
+      <li key={d.id}>
+        <button
+          onClick={() => onOpenDossier(d)}
+          style={{ borderColor: s.bordure }}
+          className="w-full text-left bg-carte rounded-carte px-4 py-3 shadow-sm border-l-[7px] active:scale-[0.98] transition"
+        >
+          <div className="flex items-center gap-2 mb-0.5">
+            <span
+              style={{ background: s.fond, color: s.texte }}
+              className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+            >
+              {s.badge}
+            </span>
+            {/* Réservé aux dossiers Plan : un Projet porte
+                commercial=BDS une fois son plan validé (pour les
+                totaux), mais l'afficher ici dirait à tort que la
+                vente appartient à quelqu'un d'autre que Bruce. */}
+            {d.type === 'plan' && d.commercial && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-carte-douce text-texte-doux">
+                {d.commercial}
+              </span>
+            )}
+            {PLAN_SANS_COMMERCIAL(d) && (
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-alerte/15 text-alerte">
+                Commercial ?
+              </span>
+            )}
+          </div>
+          <p className="font-bold text-texte">{d.titre || TYPE_LABELS[d.type]}</p>
+          <p className="text-sm text-texte-doux">
+            {libelleStatut(d)}
+            {d.montant_estime != null ? ` · ${d.montant_estime} €` : ''}
+          </p>
+          {/* Les rappels vivent sur le dossier, jamais remontés
+              jusqu'ici : rien sur la fiche client ne disait qu'un
+              de ses dossiers en portait un. La donnée était déjà
+              chargée (select('*')), il manquait juste l'affichage. */}
+          {(() => {
+            const r = etatRappel(d.rappel_date, d.rappel_heure)
+            if (!r) return null
+            return (
+              <p className={`text-xs mt-1 ${r.classe}`}>
+                ⏰ {r.texte}
+                {d.rappel_note ? ` · ${d.rappel_note}` : ''}
+              </p>
+            )
+          })()}
+        </button>
+      </li>
+    )
+  }
+
   // Une recherche web peut compléter la fiche en arrière-plan pendant que
   // Bruce est déjà sur cet écran — juste après une création (ClientForm.jsx)
   // ou une dictée (capture-intake) qui l'a lancée sans l'attendre. Sans cet
@@ -933,8 +1002,8 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
         <PiecesJointes clientId={client.id} />
 
         <Rubrique
-          titre="Dossiers"
-          compte={dossiers.length}
+          titre="Dossiers actifs"
+          compte={dossiersActifs.length}
           defautOuvert
           action={
             <button onClick={() => onNewDossier(client)} className="text-accent text-sm font-semibold h-11 px-2 -mr-2 inline-flex items-center">
@@ -957,62 +1026,27 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           ) : dossiers.length === 0 ? (
             <p className="text-texte-faible text-sm px-1">Aucun dossier pour l'instant.</p>
           ) : (
-            <ul className="space-y-2">
-              {dossiers.map((d) => {
-                const s = styleDossier(d)
-                return (
-                  <li key={d.id}>
-                    <button
-                      onClick={() => onOpenDossier(d)}
-                      style={{ borderColor: s.bordure }}
-                      className="w-full text-left bg-carte rounded-carte px-4 py-3 shadow-sm border-l-[7px] active:scale-[0.98] transition"
-                    >
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span
-                          style={{ background: s.fond, color: s.texte }}
-                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                        >
-                          {s.badge}
-                        </span>
-                        {/* Réservé aux dossiers Plan : un Projet porte
-                            commercial=BDS une fois son plan validé (pour les
-                            totaux), mais l'afficher ici dirait à tort que la
-                            vente appartient à quelqu'un d'autre que Bruce. */}
-                        {d.type === 'plan' && d.commercial && (
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-carte-douce text-texte-doux">
-                            {d.commercial}
-                          </span>
-                        )}
-                        {PLAN_SANS_COMMERCIAL(d) && (
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-alerte/15 text-alerte">
-                            Commercial ?
-                          </span>
-                        )}
-                      </div>
-                      <p className="font-bold text-texte">{d.titre || TYPE_LABELS[d.type]}</p>
-                      <p className="text-sm text-texte-doux">
-                        {libelleStatut(d)}
-                        {d.montant_estime != null ? ` · ${d.montant_estime} €` : ''}
-                      </p>
-                      {/* Les rappels vivent sur le dossier, jamais remontés
-                          jusqu'ici : rien sur la fiche client ne disait qu'un
-                          de ses dossiers en portait un. La donnée était déjà
-                          chargée (select('*')), il manquait juste l'affichage. */}
-                      {(() => {
-                        const r = etatRappel(d.rappel_date, d.rappel_heure)
-                        if (!r) return null
-                        return (
-                          <p className={`text-xs mt-1 ${r.classe}`}>
-                            ⏰ {r.texte}
-                            {d.rappel_note ? ` · ${d.rappel_note}` : ''}
-                          </p>
-                        )
-                      })()}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+            <>
+              {dossiersActifs.length === 0 ? (
+                <p className="text-texte-faible text-sm px-1">Aucun dossier actif.</p>
+              ) : (
+                <ul className="space-y-2">{dossiersActifs.map(renderDossier)}</ul>
+              )}
+              {dossiersHistorique.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setHistoriqueOuvert((v) => !v)}
+                    aria-expanded={historiqueOuvert}
+                    className="w-full text-center text-sm text-accent font-semibold py-3"
+                  >
+                    {historiqueOuvert ? 'Masquer' : 'Historique'} ({dossiersHistorique.length})
+                  </button>
+                  {historiqueOuvert && (
+                    <ul className="space-y-2">{dossiersHistorique.map(renderDossier)}</ul>
+                  )}
+                </>
+              )}
+            </>
           )}
         </Rubrique>
 

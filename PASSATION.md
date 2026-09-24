@@ -433,3 +433,15 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
   cabinet) — un centre/SCM sans praticien nommé est un cas réel et
   déjà géré ; `ClientForm.jsx` (création) suit la même règle, à
   vérifier séparément si Bruce veut la resserrer côté création.
+- **Fiche client : dossiers terminaux repliés dans « Historique (N) » —
+  24/09.** `ClientDetail.jsx` séparait mal l'actif de l'ancien sur les
+  clients à long historique : tout était dans une seule liste. Désormais
+  « Dossiers actifs · N » d'abord, puis un lien « Historique (N) » (même
+  style que « Voir les N autres » du Board) replié par défaut, qui déplie
+  les dossiers terminaux — projet `termine`/`perdu`, plan `solde`, SAV
+  `clos`, le même vocabulaire que les compteurs du Pipeline. Rien n'est
+  retiré : simple répartition d'une même liste, ordre chronologique
+  (récent d'abord) conservé dans chaque bloc, état replié non mémorisé.
+  Calcul dérivé de `dossiers` : un dossier clos en direct (temps réel)
+  passe seul de l'actif à l'historique. Testé sur un client dédié (2 actifs,
+  4 terminaux couvrant les 4 statuts, dates étalées), supprimé ensuite.
