@@ -23,6 +23,9 @@ import {
   TYPE_LABELS,
   styleDossier,
   joursDevisSansReponse,
+  joursEnAttente,
+  classeAttente,
+  MOTIFS_ATTENTE_SAV_LABELS,
   SEUIL_DEVIS_SANS_REPONSE_JOURS,
 } from '../constants/dossiers'
 
@@ -1167,20 +1170,26 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               ouverte={!!sectionsOuvertes.sav}
               onToggle={() => toggleSection('sav')}
             >
-              {bilan.savOuverts.map((d) => (
-                <Ligne
-                  key={d.id}
-                  dossier={d}
-                  onOuvrir={onOpenDossier}
-                  droite={STATUTS_SAV_LABELS[d.statut] ?? d.statut}
-                  alerte={d.statut !== 'en_attente'}
-                  sousTitre={
-                    d.statut === 'en_attente'
-                      ? `En attente${d.bloque_par ? ` — ${d.bloque_par}` : ' — motif à préciser'}`
-                      : null
-                  }
-                />
-              ))}
+              {bilan.savOuverts.map((d) => {
+                const jours = joursEnAttente(d)
+                return (
+                  <Ligne
+                    key={d.id}
+                    dossier={d}
+                    onOuvrir={onOpenDossier}
+                    droite={
+                      jours != null ? `${jours} j` : STATUTS_SAV_LABELS[d.statut] ?? d.statut
+                    }
+                    droiteClasse={jours != null ? classeAttente(jours) : undefined}
+                    alerte={d.statut !== 'en_attente'}
+                    sousTitre={
+                      d.statut === 'en_attente'
+                        ? `En attente — ${MOTIFS_ATTENTE_SAV_LABELS[d.bloque_par] ?? d.bloque_par ?? 'motif à préciser'}`
+                        : null
+                    }
+                  />
+                )
+              })}
             </Section>
 
             <Section
@@ -1198,6 +1207,7 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
                   dossier={d}
                   onOuvrir={onOpenDossier}
                   droite={`${joursDevisSansReponse(d)} j`}
+                  droiteClasse={classeAttente(joursEnAttente(d))}
                   alerte
                 />
               ))}

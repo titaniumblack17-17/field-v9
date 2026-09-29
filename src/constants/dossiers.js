@@ -77,6 +77,19 @@ export const STATUTS_SAV = [
 
 export const STATUTS_SAV_LABELS = Object.fromEntries(STATUTS_SAV)
 
+// Motif structuré de l'attente SAV plutôt qu'un texte libre : savoir à qui la
+// balle (nous ou un tiers) sans avoir à relire un commentaire à chaque fois.
+// « Autre » garde une échappatoire pour un cas non prévu par la liste.
+export const MOTIFS_ATTENTE_SAV = [
+  ['technicien', 'Technicien'],
+  ['fournisseur', 'Devis fournisseur'],
+  ['piece', 'Pièce'],
+  ['client', 'Réponse du client'],
+  ['autre', 'Autre'],
+]
+
+export const MOTIFS_ATTENTE_SAV_LABELS = Object.fromEntries(MOTIFS_ATTENTE_SAV)
+
 export const ETAPES_PROJET_LABELS = Object.fromEntries(ETAPES_PROJET)
 
 // Chaque type de dossier a son propre vocabulaire d'étape — un seul endroit
@@ -123,6 +136,34 @@ export const joursDevisSansReponse = (d) => {
     return null
   const jours = Math.floor((Date.now() - new Date(d.statut_changed_at).getTime()) / 86_400_000)
   return jours >= SEUIL_DEVIS_SANS_REPONSE_JOURS ? jours : null
+}
+
+// « À qui la balle » : un devis envoyé (Projet) ou un SAV en attente (tiers
+// à préciser) sont dans le même cas — la prochaine action revient à un tiers,
+// pas à nous. Contrairement à joursDevisSansReponse (seulement au-delà du
+// seuil d'alerte), toujours renvoyé dès le premier jour pour afficher un
+// compteur qui évolue au lieu d'un silence jusqu'au 30ᵉ jour.
+export const joursEnAttente = (d) => {
+  const projetEnAttente = d?.type === 'projet' && ['devis_envoye', 'relance'].includes(d.statut)
+  const savEnAttente = d?.type === 'sav' && d.statut === 'en_attente'
+  if ((!projetEnAttente && !savEnAttente) || !d.statut_changed_at) return null
+  return Math.floor((Date.now() - new Date(d.statut_changed_at).getTime()) / 86_400_000)
+}
+
+// Pré-seuil : l'attente commence à traîner, une relance ne ferait pas de mal,
+// mais ce n'est pas encore l'alerte franche de SEUIL_DEVIS_SANS_REPONSE_JOURS
+// (30 j, seuil déjà utilisé ailleurs, réemployé tel quel pour le rouge plutôt
+// que d'inventer un second chiffre).
+export const SEUIL_ATTENTE_ORANGE_JOURS = 10
+
+// Mêmes classes sémantiques que etatRappel (lib/rappel.js) — bleu accent
+// dans la norme, orange alerte à relancer bientôt, rouge erreur au-delà du
+// seuil déjà utilisé pour l'alerte devis. Jamais vert (règle du projet).
+export const classeAttente = (jours) => {
+  if (jours == null) return null
+  if (jours >= SEUIL_DEVIS_SANS_REPONSE_JOURS) return 'text-erreur font-medium'
+  if (jours >= SEUIL_ATTENTE_ORANGE_JOURS) return 'text-alerte'
+  return 'text-accent'
 }
 
 export const REMUNERATION = {

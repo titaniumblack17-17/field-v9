@@ -29,6 +29,9 @@ import {
   REMUNERATION_OPTIONS,
   PLAN_STATUT_OPTIONS,
   styleDossier,
+  MOTIFS_ATTENTE_SAV,
+  joursEnAttente,
+  classeAttente,
 } from '../constants/dossiers'
 
 // Deux notes suffisent à montrer que le journal vit ; le reste se déplie.
@@ -654,18 +657,26 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
                 onChange={(v) => setValues((x) => ({ ...x, statut: v }))}
               />
               {values.statut === 'en_attente' && (
-                <div className="px-4 py-3">
-                  <label className="text-xs text-texte-doux" htmlFor="bloque_par">
-                    En attente de quoi
-                  </label>
-                  <input
+                <>
+                  <ChampChoix
                     id="bloque_par"
+                    label="En attente de qui"
                     value={values.bloque_par ?? ''}
-                    onChange={setField('bloque_par')}
-                    placeholder="Pièce, devis fournisseur, décision du praticien…"
-                    className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome"
+                    options={MOTIFS_ATTENTE_SAV}
+                    videLibelle="À préciser"
+                    onChange={(v) => setValues((x) => ({ ...x, bloque_par: v || null }))}
                   />
-                </div>
+                  {dossier.statut === 'en_attente' &&
+                    (() => {
+                      const jours = joursEnAttente(dossier)
+                      if (jours == null) return null
+                      return (
+                        <p className={`text-xs px-4 -mt-2 pb-3 ${classeAttente(jours)}`}>
+                          En attente depuis {jours} j
+                        </p>
+                      )
+                    })()}
+                </>
               )}
             </>
           )}
