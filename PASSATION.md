@@ -445,3 +445,46 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
   Calcul dérivé de `dossiers` : un dossier clos en direct (temps réel)
   passe seul de l'actif à l'historique. Testé sur un client dédié (2 actifs,
   4 terminaux couvrant les 4 statuts, dates étalées), supprimé ensuite.
+- **Rappels « vides » (date ou rappel absent, par intermittence) — diagnostic
+  du 29/09, aucune cause trouvée en base, pas de correctif engagé.** Deuxième
+  passe sur ce signalement (déjà investigué le 24/09 avec la même conclusion) :
+  requêtes directes sur la base de production, aucune ne remonte quoi que ce
+  soit —
+  - Cohérence `dossiers.rappel_date/heure/note` vs le calcul du trigger
+    `refleter_prochain_rappel` (prochain rappel ouvert du dossier) : **0
+    écart** sur les 103 dossiers.
+  - Rappels sans dossier existant (cascade de suppression ratée) : **0**.
+  - Dossiers avec `rappel_date` renseigné mais aucune ligne dans `rappels`
+    (même close) : **0**.
+  - Rappels ouverts en double sur un même dossier (pourrait perturber le
+    calcul du trigger) : **0**.
+  - Rappels antérieurs à la création de leur dossier : 6 cas, mais tous déjà
+    clos (`fait_at` non nul, un seul via Todoist) et datés du 20/08 —
+    l'artefact déjà documenté de l'import en masse du 17-21/08, sans lien
+    avec ce signalement (ne pèse pas sur le reflet, réservé aux rappels
+    ouverts).
+  - `rappels.date` est `NOT NULL` au niveau du schéma — aucun des 3 chemins
+    de création (`ajouterRappel()`, réconciliation Todoist→Field, fusion
+    rappel/note de `cloreRappel()`) ne peut physiquement écrire une date
+    vide ; le formulaire de saisie (`Rappels.jsx`) désactive lui-même le
+    bouton tant qu'il n'y a pas de date.
+  - Répartition Todoist/Field : **100 %** des 15 rappels actuellement ouverts
+    portent un `todoist_task_id` (`ajouterRappel()` synchronise
+    systématiquement à la création) — impossible de distinguer un pattern
+    « plutôt Todoist » quand la quasi-totalité des rappels vivants passe par
+    Todoist de toute façon.
+  - Fonction Edge `todoist-rappel` testée en direct (`{action:'reconcilier'}`)
+    : répond `200`, fonctionne normalement.
+  Conclusion : si le symptôme est réel, ce n'est pas une perte ou une
+  corruption de donnée — la base est saine à chaque contrôle. Piste non
+  confirmée, à vérifier séparément si le signalement se reproduit :
+  [Rappels.jsx](src/components/Rappels.jsx:60) n'a aucun état de
+  chargement — `liste` démarre vide et le reste tant que le fetch n'a pas
+  répondu, rendant "Aucun rappel en cours." indiscernable d'un dossier
+  réellement sans rappel sur une connexion lente (même piège que celui déjà
+  corrigé côté `Pipeline.jsx`, voir son commentaire). N'explique pas la
+  partie « date vide » d'un rappel par ailleurs affiché — aucun mécanisme
+  trouvé dans le code pour ce cas précis. Pas de correctif tant que la vraie
+  cause n'est pas confirmée en base au moment du signalement — il faudrait,
+  la prochaine fois que ça se reproduit, le nom du dossier concerné et
+  l'écran exact pour requêter la base à ce moment-là.
