@@ -82,6 +82,9 @@ export const STATUTS_SAV_LABELS = Object.fromEntries(STATUTS_SAV)
 // « Autre » garde une échappatoire pour un cas non prévu par la liste.
 export const MOTIFS_ATTENTE_SAV = [
   ['technicien', 'Technicien'],
+  // Cas distinct de « Technicien » : la pièce et le technicien sont prêts,
+  // il manque juste un créneau disponible chez le praticien.
+  ['rdv', 'Créneau à caler'],
   ['fournisseur', 'Devis fournisseur'],
   ['piece', 'Pièce'],
   ['client', 'Réponse du client'],
