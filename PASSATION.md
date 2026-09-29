@@ -609,3 +609,69 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
   seule fois sur la page au chargement, les 4 accordéons montrent
   chevron ▸ + nom + compteur, rien de plus, tant qu'on n'a pas tapé
   dessus.
+- **Board : refonte Option B (validée sur maquette) — 01/10.** Quatre
+  chantiers en un, chacun testé séparément avec les vraies données de
+  Bruce avant ce commit unique :
+  1. **Total remonté** — le chiffre affiché à côté du header « Aussi à
+     traiter » (`board.aussiATraiter.length`, inchangé) est monté sous la
+     grille KPI : « N actions en attente aujourd'hui », centré. Plus
+     dupliqué à côté du header, qui garde juste son titre.
+  2. **Tri continu, repli à 3** — retour à un tri unique par ancienneté
+     (`joursRetard` décroissant, tous types confondus), sous-groupement
+     temporel En retard/Aujourd'hui/Cette semaine du 30/09 retiré. « Voir
+     les N autres » replie désormais après 3 éléments (contre 6
+     auparavant) — le total étant repris en tête de page, plus besoin d'en
+     montrer beaucoup ici.
+  3. **Dédoublonnage « Relance devis »** — un rappel dont le dossier est en
+     étape `devis_envoye`/`relance`, ou dont la note contient « devis »,
+     est désormais tagué `Relance devis` au lieu de `Rappel`, et porte les
+     deux informations (« Xj sans réponse » ajouté à côté de l'échéance du
+     rappel). Le dossier correspondant est retiré de `devisSansReponse`
+     avant construction de `elementsUrgents`
+     (`devisRestants = devisSansReponse.filter(d => !relanceDevisIds.has(d.id))`)
+     — plus de doublon entre l'entrée manuelle et l'entrée automatique sur
+     un même dossier. `bilan.devisSansReponse` (le compte brut, non
+     dédupliqué) reste inchangé pour le compteur de la ligne de navigation
+     « Devis sans réponse » plus bas. Tags visuellement distincts (couleur,
+     tokens existants uniquement) : `rappel` en accent, `relance_devis`/
+     `devis` en alerte, `sav`/`tache` neutres — `TAG_STYLES`, nouveau, dans
+     `BriefSoir.jsx`. **Vérifié avec un cas réel en base** : dossier Goual
+     Laura, statut `relance` depuis le 01/09 (30j pile), rappel ouvert
+     noté « Point sur le devis » — apparaissait avant en double, n'apparaît
+     plus qu'une fois, tagué Relance devis, avec les deux informations
+     affichées.
+  4. **Accordéons → navigation** — les 8 sections détaillées (SAV ouverts,
+     Devis sans réponse, À rappeler, Tâches en retard, Rappels à venir,
+     Plans à produire, Règlements, À chiffrer) ne se déplient plus sur le
+     Board : chaque ligne est un lien (nouveau composant `LigneNavigation`,
+     chevron `›`) qui ouvre directement Pipeline sur la vue et — quand une
+     seule colonne correspond — l'étape pertinente (nouvelle prop
+     `etapeInitiale` sur `Pipeline.jsx`, propagée depuis `App.jsx`, même
+     mécanisme que `vueInitiale`). Seule **Anomalies détectées** reste un
+     accordéon classique (nature différente : incohérences à corriger sur
+     place via son bouton « Traité », pas des dossiers à ouvrir ailleurs).
+     Cibles retenues (les 3 sans colonne Pipeline unique sont des
+     approximations documentées, à revoir si Bruce préfère autre chose) :
+     - SAV ouverts → Pipeline vue SAV (exact)
+     - Devis sans réponse → Pipeline vue Projet, étape Devis envoyé (les
+       deux étapes qualifiantes sont Devis envoyé + Relance, verrouillé
+       sur la première par Bruce)
+     - Règlements → Pipeline vue Plan, étape Règlement demandé (exact,
+       même logique de choix de colonne que Devis)
+     - À chiffrer → Pipeline vue Projet (exact : `bilan.sansMontant` est
+       à 100 % de type Projet)
+     - **À rappeler et Tâches en retard** → pas de colonne Pipeline
+       possible (rappel/tâche cross-type) : redirigent vers « Aussi à
+       traiter » plus haut sur le même Board (`allerAAussiATraiter`),
+       cible exacte plutôt qu'approximative — ces mêmes dossiers y sont
+       déjà listés en détail.
+     - **Plans à produire et Rappels à venir** → Pipeline vue Plan/Projet
+       respectivement — approximation (Plans à produire mélange des plans
+       intégrés à un Projet et des dossiers Plan à part ; Rappels à venir
+       n'a aucune notion de vue).
+     Pastilles de saut (`pastilles`, `allerASection`, `sectionRefs`)
+     retirées avec les accordéons qu'elles ciblaient, devenues sans objet.
+     `Section` (composant) retiré, plus aucun appelant.
+     Testé en navigateur avec les vraies données : chaque lien vérifié un
+     par un (vue et étape actives confirmées par script), Anomalies
+     détectées confirmée toujours accordéon.

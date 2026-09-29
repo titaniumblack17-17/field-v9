@@ -237,7 +237,7 @@ let etapeVueMemorisee = null
 // annulable avant que l'écriture réelle ne parte (voir armerDeplacement).
 const DUREE_ANNULATION_MS = 5000
 
-export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale }) {
+export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale, etapeInitiale }) {
   const [dossiers, setDossiers] = useState([])
   // Les deux pipelines n'ont ni le même vocabulaire d'étapes ni le même
   // volume : les montrer bout à bout obligeait à faire défiler loin pour
@@ -272,7 +272,11 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale 
   // Étape actuellement à gauche de l'écran. Suivre le défilement plutôt que le
   // dernier appui : sans ça, un balayage à la main laisserait la barre
   // désigner une étape qu'on a quittée.
-  const [etapeVue, setEtapeVue] = useState(() => etapeVueMemorisee)
+  // etapeInitiale (depuis « Devis sans réponse » ou « Règlements » du Brief,
+  // par exemple) l'emporte sur la mémoire, même logique que vueInitiale
+  // ci-dessus — une navigation ciblée sur une colonne précise ne doit pas
+  // retomber sur celle consultée la fois d'avant.
+  const [etapeVue, setEtapeVue] = useState(() => etapeInitiale ?? etapeVueMemorisee)
   const zoneRef = useRef(null)
   const pillRefs = useRef({})
 
