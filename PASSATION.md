@@ -586,3 +586,26 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
   Testé en navigateur avec les vraies données de Bruce (23 SAV/tâches
   affichés, encart de couverture faible bien repositionné en tête de
   « Qualité des données »).
+- **Board : les 4 accordéons de « À traiter » s'ouvraient par défaut,
+  dupliquant « Aussi à traiter » — corrigé le 30/09.** Bruce constatait en
+  vidéo réelle un défilement de 13s+ et les mêmes dossiers affichés 2-3
+  fois (ex. Youssef Jacques, Sharif Shayann visibles à la fois dans
+  « Aussi à traiter → En retard » et en détail dans « SAV ouverts » plus
+  bas). Cause confirmée précisément, pas de persistance en jeu : simple
+  bug d'état initial — `useState({ sav: true, devis: true, rappeler: true,
+  taches: true })`, un objet littéral, aucun `localStorage`/
+  `sessionStorage` impliqué. Décision délibérée à l'origine (« les
+  décisions les plus urgentes du soir doivent se voir sans taper »),
+  jamais reconsidérée quand « Aussi à traiter » a été ajouté plus tard et
+  s'est mis à couvrir les mêmes dossiers en détail — les deux blocs
+  affichaient alors la même chose en double. Corrigé en repliant les 9
+  accordéons détaillés par défaut (`useState({})`), sans exception : les 5
+  autres (Rappels à venir, Plans à produire, Règlements, À chiffrer,
+  Anomalies détectées) étaient déjà correctement repliés, seuls
+  SAV/Devis/À rappeler/Tâches en retard avaient le bug. « Aussi à traiter »
+  non touché, continue d'afficher les noms de dossiers par défaut comme
+  prévu. Testé en navigateur avec les vraies données de Bruce : chaque nom
+  de dossier (Youssef Jacques, Sharif Shayann) n'apparaît plus qu'une
+  seule fois sur la page au chargement, les 4 accordéons montrent
+  chevron ▸ + nom + compteur, rien de plus, tant qu'on n'a pas tapé
+  dessus.

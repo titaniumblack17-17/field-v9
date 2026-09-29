@@ -406,14 +406,18 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
   // n'ait posé todoist_task_id) redéclencherait le même appel en double.
   const syncTacheEnCours = useRef(new Set())
 
-  // SAV/Devis/À rappeler ouvertes par défaut : ce sont les décisions les
-  // plus urgentes du soir, elles doivent se voir sans taper. Rappels à
-  // venir/Plans/Règlements/À chiffrer repliées par défaut (clé absente) —
-  // moins prioritaires par nature, pas besoin de défiler leur détail pour
-  // voir juste le compteur. État levé ici plutôt que local à chaque
-  // section, pour qu'une pastille puisse forcer l'ouverture de sa cible
-  // avant d'y sauter.
-  const [sectionsOuvertes, setSectionsOuvertes] = useState({ sav: true, devis: true, rappeler: true, taches: true })
+  // Les 9 accordéons détaillés démarrent tous repliés (clé absente) — un
+  // simple nom + compteur, rien à faire défiler tant qu'on n'a pas tapé
+  // dessus. SAV/Devis/À rappeler/Tâches en retard étaient ouvertes par
+  // défaut à l'origine (« les décisions les plus urgentes du soir doivent
+  // se voir sans taper »), avant que « Aussi à traiter » n'existe — ce
+  // bloc affiche désormais ces mêmes dossiers en détail juste au-dessus,
+  // donc les rouvrir ici les répétait deux à trois fois et allongeait le
+  // défilement à 13s+ sur iPhone (constaté en vidéo réelle, bug du 30/09,
+  // voir PASSATION.md). État levé ici plutôt que local à chaque section,
+  // pour qu'une pastille puisse forcer l'ouverture de sa cible avant d'y
+  // sauter.
+  const [sectionsOuvertes, setSectionsOuvertes] = useState({})
   const toggleSection = (cle) => setSectionsOuvertes((s) => ({ ...s, [cle]: !s[cle] }))
   const allerASection = (cle) => {
     // Le haut de la section ne bouge pas quand son contenu se déplie en
