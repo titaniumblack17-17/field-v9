@@ -445,3 +445,233 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
   Calcul dérivé de `dossiers` : un dossier clos en direct (temps réel)
   passe seul de l'actif à l'historique. Testé sur un client dédié (2 actifs,
   4 terminaux couvrant les 4 statuts, dates étalées), supprimé ensuite.
+- **Rappels « vides » (date ou rappel absent, par intermittence) — diagnostic
+  du 29/09, aucune cause trouvée en base, pas de correctif engagé.** Deuxième
+  passe sur ce signalement (déjà investigué le 24/09 avec la même conclusion) :
+  requêtes directes sur la base de production, aucune ne remonte quoi que ce
+  soit —
+  - Cohérence `dossiers.rappel_date/heure/note` vs le calcul du trigger
+    `refleter_prochain_rappel` (prochain rappel ouvert du dossier) : **0
+    écart** sur les 103 dossiers.
+  - Rappels sans dossier existant (cascade de suppression ratée) : **0**.
+  - Dossiers avec `rappel_date` renseigné mais aucune ligne dans `rappels`
+    (même close) : **0**.
+  - Rappels ouverts en double sur un même dossier (pourrait perturber le
+    calcul du trigger) : **0**.
+  - Rappels antérieurs à la création de leur dossier : 6 cas, mais tous déjà
+    clos (`fait_at` non nul, un seul via Todoist) et datés du 20/08 —
+    l'artefact déjà documenté de l'import en masse du 17-21/08, sans lien
+    avec ce signalement (ne pèse pas sur le reflet, réservé aux rappels
+    ouverts).
+  - `rappels.date` est `NOT NULL` au niveau du schéma — aucun des 3 chemins
+    de création (`ajouterRappel()`, réconciliation Todoist→Field, fusion
+    rappel/note de `cloreRappel()`) ne peut physiquement écrire une date
+    vide ; le formulaire de saisie (`Rappels.jsx`) désactive lui-même le
+    bouton tant qu'il n'y a pas de date.
+  - Répartition Todoist/Field : **100 %** des 15 rappels actuellement ouverts
+    portent un `todoist_task_id` (`ajouterRappel()` synchronise
+    systématiquement à la création) — impossible de distinguer un pattern
+    « plutôt Todoist » quand la quasi-totalité des rappels vivants passe par
+    Todoist de toute façon.
+  - Fonction Edge `todoist-rappel` testée en direct (`{action:'reconcilier'}`)
+    : répond `200`, fonctionne normalement.
+  Conclusion : si le symptôme est réel, ce n'est pas une perte ou une
+  corruption de donnée — la base est saine à chaque contrôle. Piste non
+  confirmée, à vérifier séparément si le signalement se reproduit :
+  [Rappels.jsx](src/components/Rappels.jsx:60) n'a aucun état de
+  chargement — `liste` démarre vide et le reste tant que le fetch n'a pas
+  répondu, rendant "Aucun rappel en cours." indiscernable d'un dossier
+  réellement sans rappel sur une connexion lente (même piège que celui déjà
+  corrigé côté `Pipeline.jsx`, voir son commentaire). N'explique pas la
+  partie « date vide » d'un rappel par ailleurs affiché — aucun mécanisme
+  trouvé dans le code pour ce cas précis. Pas de correctif tant que la vraie
+  cause n'est pas confirmée en base au moment du signalement — il faudrait,
+  la prochaine fois que ça se reproduit, le nom du dossier concerné et
+  l'écran exact pour requêter la base à ce moment-là.
+- **Board : « Aussi à traiter » regroupé par fenêtre temporelle — 29/09.**
+  La liste plate (rappels + SAV actionnables + tâches + devis, triés par
+  urgence, tronqués à 6 avec « Voir les N autres ») masquait arbitrairement
+  des retards réels dès qu'il y en avait plus de 6, tous types confondus.
+  Le tri par urgence (`elementsUrgents`, décroissant sur `joursRetard`)
+  reste la seule règle de classement — non remplacé par un groupage par
+  type — mais la liste se découpe maintenant en sous-groupes visuels : **En
+  retard** (rouge/`text-erreur`, jamais tronqué), **Aujourd'hui**
+  (orange/`text-alerte`), **Cette semaine** (orange/`text-alerte`), puis
+  « Voir les N autres » replié comme avant pour le reste. Chaque item garde
+  son tag de type (Rappel/SAV/Tâche/Devis) et sa clôture ✓ directe,
+  inchangés. `LIMITE_AUSSI_A_TRAITER` (l'ancienne limite fixe à 6) retirée,
+  devenue sans objet.
+  **Découverte en testant avec les vraies données de Bruce** (pas de jeu de
+  test pour la vérification finale) : les groupes « Cette semaine » et
+  « Plus tard » ne peuvent aujourd'hui jamais se peupler. `aRappeler`
+  (source des rappels de cette liste) est filtré à `rappel_date <=
+  aujourd'hui`, `tachesEnRetard` à `etatEcheanceTache(...).echu` — les deux
+  excluent déjà tout ce qui n'est pas en retard ou dû aujourd'hui ; les SAV
+  et devis n'ont pas de notion de date future dans ce calcul. Confirmé en
+  ajoutant un dossier de test avec un rappel à +4 jours puis +15 jours (élément de test créé,
+  vérifié absent des deux groupes, puis supprimé) : rien n'apparaît tant que
+  la source de données elle-même n'inclut pas le futur proche. Les rappels à
+  venir vivent déjà dans une section séparée, « À venir » (`bilan.aVenir`,
+  capée à 5, non urgente) — élargir la fenêtre de `aRappeler` pour peupler
+  « Cette semaine » ferait doublon avec cette section et gonflerait le
+  compteur « 29 »/la tuile KPI « À traiter » (qui réutilise `aRappeler`).
+  Décision non prise unilatéralement : à trancher avec Bruce avant tout
+  élargissement de la source de données — le regroupement visuel livré ici
+  fonctionne correctement sur ce qui existe déjà (`En retard`/`Aujourd'hui`),
+  seuls ces deux groupes se peupleront en pratique jusqu'à cette décision.
+- **`Rappels.jsx` : état de chargement ajouté — 29/09, suite du diagnostic
+  du même jour.** Cause non prouvée du signalement « rappels vides » (la
+  base reste saine à chaque contrôle), mais bug latent réel trouvé au
+  passage et corrigé quand même, validé par Bruce : `liste` démarrait vide
+  et le restait tant que le fetch n'avait pas répondu, rendant « Aucun
+  rappel en cours. » indiscernable d'un fetch encore en vol — même piège
+  que celui déjà corrigé côté `Pipeline.jsx`. Ajout d'un état `chargement`
+  (affiche « Chargement… » tant que la réponse n'est pas arrivée, posé à
+  `false` dans les deux branches succès/échec du fetch, sans condition).
+  Testé en conditions réelles : fetch `/rest/v1/rappels` retardé
+  artificiellement (8 s) sur un vrai dossier avec un rappel en cours
+  (Goual, « Point sur le devis », en retard de 27 jours) — « Chargement… »
+  s'affiche pendant le délai, puis le rappel apparaît correctement une fois
+  la réponse arrivée. N'explique pas à lui seul le symptôme rapporté par
+  Bruce (toujours à confirmer en base la prochaine fois que ça se
+  reproduit, avec l'écran exact et le dossier concerné) — mais ferme ce
+  risque d'affichage précis, sans corriger sur hypothèse la cause du
+  signalement lui-même.
+- **Pipeline.jsx : colonnes terminales unifiées sous « Historique (N) » —
+  29/09.** Modification restée non commitée plusieurs sessions (repérée en
+  `git status`, jamais perdue). Même pattern que la fiche client et le
+  Board : un seul lien repliable remplace les deux toggles séparés
+  `montrerPerdus`/`montrerTermines` (qui n'existaient que pour Projet) —
+  désormais `historiqueDeplie`, un état partagé unique pour les trois vues
+  (Projet : Terminé+Perdu, SAV : Clos, Plan : Soldé), volontairement non
+  mémorisé entre sessions. Testée en navigateur avec les vraies données
+  avant commit : bouton « Pipeline » du Board → kanban Projet peuplé
+  normalement (pas de régression sur le fix du 18/09) ; « Historique (20) »
+  déplie bien Terminé (14) + Perdu (6) en Projet ; « Historique (3) » en
+  SAV révèle Clos ; « Historique (3) » en Plan révèle Soldé ; tuile KPI
+  « SAV ouverts » (vueInitiale='sav') toujours correcte. Le partage d'un
+  seul `historiqueDeplie` entre les trois vues est voulu, pas un bug :
+  changer de vue avec l'historique déjà déplié le garde déplié, confirmé
+  au passage lors du test.
+- **Board : les 9 accordéons détaillés regroupés en 4 en-têtes — 30/09.**
+  `SAV ouverts`/`Devis sans réponse`/`À rappeler`/`Tâches en retard`/
+  `Rappels à venir`/`Plans à produire`/`Règlements de plans à encaisser`/
+  `À chiffrer`/`Anomalies détectées` s'enchaînaient à plat, sans hiérarchie
+  visuelle. Regroupés sous 4 en-têtes discrets (texte gris uppercase, pas
+  de carte englobante, même style que « Aussi à traiter ») : **À traiter**
+  (SAV ouverts, Devis sans réponse, À rappeler, Tâches en retard),
+  **Production** (Rappels à venir, Plans à produire, À chiffrer),
+  **Financier** (Règlements de plans à encaisser), **Qualité des données**
+  (l'encart d'alerte « X dossiers sur Y signés sans montant », déplacé de
+  son ancienne position flottante entre Règlements et À chiffrer vers le
+  haut de ce groupe, + Anomalies détectées). Contenu, tri et comportement
+  accordéon de chaque section strictement inchangés — seuls l'ordre
+  d'affichage et le regroupement visuel bougent.
+  **Rappels à venir n'était explicitement assigné à aucun des 4 groupes
+  dans la demande** (seuls 8 des 9 accordéons y figuraient) : rattaché à
+  Production de ma propre initiative — rien n'y est en retard, même statut
+  « travail programmé, pas urgence » que Plans à produire/À chiffrer, pas
+  assez de volume pour un 5ᵉ en-tête à lui seul. À corriger si Bruce voit
+  ça autrement.
+  Couleur des compteurs alignée sur la sémantique demandée : orange/accent
+  réservé à SAV ouverts, Devis sans réponse, À rappeler, Tâches en retard,
+  Anomalies détectées (déjà correctement dynamiques, aucun n'a eu besoin
+  d'être touché) ; Règlements de plans à encaisser repasse en neutre
+  (`urgent={...}` retiré — c'était le seul écart réel : orange dès qu'un
+  plan avait `reglement_demande`, alors que c'est un volume de travail,
+  pas un blocage). Rappels à venir/Plans à produire/À chiffrer étaient déjà
+  neutres, rien à changer. `Rapport hebdo` non touché, hors périmètre de
+  la demande (pas dans la liste des 9 accordéons) — reste après les 4
+  groupes comme avant.
+  Testé en navigateur avec les vraies données de Bruce (23 SAV/tâches
+  affichés, encart de couverture faible bien repositionné en tête de
+  « Qualité des données »).
+- **Board : les 4 accordéons de « À traiter » s'ouvraient par défaut,
+  dupliquant « Aussi à traiter » — corrigé le 30/09.** Bruce constatait en
+  vidéo réelle un défilement de 13s+ et les mêmes dossiers affichés 2-3
+  fois (ex. Youssef Jacques, Sharif Shayann visibles à la fois dans
+  « Aussi à traiter → En retard » et en détail dans « SAV ouverts » plus
+  bas). Cause confirmée précisément, pas de persistance en jeu : simple
+  bug d'état initial — `useState({ sav: true, devis: true, rappeler: true,
+  taches: true })`, un objet littéral, aucun `localStorage`/
+  `sessionStorage` impliqué. Décision délibérée à l'origine (« les
+  décisions les plus urgentes du soir doivent se voir sans taper »),
+  jamais reconsidérée quand « Aussi à traiter » a été ajouté plus tard et
+  s'est mis à couvrir les mêmes dossiers en détail — les deux blocs
+  affichaient alors la même chose en double. Corrigé en repliant les 9
+  accordéons détaillés par défaut (`useState({})`), sans exception : les 5
+  autres (Rappels à venir, Plans à produire, Règlements, À chiffrer,
+  Anomalies détectées) étaient déjà correctement repliés, seuls
+  SAV/Devis/À rappeler/Tâches en retard avaient le bug. « Aussi à traiter »
+  non touché, continue d'afficher les noms de dossiers par défaut comme
+  prévu. Testé en navigateur avec les vraies données de Bruce : chaque nom
+  de dossier (Youssef Jacques, Sharif Shayann) n'apparaît plus qu'une
+  seule fois sur la page au chargement, les 4 accordéons montrent
+  chevron ▸ + nom + compteur, rien de plus, tant qu'on n'a pas tapé
+  dessus.
+- **Board : refonte Option B (validée sur maquette) — 01/10.** Quatre
+  chantiers en un, chacun testé séparément avec les vraies données de
+  Bruce avant ce commit unique :
+  1. **Total remonté** — le chiffre affiché à côté du header « Aussi à
+     traiter » (`board.aussiATraiter.length`, inchangé) est monté sous la
+     grille KPI : « N actions en attente aujourd'hui », centré. Plus
+     dupliqué à côté du header, qui garde juste son titre.
+  2. **Tri continu, repli à 3** — retour à un tri unique par ancienneté
+     (`joursRetard` décroissant, tous types confondus), sous-groupement
+     temporel En retard/Aujourd'hui/Cette semaine du 30/09 retiré. « Voir
+     les N autres » replie désormais après 3 éléments (contre 6
+     auparavant) — le total étant repris en tête de page, plus besoin d'en
+     montrer beaucoup ici.
+  3. **Dédoublonnage « Relance devis »** — un rappel dont le dossier est en
+     étape `devis_envoye`/`relance`, ou dont la note contient « devis »,
+     est désormais tagué `Relance devis` au lieu de `Rappel`, et porte les
+     deux informations (« Xj sans réponse » ajouté à côté de l'échéance du
+     rappel). Le dossier correspondant est retiré de `devisSansReponse`
+     avant construction de `elementsUrgents`
+     (`devisRestants = devisSansReponse.filter(d => !relanceDevisIds.has(d.id))`)
+     — plus de doublon entre l'entrée manuelle et l'entrée automatique sur
+     un même dossier. `bilan.devisSansReponse` (le compte brut, non
+     dédupliqué) reste inchangé pour le compteur de la ligne de navigation
+     « Devis sans réponse » plus bas. Tags visuellement distincts (couleur,
+     tokens existants uniquement) : `rappel` en accent, `relance_devis`/
+     `devis` en alerte, `sav`/`tache` neutres — `TAG_STYLES`, nouveau, dans
+     `BriefSoir.jsx`. **Vérifié avec un cas réel en base** : dossier Goual
+     Laura, statut `relance` depuis le 01/09 (30j pile), rappel ouvert
+     noté « Point sur le devis » — apparaissait avant en double, n'apparaît
+     plus qu'une fois, tagué Relance devis, avec les deux informations
+     affichées.
+  4. **Accordéons → navigation** — les 8 sections détaillées (SAV ouverts,
+     Devis sans réponse, À rappeler, Tâches en retard, Rappels à venir,
+     Plans à produire, Règlements, À chiffrer) ne se déplient plus sur le
+     Board : chaque ligne est un lien (nouveau composant `LigneNavigation`,
+     chevron `›`) qui ouvre directement Pipeline sur la vue et — quand une
+     seule colonne correspond — l'étape pertinente (nouvelle prop
+     `etapeInitiale` sur `Pipeline.jsx`, propagée depuis `App.jsx`, même
+     mécanisme que `vueInitiale`). Seule **Anomalies détectées** reste un
+     accordéon classique (nature différente : incohérences à corriger sur
+     place via son bouton « Traité », pas des dossiers à ouvrir ailleurs).
+     Cibles retenues (les 3 sans colonne Pipeline unique sont des
+     approximations documentées, à revoir si Bruce préfère autre chose) :
+     - SAV ouverts → Pipeline vue SAV (exact)
+     - Devis sans réponse → Pipeline vue Projet, étape Devis envoyé (les
+       deux étapes qualifiantes sont Devis envoyé + Relance, verrouillé
+       sur la première par Bruce)
+     - Règlements → Pipeline vue Plan, étape Règlement demandé (exact,
+       même logique de choix de colonne que Devis)
+     - À chiffrer → Pipeline vue Projet (exact : `bilan.sansMontant` est
+       à 100 % de type Projet)
+     - **À rappeler et Tâches en retard** → pas de colonne Pipeline
+       possible (rappel/tâche cross-type) : redirigent vers « Aussi à
+       traiter » plus haut sur le même Board (`allerAAussiATraiter`),
+       cible exacte plutôt qu'approximative — ces mêmes dossiers y sont
+       déjà listés en détail.
+     - **Plans à produire et Rappels à venir** → Pipeline vue Plan/Projet
+       respectivement — approximation (Plans à produire mélange des plans
+       intégrés à un Projet et des dossiers Plan à part ; Rappels à venir
+       n'a aucune notion de vue).
+     Pastilles de saut (`pastilles`, `allerASection`, `sectionRefs`)
+     retirées avec les accordéons qu'elles ciblaient, devenues sans objet.
+     `Section` (composant) retiré, plus aucun appelant.
+     Testé en navigateur avec les vraies données : chaque lien vérifié un
+     par un (vue et étape actives confirmées par script), Anomalies
+     détectées confirmée toujours accordéon.

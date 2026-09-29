@@ -16,16 +16,11 @@ import {
 import { nomClient } from '../lib/client'
 import {
   ETAPES_PROJET,
-  PLAN_STATUT_LABELS,
-  STATUTS_PLAN_LABELS,
   STATUTS_SAV_LABELS,
   PLAN_SANS_COMMERCIAL,
   TYPE_LABELS,
   styleDossier,
   joursDevisSansReponse,
-  joursEnAttente,
-  classeAttente,
-  MOTIFS_ATTENTE_SAV_LABELS,
   SEUIL_DEVIS_SANS_REPONSE_JOURS,
 } from '../constants/dossiers'
 
@@ -55,8 +50,6 @@ const ETAPES_FACTUREES = ['finition', 'termine']
 const euros = (n) =>
   n == null ? '—' : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n) + ' €'
 
-const libelleEtape = (v) => ETAPES_PROJET.find(([k]) => k === v)?.[1] ?? v
-
 // Même normalisation que ClientList.jsx/ChoixClient.jsx : insensible aux
 // accents et à la casse, pour que « poirot » retrouve « Poirot ».
 const normaliser = (s) =>
@@ -66,13 +59,27 @@ const normaliser = (s) =>
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
 
-const TAG_LABELS = { rappel: 'Rappel', sav: 'SAV', tache: 'Tâche', devis: 'Devis' }
-
-// Au-delà de ce nombre, « Aussi à traiter » se replie derrière un lien
-// « Voir les N autres » — un board qui force un défilement marathon avant
-// d'atteindre les 7 sections détaillées en dessous rate son objectif
-// (constaté en vidéo réelle sur iPhone, 25 éléments affichés à plat).
-const LIMITE_AUSSI_A_TRAITER = 6
+const TAG_LABELS = {
+  rappel: 'Rappel',
+  sav: 'SAV',
+  tache: 'Tâche',
+  devis: 'Devis',
+  relance_devis: 'Relance devis',
+}
+// Couleur par type de tag dans « Aussi à traiter », où plusieurs familles se
+// mélangent dans une même liste triée par urgence — le texte seul (« Rappel »
+// vs « Tâche ») ne suffisait pas à distinguer au premier coup d'œil. Tokens
+// déjà en place, aucune couleur ajoutée : accent pour un rappel simple,
+// alerte pour tout ce qui touche un devis (même famille visuelle que le
+// « j sans réponse » déjà en alerte), neutre pour SAV/Tâche — leur propre
+// ligne (statut, échéance) porte déjà l'information de gravité.
+const TAG_STYLES = {
+  rappel: 'text-accent bg-accent-doux',
+  relance_devis: 'text-alerte bg-alerte/10',
+  devis: 'text-alerte bg-alerte/10',
+  sav: 'text-texte-faible bg-carte-douce',
+  tache: 'text-texte-faible bg-carte-douce',
+}
 
 function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTitre, ligneSecondaire, tag }) {
   const s = styleDossier(dossier)
@@ -101,8 +108,10 @@ function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTi
                 mélangent — inutile dans les 7 sections détaillées plus bas,
                 déjà homogènes chacune sur son propre type. */}
             {tag && (
-              <span className="inline-block align-middle text-[10px] font-semibold uppercase tracking-wide text-texte-faible bg-carte-douce rounded px-1.5 py-0.5 mr-1.5">
-                {tag}
+              <span
+                className={`inline-block align-middle text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 mr-1.5 ${TAG_STYLES[tag] ?? 'text-texte-faible bg-carte-douce'}`}
+              >
+                {TAG_LABELS[tag] ?? tag}
               </span>
             )}
             {nomClient(dossier.clients) ?? '—'}
@@ -167,28 +176,29 @@ function EnTeteCarte({ titre, compte, urgent, ouverte, onToggle }) {
   )
 }
 
-// État ouvert/fermé toujours contrôlé par le parent (pas de useState local) :
-// sauter à une section via une pastille ou un lien « Voir les N autres »
-// doit pouvoir la forcer ouverte avant d'y défiler.
-function Section({ sectionRef, titre, compte, urgent, vide, ouverte, onToggle, children }) {
+// Remplace l'accordéon pour les sections dont le détail vit ailleurs
+// (Pipeline, ou « Aussi à traiter » plus haut sur ce même Board) : chevron
+// › de navigation, jamais de contenu déplié sur place — un simple nom +
+// compteur, comme EnTeteCarte, mais qui part au tap au lieu de s'ouvrir.
+function LigneNavigation({ titre, compte, urgent, onClick }) {
   return (
-    <section ref={sectionRef} className="mt-6 scroll-mt-32 bg-carte rounded-xl overflow-hidden">
-      <EnTeteCarte titre={titre} compte={compte} urgent={urgent && compte > 0} ouverte={ouverte} onToggle={onToggle} />
-      {ouverte && (
-        <div className="px-4 pb-3">
-          {compte === 0 ? (
-            <p className="text-texte-faible text-sm">{vide}</p>
-          ) : (
-            <ul className="space-y-2">{children}</ul>
-          )}
-        </div>
-      )}
-    </section>
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-2 px-4 py-3 text-left bg-carte rounded-xl shadow-sm active:scale-[0.98] transition"
+    >
+      <span className="flex-1 text-sm font-medium text-texte truncate">{titre}</span>
+      <span className={`text-sm font-semibold flex-shrink-0 ${urgent ? 'text-alerte' : 'text-texte-doux'}`}>
+        {compte}
+      </span>
+      <span className="text-texte-faible text-base flex-shrink-0" aria-hidden="true">
+        ›
+      </span>
+    </button>
   )
 }
 
 // Tuile compacte de la grille 2x2 : un chiffre à lire d'un coup d'œil, pas de
-// détail — le détail, c'est le board et les 7 sections juste en dessous.
+// détail — le détail, c'est le board et « Aussi à traiter » juste en dessous.
 function TuileKPI({ titre, valeur, sousTitre, urgent, onClick }) {
   return (
     <button
@@ -368,9 +378,12 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
   // puisque BriefSoir se démonte à chaque navigation ailleurs.
   const [ignores, setIgnores] = useState(() => new Set())
 
-  // « Aussi à traiter » replié par défaut au-delà de LIMITE_AUSSI_A_TRAITER
-  // (voir son commentaire) — une fois déplié via le lien ou la tuile KPI
-  // « À traiter », reste déplié pour le reste de la session.
+  // « Aussi à traiter » replie par défaut ce qui dépasse la semaine (voir
+  // groupesAussiATraiter) derrière un lien « Voir les N autres » — un board
+  // qui force un défilement marathon avant d'atteindre les 7 sections
+  // détaillées en dessous rate son objectif (constaté en vidéo réelle sur
+  // iPhone, 25 éléments affichés à plat). Une fois déplié via le lien ou la
+  // tuile KPI « À traiter », reste déplié pour le reste de la session.
   const [aussiATraiterDeplie, setAussiATraiterDeplie] = useState(false)
   const aussiATraiterRef = useRef(null)
   const objectifRef = useRef(null)
@@ -401,10 +414,6 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
   // (clé service_role), jamais une écriture directe depuis l'app.
   const [anomalies, setAnomalies] = useState([])
 
-  // Jauge Objectif puis pastilles de navigation tout en haut ; les pastilles
-  // sautent directement à la section concernée plus bas via ces mêmes refs.
-  const sectionRefs = useRef({})
-
   // Garde-fou anti-doublon pour la synchro Todoist des tâches en retard : le
   // job planifié (pg_cron) est le mécanisme fiable, ceci n'est qu'un aller
   // plus rapide quand Bruce a déjà le Brief ouvert. Sans cette Set, un
@@ -412,25 +421,15 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
   // n'ait posé todoist_task_id) redéclencherait le même appel en double.
   const syncTacheEnCours = useRef(new Set())
 
-  // SAV/Devis/À rappeler ouvertes par défaut : ce sont les décisions les
-  // plus urgentes du soir, elles doivent se voir sans taper. Rappels à
-  // venir/Plans/Règlements/À chiffrer repliées par défaut (clé absente) —
-  // moins prioritaires par nature, pas besoin de défiler leur détail pour
-  // voir juste le compteur. État levé ici plutôt que local à chaque
-  // section, pour qu'une pastille puisse forcer l'ouverture de sa cible
-  // avant d'y sauter.
-  const [sectionsOuvertes, setSectionsOuvertes] = useState({ sav: true, devis: true, rappeler: true, taches: true })
+  // Seuls Anomalies détectées et Rapport hebdo restent de vrais accordéons
+  // (01/10) — les 8 autres sont devenus des liens de navigation (voir plus
+  // bas), qui n'ont plus besoin d'un état ouvert/fermé.
+  const [sectionsOuvertes, setSectionsOuvertes] = useState({})
   const toggleSection = (cle) => setSectionsOuvertes((s) => ({ ...s, [cle]: !s[cle] }))
-  const allerASection = (cle) => {
-    // Le haut de la section ne bouge pas quand son contenu se déplie en
-    // dessous : pas besoin d'attendre le re-rendu avant de lancer le scroll.
-    setSectionsOuvertes((s) => (s[cle] ? s : { ...s, [cle]: true }))
-    sectionRefs.current[cle]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
 
   // Tuile KPI « À traiter » : contourne le lien « Voir les N autres » — un
   // tap sur le chiffre doit montrer tout ce qu'il représente sans étape
-  // intermédiaire, même mécanisme scrollIntoView que les pastilles.
+  // intermédiaire.
   const allerAAussiATraiter = () => {
     setAussiATraiterDeplie(true)
     aussiATraiterRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -487,7 +486,9 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
   // devis n'a pas de bouton ✓ (voir `aussiATraiter` plus bas) : rien
   // n'équivaut à « clore un devis » en un geste, ça se décide en fiche.
   const traiterElement = (item) => {
-    if (item.type === 'rappel') return rappelFait(item.dossier)
+    // relance_devis reste un rappel côté base (voir bilan ci-dessus) — même
+    // clôture que 'rappel', seul le tag affiché diffère.
+    if (item.type === 'rappel' || item.type === 'relance_devis') return rappelFait(item.dossier)
     if (item.type === 'tache') return tacheFaite(item.tache)
     if (item.type === 'sav') return savCloture(item.dossier)
   }
@@ -818,15 +819,37 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
       Math.round((new Date(aujourdhui + 'T00:00:00') - new Date(dateISO + 'T00:00:00')) / 86_400_000)
     const joursDepuisHorodatage = (ts) => Math.floor((Date.now() - new Date(ts).getTime()) / 86_400_000)
 
-    const elementsUrgents = [
-      ...aRappeler.map((d) => ({
+    // Un rappel manuel posé pour relancer un devis (note contenant « devis »,
+    // ou dossier resté en Devis envoyé/Relance) et l'entrée automatique
+    // « Devis sans réponse » (calculée sur l'étape) portent le même signal
+    // sur le même dossier — deux lignes pour une seule décision à prendre.
+    // Le rappel l'emporte : il est daté par Bruce lui-même, plus précis que
+    // le seuil générique de 30j. relanceDevisIds retient les dossiers déjà
+    // couverts pour exclure leur doublon de devisSansReponse plus bas.
+    const relanceDevisIds = new Set()
+    const elementsRappels = aRappeler.map((d) => {
+      const estRelanceDevis =
+        ['devis_envoye', 'relance'].includes(d.statut) ||
+        (d.rappel_note ?? '').toLowerCase().includes('devis')
+      if (estRelanceDevis) relanceDevisIds.add(d.id)
+      const joursSansReponse = joursDevisSansReponse(d)
+      const texteRappel = etatRappel(d.rappel_date, d.rappel_heure)?.texte
+      return {
         cle: `rappel-${d.id}`,
-        type: 'rappel',
+        type: estRelanceDevis ? 'relance_devis' : 'rappel',
         dossier: d,
         joursRetard: joursDepuisJour(d.rappel_date),
         libelle: d.rappel_note || d.titre || TYPE_LABELS[d.type],
-        droite: etatRappel(d.rappel_date, d.rappel_heure)?.texte,
-      })),
+        // Porte les deux informations quand le devis a lui-même franchi le
+        // seuil des 30j — un rappel de relance posé avant ce seuil n'a que
+        // sa propre échéance à afficher.
+        droite: joursSansReponse != null ? `${texteRappel} · ${joursSansReponse} j sans réponse` : texteRappel,
+      }
+    })
+    const devisRestants = devisSansReponse.filter((d) => !relanceDevisIds.has(d.id))
+
+    const elementsUrgents = [
+      ...elementsRappels,
       ...savOuverts
         // Un SAV « en_attente » patiente sur un tiers (pièce, fournisseur) —
         // ce n'est pas un oubli de Bruce, il ne concourt donc pas ici (même
@@ -850,7 +873,7 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
         libelle: t.texte,
         droite: etatEcheanceTache(t.echeance)?.texte,
       })),
-      ...devisSansReponse.map((d) => ({
+      ...devisRestants.map((d) => ({
         cle: `devis-${d.id}`,
         type: 'devis',
         dossier: d,
@@ -908,6 +931,15 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
     return { prioriteJour, aussiATraiter }
   }, [bilan.elementsUrgents, ignores])
 
+  // Retour au tri continu unique (le sous-groupement temporel En retard/
+  // Aujourd'hui/Cette semaine a été retiré le 01/10) : `board.aussiATraiter`
+  // est déjà trié par ancienneté décroissante (joursRetard, voir bilan
+  // ci-dessus), tous types confondus — plus vieux en tête, sans distinction
+  // de famille. Repli après les 3 premiers, contre 6 avant : le total est
+  // maintenant repris en tête de page (voir la ligne sous les KPI), plus
+  // besoin d'en montrer beaucoup ici pour donner une idée du volume.
+  const LIMITE_AUSSI_A_TRAITER = 3
+
   const plusTard = (cle) => setIgnores((cur) => new Set(cur).add(cle))
 
   // Aller Todoist immédiat pour les tâches fraîchement en retard, en plus du
@@ -927,20 +959,6 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
 
   const couvertureFaible =
     bilan.signesSansMontant > 0 || (bilan.totalActifs > 0 && bilan.chiffres < bilan.totalActifs / 2)
-
-  // Une pastille par section peuplée, colorée quand elle attend une décision
-  // ce soir plutôt qu'un simple suivi. L'ordre reprend celui des sections :
-  // sauter à une pastille retrouve toujours la même section plus bas.
-  const pastilles = [
-    { cle: 'sav', titre: 'SAV', compte: bilan.savOuverts.length, urgent: bilan.savOuverts.some((d) => d.statut !== 'en_attente') },
-    { cle: 'devis', titre: 'Devis oubliés', compte: bilan.devisSansReponse.length, urgent: bilan.devisSansReponse.length > 0 },
-    { cle: 'rappeler', titre: 'À rappeler', compte: bilan.aRappeler.length, urgent: bilan.aRappeler.length > 0 },
-    { cle: 'taches', titre: 'Tâches en retard', compte: bilan.tachesEnRetard.length, urgent: bilan.tachesEnRetard.length > 0 },
-    { cle: 'avenir', titre: 'À venir', compte: bilan.aVenir.length, urgent: false },
-    { cle: 'plans', titre: 'Plans', compte: bilan.plansAProduire.length, urgent: false },
-    { cle: 'reglements', titre: 'Règlements', compte: bilan.reglements.length, urgent: bilan.reglements.some((d) => d.statut === 'reglement_demande') },
-    { cle: 'chiffrer', titre: 'À chiffrer', compte: bilan.sansMontant.length, urgent: false },
-  ].filter((p) => p.compte > 0)
 
   return (
     <div className="min-h-screen bg-fond">
@@ -1075,6 +1093,15 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               />
             </div>
 
+            {/* Total remonté ici (retiré à côté du header « Aussi à
+                traiter » plus bas, pour ne plus le montrer deux fois) : un
+                seul chiffre à lire juste sous les KPI dit tout de suite
+                l'ampleur de la soirée, avant même de croiser la carte
+                Priorité. */}
+            <p className="text-center text-sm text-texte-doux mt-3">
+              {board.aussiATraiter.length} action{board.aussiATraiter.length > 1 ? 's' : ''} en attente aujourd'hui
+            </p>
+
             {board.prioriteJour && (
               <CartePriorite
                 item={board.prioriteJour}
@@ -1085,12 +1112,7 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
             )}
 
             <section ref={aussiATraiterRef} className="mt-6 scroll-mt-32">
-              <div className="flex items-center gap-2 px-1 mb-2">
-                <h2 className="text-xs text-texte-faible uppercase tracking-wider flex-1">Aussi à traiter</h2>
-                <span className={`text-sm font-semibold ${board.aussiATraiter.length > 0 ? 'text-alerte' : 'text-texte-doux'}`}>
-                  {board.aussiATraiter.length}
-                </span>
-              </div>
+              <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mb-2">Aussi à traiter</h2>
               {board.aussiATraiter.length === 0 ? (
                 <p className="text-texte-faible text-sm px-1">Rien d'autre en attente.</p>
               ) : (
@@ -1104,7 +1126,7 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
                         key={item.cle}
                         dossier={item.dossier}
                         onOuvrir={onOpenDossier}
-                        tag={TAG_LABELS[item.type]}
+                        tag={item.type}
                         ligneSecondaire={item.libelle}
                         droite={item.droite}
                         alerte
@@ -1144,182 +1166,89 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               )}
             </section>
 
-            {pastilles.length > 0 && (
-              <div className="flex gap-1.5 overflow-x-auto mt-4 pb-1">
-                {pastilles.map((p) => (
-                  <button
-                    key={p.cle}
-                    onClick={() => allerASection(p.cle)}
-                    className={`flex-shrink-0 h-9 px-3 rounded-full text-xs font-medium shadow-sm flex items-center gap-1.5 ${
-                      p.urgent ? 'bg-alerte/10 text-alerte' : 'bg-carte text-texte-doux'
-                    }`}
-                  >
-                    {p.titre}
-                    <span className={p.urgent ? 'text-alerte/70' : 'text-texte-faible'}>{p.compte}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* Regroupement en 4 en-têtes discrets (texte seul, pas de carte
+                englobante). Chaque ligne est désormais un lien de
+                navigation (chevron ›), jamais un accordéon : plus aucun
+                contenu ne se déplie sur place, ce qui élimine à la racine
+                la classe de bug du 30/09 (un même dossier affiché deux fois
+                entre « Aussi à traiter » et une section dépliée en
+                dessous). Pastilles de saut retirées avec les accordéons
+                qu'elles ciblaient — un tap sur la ligne fait déjà le
+                trajet. */}
+            <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mt-6 mb-1">
+              À traiter
+            </h2>
+            <div className="space-y-2">
+              <LigneNavigation
+                titre="SAV ouverts"
+                compte={bilan.savOuverts.length}
+                urgent={bilan.savOuverts.some((d) => d.statut !== 'en_attente')}
+                onClick={() => onPipeline('sav')}
+              />
+              <LigneNavigation
+                titre="Devis sans réponse"
+                compte={bilan.devisSansReponse.length}
+                urgent={bilan.devisSansReponse.length > 0}
+                onClick={() => onPipeline('projet', 'devis_envoye')}
+              />
+              {/* À rappeler et Tâches en retard n'ont pas de colonne Pipeline
+                  unique (un rappel ou une tâche vit sur un dossier de
+                  n'importe quel type/étape) — mais ces mêmes dossiers sont
+                  déjà listés en détail dans « Aussi à traiter » juste
+                  au-dessus : y défiler est la cible exacte, pas une
+                  approximation. */}
+              <LigneNavigation
+                titre="À rappeler"
+                compte={bilan.aRappeler.length}
+                urgent={bilan.aRappeler.length > 0}
+                onClick={allerAAussiATraiter}
+              />
+              <LigneNavigation
+                titre="Tâches en retard"
+                compte={bilan.tachesEnRetard.length}
+                urgent={bilan.tachesEnRetard.length > 0}
+                onClick={allerAAussiATraiter}
+              />
+            </div>
 
-            <Section
-              sectionRef={(el) => (sectionRefs.current.sav = el)}
-              titre="SAV ouverts"
-              compte={bilan.savOuverts.length}
-              urgent={bilan.savOuverts.some((d) => d.statut !== 'en_attente')}
-              vide="Aucun SAV en cours."
-              ouverte={!!sectionsOuvertes.sav}
-              onToggle={() => toggleSection('sav')}
-            >
-              {bilan.savOuverts.map((d) => {
-                const jours = joursEnAttente(d)
-                return (
-                  <Ligne
-                    key={d.id}
-                    dossier={d}
-                    onOuvrir={onOpenDossier}
-                    droite={
-                      jours != null ? `${jours} j` : STATUTS_SAV_LABELS[d.statut] ?? d.statut
-                    }
-                    droiteClasse={jours != null ? classeAttente(jours) : undefined}
-                    alerte={d.statut !== 'en_attente'}
-                    sousTitre={
-                      d.statut === 'en_attente'
-                        ? `En attente — ${MOTIFS_ATTENTE_SAV_LABELS[d.bloque_par] ?? d.bloque_par ?? 'motif à préciser'}`
-                        : null
-                    }
-                  />
-                )
-              })}
-            </Section>
+            <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mt-6 mb-1">
+              Production
+            </h2>
+            <div className="space-y-2">
+              {/* Rappels à venir n'a pas non plus de colonne dédiée et n'est
+                  pas dans « Aussi à traiter » (rien n'y est en retard) —
+                  approximation : ouvre le Pipeline vue Projet, où vivent la
+                  plupart des rappels. */}
+              <LigneNavigation
+                titre="Rappels à venir"
+                compte={bilan.aVenir.length}
+                onClick={() => onPipeline('projet')}
+              />
+              <LigneNavigation
+                titre="Plans à produire"
+                compte={bilan.plansAProduire.length}
+                onClick={() => onPipeline('plan')}
+              />
+              {/* À chiffrer est exact, pas une approximation : tous les
+                  dossiers sans montant estimé (bilan.sansMontant) sont de
+                  type Projet. */}
+              <LigneNavigation
+                titre="À chiffrer"
+                compte={bilan.sansMontant.length}
+                onClick={() => onPipeline('projet')}
+              />
+            </div>
 
-            <Section
-              sectionRef={(el) => (sectionRefs.current.devis = el)}
-              titre="Devis sans réponse"
-              compte={bilan.devisSansReponse.length}
-              urgent
-              vide="Aucun devis oublié."
-              ouverte={!!sectionsOuvertes.devis}
-              onToggle={() => toggleSection('devis')}
-            >
-              {bilan.devisSansReponse.map((d) => (
-                <Ligne
-                  key={d.id}
-                  dossier={d}
-                  onOuvrir={onOpenDossier}
-                  droite={`${joursDevisSansReponse(d)} j`}
-                  droiteClasse={classeAttente(joursEnAttente(d))}
-                  alerte
-                />
-              ))}
-            </Section>
-
-            <Section
-              sectionRef={(el) => (sectionRefs.current.rappeler = el)}
-              titre="À rappeler"
-              compte={bilan.aRappeler.length}
-              urgent
-              vide="Aucun rappel en retard. "
-              ouverte={!!sectionsOuvertes.rappeler}
-              onToggle={() => toggleSection('rappeler')}
-            >
-              {bilan.aRappeler.map((d) => (
-                <Ligne
-                  key={d.id}
-                  dossier={d}
-                  onOuvrir={onOpenDossier}
-                  droite={etatRappel(d.rappel_date, d.rappel_heure)?.texte}
-                  droiteClasse={etatRappel(d.rappel_date, d.rappel_heure)?.classe}
-                  ligneSecondaire={d.rappel_note}
-                  alerte
-                  onFait={rappelFait}
-                />
-              ))}
-            </Section>
-
-            <Section
-              sectionRef={(el) => (sectionRefs.current.taches = el)}
-              titre="Tâches en retard"
-              compte={bilan.tachesEnRetard.length}
-              urgent
-              vide="Aucune tâche en retard."
-              ouverte={!!sectionsOuvertes.taches}
-              onToggle={() => toggleSection('taches')}
-            >
-              {bilan.tachesEnRetard.map((t) => (
-                <Ligne
-                  key={t.id}
-                  dossier={t.dossier}
-                  onOuvrir={onOpenDossier}
-                  ligneSecondaire={t.texte}
-                  droite={etatEcheanceTache(t.echeance)?.texte}
-                  droiteClasse={etatEcheanceTache(t.echeance)?.classe}
-                  alerte
-                />
-              ))}
-            </Section>
-
-            <Section
-              sectionRef={(el) => (sectionRefs.current.avenir = el)}
-              titre="Rappels à venir"
-              compte={bilan.aVenir.length}
-              vide="Rien de programmé."
-              ouverte={!!sectionsOuvertes.avenir}
-              onToggle={() => toggleSection('avenir')}
-            >
-              {bilan.aVenir.map((d) => (
-                <Ligne
-                  key={d.id}
-                  dossier={d}
-                  onOuvrir={onOpenDossier}
-                  droite={etatRappel(d.rappel_date, d.rappel_heure)?.texte}
-                  droiteClasse={etatRappel(d.rappel_date, d.rappel_heure)?.classe}
-                  ligneSecondaire={d.rappel_note}
-                  onFait={rappelFait}
-                />
-              ))}
-            </Section>
-
-            <Section
-              sectionRef={(el) => (sectionRefs.current.plans = el)}
-              titre="Plans à produire"
-              compte={bilan.plansAProduire.length}
-              vide="Aucun plan en attente."
-              ouverte={!!sectionsOuvertes.plans}
-              onToggle={() => toggleSection('plans')}
-            >
-              {bilan.plansAProduire.map((d) => (
-                <Ligne
-                  key={d.id}
-                  dossier={d}
-                  onOuvrir={onOpenDossier}
-                  droite={
-                    d.plan_statut
-                      ? PLAN_STATUT_LABELS[d.plan_statut]
-                      : STATUTS_PLAN_LABELS[d.statut] ?? libelleEtape(d.statut)
-                  }
-                />
-              ))}
-            </Section>
-
-            <Section
-              sectionRef={(el) => (sectionRefs.current.reglements = el)}
-              titre="Règlements de plans à encaisser"
-              compte={bilan.reglements.length}
-              urgent={bilan.reglements.some((d) => d.statut === 'reglement_demande')}
-              vide="Aucun plan en attente de règlement."
-              ouverte={!!sectionsOuvertes.reglements}
-              onToggle={() => toggleSection('reglements')}
-            >
-              {bilan.reglements.map((d) => (
-                <Ligne
-                  key={d.id}
-                  dossier={d}
-                  onOuvrir={onOpenDossier}
-                  droite={STATUTS_PLAN_LABELS[d.statut]}
-                  alerte={d.statut === 'reglement_demande'}
-                />
-              ))}
-            </Section>
+            <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mt-6 mb-1">
+              Financier
+            </h2>
+            <div className="space-y-2">
+              <LigneNavigation
+                titre="Règlements de plans à encaisser"
+                compte={bilan.reglements.length}
+                onClick={() => onPipeline('plan', 'reglement_demande')}
+              />
+            </div>
 
             {bilan.reglements.length > 0 && (
               <p className="text-xs text-texte-doux px-1 mt-2">
@@ -1327,8 +1256,12 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               </p>
             )}
 
+            <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mt-6 mb-1">
+              Qualité des données
+            </h2>
+
             {couvertureFaible && (
-              <section className="mt-6">
+              <section className="mt-2">
                 <div className="bg-alerte/10 border border-alerte/30 rounded-xl px-4 py-3">
                   <p className="text-sm text-texte">
                     {bilan.signesSansMontant > 0
@@ -1341,24 +1274,6 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
                 </div>
               </section>
             )}
-
-            <Section
-              sectionRef={(el) => (sectionRefs.current.chiffrer = el)}
-              titre="À chiffrer"
-              compte={bilan.sansMontant.length}
-              vide="Tous les dossiers actifs sont chiffrés."
-              ouverte={!!sectionsOuvertes.chiffrer}
-              onToggle={() => toggleSection('chiffrer')}
-            >
-              {bilan.sansMontant.map((d) => (
-                <Ligne
-                  key={d.id}
-                  dossier={d}
-                  onOuvrir={onOpenDossier}
-                  droite={libelleEtape(d.statut)}
-                />
-              ))}
-            </Section>
 
             <CarteAnomalies
               anomalies={anomalies}
