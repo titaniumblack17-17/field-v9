@@ -488,3 +488,34 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
   cause n'est pas confirmée en base au moment du signalement — il faudrait,
   la prochaine fois que ça se reproduit, le nom du dossier concerné et
   l'écran exact pour requêter la base à ce moment-là.
+- **Board : « Aussi à traiter » regroupé par fenêtre temporelle — 29/09.**
+  La liste plate (rappels + SAV actionnables + tâches + devis, triés par
+  urgence, tronqués à 6 avec « Voir les N autres ») masquait arbitrairement
+  des retards réels dès qu'il y en avait plus de 6, tous types confondus.
+  Le tri par urgence (`elementsUrgents`, décroissant sur `joursRetard`)
+  reste la seule règle de classement — non remplacé par un groupage par
+  type — mais la liste se découpe maintenant en sous-groupes visuels : **En
+  retard** (rouge/`text-erreur`, jamais tronqué), **Aujourd'hui**
+  (orange/`text-alerte`), **Cette semaine** (orange/`text-alerte`), puis
+  « Voir les N autres » replié comme avant pour le reste. Chaque item garde
+  son tag de type (Rappel/SAV/Tâche/Devis) et sa clôture ✓ directe,
+  inchangés. `LIMITE_AUSSI_A_TRAITER` (l'ancienne limite fixe à 6) retirée,
+  devenue sans objet.
+  **Découverte en testant avec les vraies données de Bruce** (pas de jeu de
+  test pour la vérification finale) : les groupes « Cette semaine » et
+  « Plus tard » ne peuvent aujourd'hui jamais se peupler. `aRappeler`
+  (source des rappels de cette liste) est filtré à `rappel_date <=
+  aujourd'hui`, `tachesEnRetard` à `etatEcheanceTache(...).echu` — les deux
+  excluent déjà tout ce qui n'est pas en retard ou dû aujourd'hui ; les SAV
+  et devis n'ont pas de notion de date future dans ce calcul. Confirmé en
+  ajoutant un dossier de test avec un rappel à +4 jours puis +15 jours (élément de test créé,
+  vérifié absent des deux groupes, puis supprimé) : rien n'apparaît tant que
+  la source de données elle-même n'inclut pas le futur proche. Les rappels à
+  venir vivent déjà dans une section séparée, « À venir » (`bilan.aVenir`,
+  capée à 5, non urgente) — élargir la fenêtre de `aRappeler` pour peupler
+  « Cette semaine » ferait doublon avec cette section et gonflerait le
+  compteur « 29 »/la tuile KPI « À traiter » (qui réutilise `aRappeler`).
+  Décision non prise unilatéralement : à trancher avec Bruce avant tout
+  élargissement de la source de données — le regroupement visuel livré ici
+  fonctionne correctement sur ce qui existe déjà (`En retard`/`Aujourd'hui`),
+  seuls ces deux groupes se peupleront en pratique jusqu'à cette décision.

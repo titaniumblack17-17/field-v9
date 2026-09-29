@@ -65,12 +65,6 @@ const normaliser = (s) =>
 
 const TAG_LABELS = { rappel: 'Rappel', sav: 'SAV', tache: 'Tâche', devis: 'Devis' }
 
-// Au-delà de ce nombre, « Aussi à traiter » se replie derrière un lien
-// « Voir les N autres » — un board qui force un défilement marathon avant
-// d'atteindre les 7 sections détaillées en dessous rate son objectif
-// (constaté en vidéo réelle sur iPhone, 25 éléments affichés à plat).
-const LIMITE_AUSSI_A_TRAITER = 6
-
 function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait, sousTitre, ligneSecondaire, tag }) {
   const s = styleDossier(dossier)
   const [enCours, setEnCours] = useState(false)
@@ -365,9 +359,12 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
   // puisque BriefSoir se démonte à chaque navigation ailleurs.
   const [ignores, setIgnores] = useState(() => new Set())
 
-  // « Aussi à traiter » replié par défaut au-delà de LIMITE_AUSSI_A_TRAITER
-  // (voir son commentaire) — une fois déplié via le lien ou la tuile KPI
-  // « À traiter », reste déplié pour le reste de la session.
+  // « Aussi à traiter » replie par défaut ce qui dépasse la semaine (voir
+  // groupesAussiATraiter) derrière un lien « Voir les N autres » — un board
+  // qui force un défilement marathon avant d'atteindre les 7 sections
+  // détaillées en dessous rate son objectif (constaté en vidéo réelle sur
+  // iPhone, 25 éléments affichés à plat). Une fois déplié via le lien ou la
+  // tuile KPI « À traiter », reste déplié pour le reste de la session.
   const [aussiATraiterDeplie, setAussiATraiterDeplie] = useState(false)
   const aussiATraiterRef = useRef(null)
   const objectifRef = useRef(null)
@@ -905,6 +902,28 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
     return { prioriteJour, aussiATraiter }
   }, [bilan.elementsUrgents, ignores])
 
+  // Sous-groupes temporels de « Aussi à traiter » — le tri par urgence de
+  // `elementsUrgents` (joursRetard décroissant) reste la seule règle de
+  // classement ; on ne fait que répartir la même liste, déjà triée, en
+  // fenêtres de temps plutôt que par type. Une liste plate limitée à un
+  // nombre fixe d'éléments (l'ancienne limite à 6, tous types confondus)
+  // masquait arbitrairement des retards réels dès qu'il y en avait plus :
+  // « En retard » ne se tronque donc plus jamais, seul ce qui dépasse la
+  // semaine se replie.
+  const groupesAussiATraiter = useMemo(() => {
+    const enRetard = []
+    const aujourdhui = []
+    const cetteSemaine = []
+    const resteLoin = []
+    for (const item of board.aussiATraiter) {
+      if (item.joursRetard > 0) enRetard.push(item)
+      else if (item.joursRetard === 0) aujourdhui.push(item)
+      else if (item.joursRetard >= -7) cetteSemaine.push(item)
+      else resteLoin.push(item)
+    }
+    return { enRetard, aujourdhui, cetteSemaine, resteLoin }
+  }, [board.aussiATraiter])
+
   const plusTard = (cle) => setIgnores((cur) => new Set(cur).add(cle))
 
   // Aller Todoist immédiat pour les tâches fraîchement en retard, en plus du
@@ -1092,31 +1111,63 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
                 <p className="text-texte-faible text-sm px-1">Rien d'autre en attente.</p>
               ) : (
                 <>
-                  <ul className="space-y-2">
-                    {(aussiATraiterDeplie
-                      ? board.aussiATraiter
-                      : board.aussiATraiter.slice(0, LIMITE_AUSSI_A_TRAITER)
-                    ).map((item) => (
-                      <Ligne
-                        key={item.cle}
-                        dossier={item.dossier}
-                        onOuvrir={onOpenDossier}
-                        tag={TAG_LABELS[item.type]}
-                        ligneSecondaire={item.libelle}
-                        droite={item.droite}
-                        alerte
-                        onFait={item.type === 'devis' ? undefined : () => traiterElement(item)}
-                      />
-                    ))}
-                  </ul>
-                  {!aussiATraiterDeplie && board.aussiATraiter.length > LIMITE_AUSSI_A_TRAITER && (
-                    <button
-                      onClick={() => setAussiATraiterDeplie(true)}
-                      className="w-full text-center text-sm text-accent font-semibold py-3"
-                    >
-                      Voir les {board.aussiATraiter.length - LIMITE_AUSSI_A_TRAITER} autres
-                    </button>
+                  {[
+                    { titre: 'En retard', classe: 'text-erreur', items: groupesAussiATraiter.enRetard },
+                    { titre: "Aujourd'hui", classe: 'text-alerte', items: groupesAussiATraiter.aujourdhui },
+                    { titre: 'Cette semaine', classe: 'text-alerte', items: groupesAussiATraiter.cetteSemaine },
+                  ].map(
+                    ({ titre, classe, items }) =>
+                      items.length > 0 && (
+                        <div key={titre} className="mb-3 last:mb-0">
+                          <p className={`text-xs font-semibold uppercase tracking-wide px-1 mb-1.5 ${classe}`}>
+                            {titre} · {items.length}
+                          </p>
+                          <ul className="space-y-2">
+                            {items.map((item) => (
+                              <Ligne
+                                key={item.cle}
+                                dossier={item.dossier}
+                                onOuvrir={onOpenDossier}
+                                tag={TAG_LABELS[item.type]}
+                                ligneSecondaire={item.libelle}
+                                droite={item.droite}
+                                alerte
+                                onFait={item.type === 'devis' ? undefined : () => traiterElement(item)}
+                              />
+                            ))}
+                          </ul>
+                        </div>
+                      )
                   )}
+                  {groupesAussiATraiter.resteLoin.length > 0 &&
+                    (aussiATraiterDeplie ? (
+                      <div className="mb-3 last:mb-0">
+                        <p className="text-xs font-semibold uppercase tracking-wide px-1 mb-1.5 text-texte-faible">
+                          Plus tard · {groupesAussiATraiter.resteLoin.length}
+                        </p>
+                        <ul className="space-y-2">
+                          {groupesAussiATraiter.resteLoin.map((item) => (
+                            <Ligne
+                              key={item.cle}
+                              dossier={item.dossier}
+                              onOuvrir={onOpenDossier}
+                              tag={TAG_LABELS[item.type]}
+                              ligneSecondaire={item.libelle}
+                              droite={item.droite}
+                              alerte
+                              onFait={item.type === 'devis' ? undefined : () => traiterElement(item)}
+                            />
+                          ))}
+                        </ul>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setAussiATraiterDeplie(true)}
+                        className="w-full text-center text-sm text-accent font-semibold py-3"
+                      >
+                        Voir les {groupesAussiATraiter.resteLoin.length} autres
+                      </button>
+                    ))}
                 </>
               )}
             </section>
