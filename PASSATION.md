@@ -519,3 +519,21 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
   élargissement de la source de données — le regroupement visuel livré ici
   fonctionne correctement sur ce qui existe déjà (`En retard`/`Aujourd'hui`),
   seuls ces deux groupes se peupleront en pratique jusqu'à cette décision.
+- **`Rappels.jsx` : état de chargement ajouté — 29/09, suite du diagnostic
+  du même jour.** Cause non prouvée du signalement « rappels vides » (la
+  base reste saine à chaque contrôle), mais bug latent réel trouvé au
+  passage et corrigé quand même, validé par Bruce : `liste` démarrait vide
+  et le restait tant que le fetch n'avait pas répondu, rendant « Aucun
+  rappel en cours. » indiscernable d'un fetch encore en vol — même piège
+  que celui déjà corrigé côté `Pipeline.jsx`. Ajout d'un état `chargement`
+  (affiche « Chargement… » tant que la réponse n'est pas arrivée, posé à
+  `false` dans les deux branches succès/échec du fetch, sans condition).
+  Testé en conditions réelles : fetch `/rest/v1/rappels` retardé
+  artificiellement (8 s) sur un vrai dossier avec un rappel en cours
+  (Goual, « Point sur le devis », en retard de 27 jours) — « Chargement… »
+  s'affiche pendant le délai, puis le rappel apparaît correctement une fois
+  la réponse arrivée. N'explique pas à lui seul le symptôme rapporté par
+  Bruce (toujours à confirmer en base la prochaine fois que ça se
+  reproduit, avec l'écran exact et le dossier concerné) — mais ferme ce
+  risque d'affichage précis, sans corriger sur hypothèse la cause du
+  signalement lui-même.

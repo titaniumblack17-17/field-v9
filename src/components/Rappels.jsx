@@ -47,6 +47,11 @@ const normaliserHeure = (saisie) => {
  */
 export default function Rappels({ dossierId, statut }) {
   const [liste, setListe] = useState([])
+  // Sans ça, "liste" démarre vide et le reste tant que le fetch n'a pas
+  // répondu : "Aucun rappel en cours." s'affichait alors indiscernable
+  // d'un dossier réellement sans rappel, le temps d'une connexion lente
+  // (terrain, cabinet) — même piège déjà corrigé côté Pipeline.jsx.
+  const [chargement, setChargement] = useState(true)
   const [ouvertureForm, setOuvertureForm] = useState(false)
   const [date, setDate] = useState(aujourdhui())
   const [note, setNote] = useState('')
@@ -59,6 +64,7 @@ export default function Rappels({ dossierId, statut }) {
 
   useEffect(() => {
     let actif = true
+    setChargement(true)
 
     supabase
       .from('rappels')
@@ -66,9 +72,13 @@ export default function Rappels({ dossierId, statut }) {
       .eq('dossier_id', dossierId)
       .order('date', { ascending: true })
       .then(({ data, error }) => {
-        if (actif && !error) setListe(data ?? [])
+        if (!actif) return
+        if (!error) setListe(data ?? [])
+        setChargement(false)
       })
-      .catch(() => {})
+      .catch(() => {
+        if (actif) setChargement(false)
+      })
 
     const canal = supabase
       .channel(`rappels-${dossierId}`)
@@ -283,62 +293,68 @@ export default function Rappels({ dossierId, statut }) {
         </div>
       )}
 
-      {ouverts.length === 0 && !ouvertureForm && (
-        <p className="text-texte-faible text-sm px-1">Aucun rappel en cours.</p>
-      )}
+      {chargement ? (
+        <p className="text-texte-doux text-sm px-1">Chargement…</p>
+      ) : (
+        <>
+        {ouverts.length === 0 && !ouvertureForm && (
+          <p className="text-texte-faible text-sm px-1">Aucun rappel en cours.</p>
+        )}
 
-      <ul className="space-y-2">
-        {ouverts.map((r) => {
-          const e = etatRappel(r.date, r.heure)
-          return (
-            <li key={r.id} className="bg-carte rounded-xl shadow-sm flex items-stretch">
-              <div className="flex-1 min-w-0 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <TexteModifiable
-                    valeur={r.date}
-                    type="date"
-                    vide="Sans date"
-                    className={`text-sm ${e?.classe ?? 'text-texte-doux'} underline decoration-dotted underline-offset-2`}
-                    rendu={() => e?.texte}
-                    onEnregistrer={(v) => v && modifier(r, { date: v })}
-                  />
-                  {/* Le texte de l'heure se lit déjà dans la date à gauche
-                      (« à 09 h 00 »), mais le bouton garde un libellé visible
-                      même dans ce cas : un bouton à texte vide ne se repère
-                      pas du tout comme cliquable. */}
+        <ul className="space-y-2">
+          {ouverts.map((r) => {
+            const e = etatRappel(r.date, r.heure)
+            return (
+              <li key={r.id} className="bg-carte rounded-xl shadow-sm flex items-stretch">
+                <div className="flex-1 min-w-0 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <TexteModifiable
+                      valeur={r.date}
+                      type="date"
+                      vide="Sans date"
+                      className={`text-sm ${e?.classe ?? 'text-texte-doux'} underline decoration-dotted underline-offset-2`}
+                      rendu={() => e?.texte}
+                      onEnregistrer={(v) => v && modifier(r, { date: v })}
+                    />
+                    {/* Le texte de l'heure se lit déjà dans la date à gauche
+                        (« à 09 h 00 »), mais le bouton garde un libellé visible
+                        même dans ce cas : un bouton à texte vide ne se repère
+                        pas du tout comme cliquable. */}
+                    <button
+                      onClick={() => modifierHeure(r)}
+                      className="text-xs text-texte-faible underline decoration-dotted underline-offset-2 flex-shrink-0"
+                    >
+                      {r.heure ? 'modifier' : '+ heure'}
+                    </button>
+                  </div>
                   <button
-                    onClick={() => modifierHeure(r)}
-                    className="text-xs text-texte-faible underline decoration-dotted underline-offset-2 flex-shrink-0"
+                    onClick={() => modifierObjet(r)}
+                    className={`text-left w-full ${r.note ? 'text-texte' : 'text-texte-fantome'}`}
                   >
-                    {r.heure ? 'modifier' : '+ heure'}
+                    {r.note || 'Ajouter un objet'}
                   </button>
                 </div>
                 <button
-                  onClick={() => modifierObjet(r)}
-                  className={`text-left w-full ${r.note ? 'text-texte' : 'text-texte-fantome'}`}
+                  onClick={() => supprimer(r)}
+                  aria-label="Supprimer ce rappel"
+                  className="w-11 flex-shrink-0 flex items-center justify-center text-texte-fantome text-lg"
                 >
-                  {r.note || 'Ajouter un objet'}
+                  ×
                 </button>
-              </div>
-              <button
-                onClick={() => supprimer(r)}
-                aria-label="Supprimer ce rappel"
-                className="w-11 flex-shrink-0 flex items-center justify-center text-texte-fantome text-lg"
-              >
-                ×
-              </button>
-              <button
-                onClick={() => clore(r)}
-                disabled={enCours === r.id}
-                aria-label="Marquer ce rappel comme fait"
-                className="w-14 flex-shrink-0 flex items-center justify-center text-texte-fantome text-xl active:text-accent disabled:opacity-40 border-l border-separateur"
-              >
-                {enCours === r.id ? '…' : '✓'}
-              </button>
-            </li>
-          )
-        })}
-      </ul>
+                <button
+                  onClick={() => clore(r)}
+                  disabled={enCours === r.id}
+                  aria-label="Marquer ce rappel comme fait"
+                  className="w-14 flex-shrink-0 flex items-center justify-center text-texte-fantome text-xl active:text-accent disabled:opacity-40 border-l border-separateur"
+                >
+                  {enCours === r.id ? '…' : '✓'}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+        </>
+      )}
 
       {faits.length > 0 && (
         <div className="mt-3">
