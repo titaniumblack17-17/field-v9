@@ -264,10 +264,10 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale 
   const [montrerVides, setMontrerVides] = useState(false)
   // Un dossier perdu mérite d'être relu de temps en temps, pas de tenir une
   // colonne dans le champ de vision tous les jours.
-  const [montrerPerdus, setMontrerPerdus] = useState(false)
-  // Même logique pour les dossiers soldés : une fois terminés, ils sortent
-  // du champ de vision quotidien sans quitter le tableau.
-  const [montrerTermines, setMontrerTermines] = useState(false)
+  const [historiqueDeplie, setHistoriqueDeplie] = useState(false)
+  // Même logique pour tous les statuts terminaux (Perdu, Terminé, Soldé, Clos) :
+  // un seul lien « Historique (N) » en fin de rangée les déplie. Volontairement
+  // non mémorisé — replié à chaque ouverture.
 
   // Étape actuellement à gauche de l'écran. Suivre le défilement plutôt que le
   // dernier appui : sans ça, un balayage à la main laisserait la barre
@@ -546,12 +546,21 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale 
   const etapesVisibles = useMemo(
     () =>
       ETAPES_PROJET.filter(([cle]) => {
-        if (cle === 'perdu') return montrerPerdus || activeDrag
-        if (cle === 'termine') return montrerTermines || activeDrag
+        if (cle === 'perdu' || cle === 'termine') return historiqueDeplie || activeDrag
         return montrerVides || byEtape[cle].length > 0 || activeDrag
       }),
-    [byEtape, montrerPerdus, montrerTermines, montrerVides, activeDrag]
+    [byEtape, historiqueDeplie, montrerVides, activeDrag]
   )
+  // Colonnes terminales du kanban affiché, et nombre de dossiers qu'elles
+  // contiennent. Une colonne vide n'est pas masquée par ce mécanisme mais le
+  // lien reste utile tant qu'il y a au moins un dossier à retrouver.
+  const historique = useMemo(() => {
+    if (vue === 'sav') return { cles: ['clos'], n: bySavEtape.clos?.length ?? 0 }
+    if (vue === 'plan') return { cles: ['solde'], n: byPlanEtape.solde?.length ?? 0 }
+    return { cles: ['termine', 'perdu'], n: (byEtape.termine?.length ?? 0) + (byEtape.perdu?.length ?? 0) }
+  }, [vue, byEtape, bySavEtape, byPlanEtape])
+  const colonneCachee = (cle) => historique.cles.includes(cle) && !historiqueDeplie && !activeDrag
+
   const nbVides = useMemo(
     () =>
       ETAPES_PROJET.filter(([c]) => c !== 'perdu' && c !== 'termine' && byEtape[c].length === 0).length,
@@ -758,7 +767,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale 
             // colonnes qui en résultait laissait le repère de défilement
             // sur une tout autre étape — l'appui semblait mener au hasard.
             onClick={() => {
-              setMontrerTermines(true)
+              setHistoriqueDeplie(true)
               setTimeout(() => selectionnerEtape('termine'), 100)
             }}
             className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-semibold shadow-sm flex items-center gap-1.5 ${
@@ -775,7 +784,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale 
           <button
             ref={(el) => { pillRefs.current.perdu = el }}
             onClick={() => {
-              setMontrerPerdus(true)
+              setHistoriqueDeplie(true)
               setTimeout(() => selectionnerEtape('perdu'), 100)
             }}
             className={`flex-shrink-0 h-11 px-3 rounded-full text-xs font-semibold shadow-sm flex items-center gap-1.5 ${
@@ -803,7 +812,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale 
           dans la barre, pas besoin des « vides »/« perdus » du Projet. */}
       {vue === 'sav' && (
         <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto flex-shrink-0">
-          {STATUTS_SAV.map(([cle, libelle]) => (
+          {STATUTS_SAV.filter(([c]) => !colonneCachee(c)).map(([cle, libelle]) => (
             <button
               key={cle}
               ref={(el) => { pillRefs.current[cle] = el }}
@@ -823,7 +832,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale 
 
       {vue === 'plan' && (
         <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto flex-shrink-0">
-          {STATUTS_PLAN.map(([cle, libelle]) => (
+          {STATUTS_PLAN.filter(([c]) => !colonneCachee(c)).map(([cle, libelle]) => (
             <button
               key={cle}
               ref={(el) => { pillRefs.current[cle] = el }}
@@ -866,7 +875,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale 
             ))}
 
           {vue === 'sav' &&
-            STATUTS_SAV.map((etape) => (
+            STATUTS_SAV.filter(([c]) => !colonneCachee(c)).map((etape) => (
               <Column
                 key={`sav:${etape[0]}`}
                 etape={etape}
@@ -883,7 +892,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale 
             ))}
 
           {vue === 'plan' &&
-            STATUTS_PLAN.map((etape) => (
+            STATUTS_PLAN.filter(([c]) => !colonneCachee(c)).map((etape) => (
               <Column
                 key={`plan:${etape[0]}`}
                 etape={etape}
@@ -898,6 +907,15 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale 
                 onSelect={selectionnerEtape}
               />
             ))}
+
+          {historique.n > 0 && (
+            <button
+              onClick={() => setHistoriqueDeplie((v) => !v)}
+              className="flex-shrink-0 self-start h-11 px-3 text-sm text-accent font-semibold"
+            >
+              {historiqueDeplie ? "Masquer l'historique" : `Historique (${historique.n})`}
+            </button>
+          )}
 
           {/* Sans cette marge, une colonne proche de la fin (Terminé, Perdu)
               ne peut pas être alignée sur le bord gauche — il n'y a plus

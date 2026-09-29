@@ -537,3 +537,19 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
   reproduit, avec l'écran exact et le dossier concerné) — mais ferme ce
   risque d'affichage précis, sans corriger sur hypothèse la cause du
   signalement lui-même.
+- **Pipeline.jsx : colonnes terminales unifiées sous « Historique (N) » —
+  29/09.** Modification restée non commitée plusieurs sessions (repérée en
+  `git status`, jamais perdue). Même pattern que la fiche client et le
+  Board : un seul lien repliable remplace les deux toggles séparés
+  `montrerPerdus`/`montrerTermines` (qui n'existaient que pour Projet) —
+  désormais `historiqueDeplie`, un état partagé unique pour les trois vues
+  (Projet : Terminé+Perdu, SAV : Clos, Plan : Soldé), volontairement non
+  mémorisé entre sessions. Testée en navigateur avec les vraies données
+  avant commit : bouton « Pipeline » du Board → kanban Projet peuplé
+  normalement (pas de régression sur le fix du 18/09) ; « Historique (20) »
+  déplie bien Terminé (14) + Perdu (6) en Projet ; « Historique (3) » en
+  SAV révèle Clos ; « Historique (3) » en Plan révèle Soldé ; tuile KPI
+  « SAV ouverts » (vueInitiale='sav') toujours correcte. Le partage d'un
+  seul `historiqueDeplie` entre les trois vues est voulu, pas un bug :
+  changer de vue avec l'historique déjà déplié le garde déplié, confirmé
+  au passage lors du test.
