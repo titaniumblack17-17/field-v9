@@ -553,3 +553,36 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
   seul `historiqueDeplie` entre les trois vues est voulu, pas un bug :
   changer de vue avec l'historique déjà déplié le garde déplié, confirmé
   au passage lors du test.
+- **Board : les 9 accordéons détaillés regroupés en 4 en-têtes — 30/09.**
+  `SAV ouverts`/`Devis sans réponse`/`À rappeler`/`Tâches en retard`/
+  `Rappels à venir`/`Plans à produire`/`Règlements de plans à encaisser`/
+  `À chiffrer`/`Anomalies détectées` s'enchaînaient à plat, sans hiérarchie
+  visuelle. Regroupés sous 4 en-têtes discrets (texte gris uppercase, pas
+  de carte englobante, même style que « Aussi à traiter ») : **À traiter**
+  (SAV ouverts, Devis sans réponse, À rappeler, Tâches en retard),
+  **Production** (Rappels à venir, Plans à produire, À chiffrer),
+  **Financier** (Règlements de plans à encaisser), **Qualité des données**
+  (l'encart d'alerte « X dossiers sur Y signés sans montant », déplacé de
+  son ancienne position flottante entre Règlements et À chiffrer vers le
+  haut de ce groupe, + Anomalies détectées). Contenu, tri et comportement
+  accordéon de chaque section strictement inchangés — seuls l'ordre
+  d'affichage et le regroupement visuel bougent.
+  **Rappels à venir n'était explicitement assigné à aucun des 4 groupes
+  dans la demande** (seuls 8 des 9 accordéons y figuraient) : rattaché à
+  Production de ma propre initiative — rien n'y est en retard, même statut
+  « travail programmé, pas urgence » que Plans à produire/À chiffrer, pas
+  assez de volume pour un 5ᵉ en-tête à lui seul. À corriger si Bruce voit
+  ça autrement.
+  Couleur des compteurs alignée sur la sémantique demandée : orange/accent
+  réservé à SAV ouverts, Devis sans réponse, À rappeler, Tâches en retard,
+  Anomalies détectées (déjà correctement dynamiques, aucun n'a eu besoin
+  d'être touché) ; Règlements de plans à encaisser repasse en neutre
+  (`urgent={...}` retiré — c'était le seul écart réel : orange dès qu'un
+  plan avait `reglement_demande`, alors que c'est un volume de travail,
+  pas un blocage). Rappels à venir/Plans à produire/À chiffrer étaient déjà
+  neutres, rien à changer. `Rapport hebdo` non touché, hors périmètre de
+  la demande (pas dans la liste des 9 accordéons) — reste après les 4
+  groupes comme avant.
+  Testé en navigateur avec les vraies données de Bruce (23 SAV/tâches
+  affichés, encart de couverture faible bien repositionné en tête de
+  « Qualité des données »).

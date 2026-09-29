@@ -1209,6 +1209,15 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               </div>
             )}
 
+            {/* Regroupement en 4 en-têtes discrets (texte seul, pas de carte
+                englobante) : les 9 accordéons à plat rendaient la hiérarchie
+                illisible malgré le tri interne correct de chacun. Le contenu
+                de chaque section reste inchangé — seuls l'ordre d'affichage,
+                le regroupement visuel et la couleur du compteur bougent. */}
+            <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mt-6 mb-1">
+              À traiter
+            </h2>
+
             <Section
               sectionRef={(el) => (sectionRefs.current.sav = el)}
               titre="SAV ouverts"
@@ -1299,6 +1308,15 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               ))}
             </Section>
 
+            {/* Rappels à venir n'est pas un rendez-vous manqué comme les
+                quatre précédents (rien n'est en retard ici) — hors du
+                groupe « À traiter », mais pas assez de volume à lui seul
+                pour un cinquième en-tête ; rattaché à Production, qui
+                partage le même statut « travail programmé, pas urgence ». */}
+            <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mt-6 mb-1">
+              Production
+            </h2>
+
             <Section
               sectionRef={(el) => (sectionRefs.current.avenir = el)}
               titre="Rappels à venir"
@@ -1343,10 +1361,31 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
             </Section>
 
             <Section
+              sectionRef={(el) => (sectionRefs.current.chiffrer = el)}
+              titre="À chiffrer"
+              compte={bilan.sansMontant.length}
+              vide="Tous les dossiers actifs sont chiffrés."
+              ouverte={!!sectionsOuvertes.chiffrer}
+              onToggle={() => toggleSection('chiffrer')}
+            >
+              {bilan.sansMontant.map((d) => (
+                <Ligne
+                  key={d.id}
+                  dossier={d}
+                  onOuvrir={onOpenDossier}
+                  droite={libelleEtape(d.statut)}
+                />
+              ))}
+            </Section>
+
+            <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mt-6 mb-1">
+              Financier
+            </h2>
+
+            <Section
               sectionRef={(el) => (sectionRefs.current.reglements = el)}
               titre="Règlements de plans à encaisser"
               compte={bilan.reglements.length}
-              urgent={bilan.reglements.some((d) => d.statut === 'reglement_demande')}
               vide="Aucun plan en attente de règlement."
               ouverte={!!sectionsOuvertes.reglements}
               onToggle={() => toggleSection('reglements')}
@@ -1368,8 +1407,12 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               </p>
             )}
 
+            <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mt-6 mb-1">
+              Qualité des données
+            </h2>
+
             {couvertureFaible && (
-              <section className="mt-6">
+              <section className="mt-2">
                 <div className="bg-alerte/10 border border-alerte/30 rounded-xl px-4 py-3">
                   <p className="text-sm text-texte">
                     {bilan.signesSansMontant > 0
@@ -1382,24 +1425,6 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
                 </div>
               </section>
             )}
-
-            <Section
-              sectionRef={(el) => (sectionRefs.current.chiffrer = el)}
-              titre="À chiffrer"
-              compte={bilan.sansMontant.length}
-              vide="Tous les dossiers actifs sont chiffrés."
-              ouverte={!!sectionsOuvertes.chiffrer}
-              onToggle={() => toggleSection('chiffrer')}
-            >
-              {bilan.sansMontant.map((d) => (
-                <Ligne
-                  key={d.id}
-                  dossier={d}
-                  onOuvrir={onOpenDossier}
-                  droite={libelleEtape(d.statut)}
-                />
-              ))}
-            </Section>
 
             <CarteAnomalies
               anomalies={anomalies}
