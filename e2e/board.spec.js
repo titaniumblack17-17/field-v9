@@ -34,6 +34,7 @@ test('bande « À appeler » : gabarit, feuille, fermetures, focus, contact', as
   await expect(b).toBeVisible()
   const boite = await b.boundingBox()
   expect(boite.height).toBeGreaterThanOrEqual(56)
+  await expect(b).toContainText(/À appeler · \d+ contacts?/)
   const n = Number((await b.innerText()).match(/^\d+/)[0])
 
   // Bouton Appeler : 96 x 56, à droite, 8 px d'écart
@@ -68,10 +69,16 @@ test('bande « À appeler » : gabarit, feuille, fermetures, focus, contact', as
   const bo = await feuille.getByText('Appeler', { exact: true }).first().boundingBox()
   expect([Math.round(bo.width), Math.round(bo.height)]).toEqual([88, 44])
   await expect(feuille.getByText('Priorité du jour')).toBeVisible()
+  // Étiquette de type et ligne de retard sur chaque ligne
+  for (let i = 0; i < n; i++) {
+    const t = await lignes.nth(i).innerText()
+    expect(t).toMatch(/SAV|RAPPEL|TÂCHE|TACHE|DEVIS|RELANCE/i)
+    expect(t).toMatch(/En retard de \d+ jours?|À traiter aujourd'hui/)
+  }
 
   // Chaque contact une seule fois, et « Aussi à traiter » ne le répète pas
   const noms = await lignes.locator('button').evaluateAll((bs) =>
-    bs.filter((b) => b.querySelector('.font-bold')).map((b) => b.querySelector('.font-bold').textContent.trim())
+    bs.filter((b) => b.querySelector('.font-bold')).map((b) => b.querySelector('.font-bold').lastChild.textContent.trim())
   )
   expect(noms.length).toBe(n)
   expect(new Set(noms).size).toBe(n)
@@ -192,13 +199,13 @@ test('« Plus tard » : n\'écarte que l\'élément concerné', async ({ page })
   const feuille = page.getByRole('dialog')
   const lignes = feuille.locator('ul').first().locator('> li')
   const premiere = lignes.first()
-  const nom = (await premiere.locator('.font-bold').first().innerText()).trim()
+  const nom = (await premiere.locator('.font-bold').first().evaluate((e) => e.lastChild.textContent)).trim()
   const aDAutres = /\(\+\d+\)/.test(await premiere.innerText())
   await premiere.getByRole('button', { name: 'Plus tard' }).click()
   if (aDAutres) {
     // Le contact reste, représenté par son élément suivant ; le nombre ne bouge pas
     await expect(lignes).toHaveCount(n)
-    await expect(lignes.first().locator('.font-bold').first()).toHaveText(nom)
+    await expect(lignes.first().locator('.font-bold').first()).toContainText(nom)
   } else {
     await expect(lignes).toHaveCount(n - 1)
   }

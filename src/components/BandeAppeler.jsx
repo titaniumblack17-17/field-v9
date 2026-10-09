@@ -40,7 +40,9 @@ export default function BandeAppeler({ nombre, premier, onOuvrirFeuille, onOuvri
           {nombre}
         </span>
         <span className="flex-1 min-w-0">
-          <span className="block text-xs text-texte-doux">À appeler</span>
+          <span className="block text-xs text-texte-doux">
+            À appeler · {nombre} contact{nombre > 1 ? 's' : ''}
+          </span>
           <span className="block truncate">
             <span className="text-[15px] font-bold text-texte">{nomClient(premier.dossier.clients) ?? '—'}</span>
             {premier.libelle && <span className="text-xs text-texte-doux"> · {premier.libelle}</span>}

@@ -1381,7 +1381,15 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
                       </span>
                     )}
                     <span className="block text-[15px] font-bold text-texte truncate">
+                      <span className="inline-block align-middle text-[10px] font-semibold uppercase tracking-wide text-alerte bg-fond rounded px-1.5 py-0.5 mr-1.5">
+                        {TAG_LABELS[item.type]}
+                      </span>
                       {nomClient(item.dossier.clients) ?? '—'}
+                    </span>
+                    <span className="block text-xs text-alerte font-medium truncate">
+                      {item.joursRetard > 0
+                        ? `En retard de ${item.joursRetard} jour${item.joursRetard > 1 ? 's' : ''}`
+                        : "À traiter aujourd'hui"}
                     </span>
                     <span className="block text-xs text-texte-doux truncate">
                       {item.libelle}
