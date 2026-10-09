@@ -687,3 +687,13 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
 - Un devis déposé sur une **fiche client** (hors dossier) n'est jamais analysé : Goual, Dahan, Laban (…020B) et Pagazani sont dans ce cas. À rattacher à leur dossier pour être lus.
 - Tests de parcours : `npm run e2e` (Playwright, devDependency, viewport 390x844). Ils créent un client `ZZTEST-E2E` sur la base réelle et le suppriment à la fin.
 - En attente de la maquette `docs/maquette-board.html` (absente du dépôt) pour la bande « À appeler » et les pastilles « En attente » (sous-point d).
+
+### Complément 2 (phase 1)
+
+- Montant « à chiffrer » : migration `20261009_montant_a_chiffrer.sql` (appliquée). Quand le dernier devis chiffré d'un dossier est retiré (retenue annulée, changement de type, suppression), `montant_estime` passe à NULL. Seul ce retrait déclenche la remise à vide (variable de session `field.vider_si_vide` posée par `sur_changement_devis`) : déposer une photo ou un PDF non chiffré laisse la saisie manuelle intacte. Retour arrière : `supabase/rollback/20261009_montant_a_chiffrer_rollback.sql`.
+- `devis-montant-v2` accepte `dryRun: true` (lit sans écrire, y compris pour un PDF encore sur une fiche client). Les erreurs d'analyse (PDF illisible…) s'écrivent toutefois même en dry-run.
+- Rattachés à leur dossier unique : Goual, Dahan, Pagazani (leur `montant_estime` égalait déjà une des offres lues). **Laban …020B reste sur la fiche client** : 4 offres (20 675 – 28 115 €) alors que le dossier porte 13 472 € (révision C déjà chiffrée).
+- Un devis dont `montant_estime` est vide s'affiche « À chiffrer » (carte Pipeline, fiche client, champ du dossier) pour les projets, jamais 0 €.
+- Catalogue : plus aucun chemin dans l'interface (la pilule de nav a été retirée) ; seule la route `catalogue` de App.jsx existe.
+- Synchro Todoist : `todoist-rappel` a répondu 429 (limite de débit Todoist) à tous les essais du 09/10 en soirée ; non vérifiée de bout en bout.
+- `npm run e2e` : e2e/phase1.spec.js et e2e/smoke.spec.js.
