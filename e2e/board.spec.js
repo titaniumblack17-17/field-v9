@@ -213,3 +213,43 @@ test('« Plus tard » : n\'écarte que l\'élément concerné', async ({ page })
   await page.keyboard.press('Escape')
   await expect(page.getByText('Aussi à traiter').first()).toBeVisible()
 })
+
+test('compteurs du Board : actions = 1 priorité + « Aussi à traiter », contacts = bande', async ({ page }) => {
+  await accueil(page)
+  const ligne = await page.getByText(/actions? à traiter aujourd'hui/).innerText()
+  const [, T, C] = ligne.match(/(\d+) actions? à traiter aujourd'hui · (\d+) contacts? à appeler/)
+  const aussi = Number((await page.getByRole('heading', { name: /^Aussi à traiter · \d+/ }).innerText()).match(/(\d+)\s*$/)[1])
+  // La priorité du jour (Kahloun ici) est comptée : T = 1 + « Aussi à traiter »
+  expect(Number(T)).toBe(1 + aussi)
+  expect(Number(C)).toBe(Number((await bande(page).innerText()).match(/^\d+/)[0]))
+  expect(Number(C)).toBeLessThanOrEqual(Number(T))
+  // Lignes visibles + « Voir les N autres » = « Aussi à traiter »
+  const voir = page.getByRole('button', { name: /^Voir les \d+ autres/ })
+  const visibles = await page.locator('section', { hasText: 'Aussi à traiter' }).first().locator('ul > li').count()
+  const reste = (await voir.count()) ? Number((await voir.innerText()).match(/\d+/)[0]) : 0
+  expect(visibles + reste).toBe(aussi)
+  if (reste) {
+    await voir.click()
+    expect(await page.locator('section', { hasText: 'Aussi à traiter' }).first().locator('ul > li').count()).toBe(aussi)
+  }
+})
+
+for (const [nom, largeur, hauteur] of [['téléphone', 390, 844], ['ordinateur', 1280, 800]]) {
+  test(`grille des tuiles équilibrée (${nom})`, async ({ page }) => {
+    await page.setViewportSize({ width: largeur, height: hauteur })
+    await accueil(page)
+    const tuiles = page.locator('main .grid').first().locator('> button')
+    await expect(tuiles).toHaveCount(5)
+    const tops = []
+    for (let i = 0; i < 5; i++) tops.push(Math.round((await tuiles.nth(i).boundingBox()).y))
+    const parLigne = {}
+    for (const y of tops) parLigne[y] = (parLigne[y] ?? 0) + 1
+    expect(Object.values(parLigne).every((n) => n >= 2)).toBe(true)
+    await pasDeDebordement(page)
+    // Rien de tronqué dans les tuiles (contenu inchangé, lisible en entier)
+    const tronques = await tuiles.evaluateAll((ts) =>
+      ts.flatMap((t) => [...t.querySelectorAll('p')]).filter((p) => p.scrollWidth > p.clientWidth + 1).map((p) => p.textContent)
+    )
+    expect(tronques).toEqual([])
+  })
+}

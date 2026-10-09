@@ -206,11 +206,11 @@ function LigneNavigation({ titre, compte, urgent, onClick }) {
 
 // Tuile compacte de la grille 2x2 : un chiffre à lire d'un coup d'œil, pas de
 // détail — le détail, c'est le board et « Aussi à traiter » juste en dessous.
-function TuileKPI({ titre, valeur, sousTitre, urgent, onClick }) {
+function TuileKPI({ titre, valeur, sousTitre, urgent, onClick, className = '' }) {
   return (
     <button
       onClick={onClick}
-      className="bg-carte rounded-xl shadow-sm px-3 py-3 text-left active:scale-[0.98] transition"
+      className={`bg-carte rounded-xl shadow-sm px-3 py-3 text-left active:scale-[0.98] transition min-w-0 ${className}`}
     >
       <p className="text-xs text-texte-doux truncate">{titre}</p>
       <p className={`text-2xl font-bold tabular-nums mt-1 ${urgent ? 'text-alerte' : 'text-texte'}`}>{valeur}</p>
@@ -1127,39 +1127,42 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               </p>
             )}
 
-            <div ref={kpiRef} className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
+            <div ref={kpiRef} className="grid grid-cols-6 lg:grid-cols-5 gap-3 mt-2">
               <TuileKPI
+                className="col-span-2 lg:col-span-1"
                 titre="Dossiers actifs"
                 valeur={bilan.totalActifsTousTypes}
                 onClick={() => onPipeline()}
               />
               <TuileKPI
+                className="col-span-2 lg:col-span-1"
                 titre={`Objectif ${bilan.annee}`}
                 valeur={`${bilan.pourcentageObjectif} %`}
                 sousTitre={euros(bilan.signe)}
                 onClick={allerAObjectif}
               />
               <TuileKPI
+                className="col-span-2 lg:col-span-1"
                 titre="À traiter"
                 valeur={bilan.totalATraiter}
                 urgent={bilan.totalATraiter > 0}
                 onClick={allerAAussiATraiter}
               />
               <TuileKPI
+                className="col-span-3 lg:col-span-1"
                 titre="SAV ouverts"
                 valeur={bilan.savOuverts.length}
                 sousTitre={bilan.savEnRetard > 0 ? `dont ${bilan.savEnRetard} en retard` : null}
                 urgent={bilan.savEnRetard > 0}
                 onClick={() => onPipeline('sav')}
               />
-              <div className="col-span-2 lg:col-span-1 grid">
-                <TuileKPI
-                  titre="En attente"
-                  valeur={enAttente.length}
-                  sousTitre="un tiers doit répondre"
-                  onClick={() => setFeuille('attente')}
-                />
-              </div>
+              <TuileKPI
+                className="col-span-3 lg:col-span-1"
+                titre="En attente"
+                valeur={enAttente.length}
+                sousTitre="un tiers doit répondre"
+                onClick={() => setFeuille('attente')}
+              />
             </div>
 
             {/* Total remonté ici (retiré à côté du header « Aussi à
@@ -1168,7 +1171,8 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
                 l'ampleur de la soirée, avant même de croiser la carte
                 Priorité. */}
             <p className="text-center text-sm text-texte-doux mt-3">
-              {board.aussiATraiter.length} action{board.aussiATraiter.length > 1 ? 's' : ''} en attente aujourd'hui
+              {bilan.elementsUrgents.length} action{bilan.elementsUrgents.length > 1 ? 's' : ''} à traiter
+              aujourd'hui · {board.contacts.length} contact{board.contacts.length > 1 ? 's' : ''} à appeler
             </p>
 
             {board.prioriteJour && (
@@ -1181,7 +1185,8 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
             )}
 
             <section ref={aussiATraiterRef} className="mt-6 scroll-mt-32">
-              <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mb-2">Aussi à traiter</h2>
+              <h2 className="text-xs text-texte-faible uppercase tracking-wider px-1 mb-2">Aussi à traiter · {board.aussiATraiter.length}
+              </h2>
               {board.aussiATraiter.length === 0 ? (
                 <p className="text-texte-faible text-sm px-1">Rien d'autre en attente.</p>
               ) : (
