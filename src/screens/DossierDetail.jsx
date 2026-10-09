@@ -750,7 +750,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
               disabled={values.type === 'sav' && values.sous_garantie}
               value={values.type === 'sav' && values.sous_garantie ? '' : values.montant_estime ?? ''}
               onChange={setField('montant_estime')}
-              placeholder={values.type === 'sav' && values.sous_garantie ? 'Sous garantie' : '—'}
+              placeholder={values.type === 'sav' && values.sous_garantie ? 'Sous garantie' : values.type === 'projet' ? 'À chiffrer' : '—'}
               className="w-full text-texte outline-none bg-transparent placeholder:text-texte-fantome disabled:opacity-50"
             />
           </div>

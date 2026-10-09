@@ -111,6 +111,10 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
           Estimé : <span className="font-semibold text-texte">{dossier.montant_estime} €</span>
         </p>
       )}
+      {/* Un montant vide n'est pas 0 € : c'est un dossier de vente à chiffrer. */}
+      {dossier.montant_estime == null && dossier.type === 'projet' && (
+        <p className="text-[11px] text-alerte">À chiffrer</p>
+      )}
       {(() => {
         const r = etatRappel(dossier.rappel_date, dossier.rappel_heure)
         if (!r) return null

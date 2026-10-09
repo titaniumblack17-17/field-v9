@@ -48,8 +48,13 @@ Deno.serve(async (req) => {
   if (!cle) return json({ erreur: 'FIELD_EDGE_API_KEY absente des secrets.' }, 503)
 
   let fichierId: string
+  // dryRun : lit le devis et renvoie le résultat sans rien écrire — pour
+  // montrer à Bruce ce qui changerait avant d'y toucher.
+  let dryRun = false
   try {
-    fichierId = (await req.json()).fichierId
+    const corps = await req.json()
+    fichierId = corps.fichierId
+    dryRun = corps.dryRun === true
   } catch {
     return json({ erreur: 'Corps JSON invalide.' }, 400)
   }
@@ -73,7 +78,7 @@ Deno.serve(async (req) => {
   if (fichier.type_mime !== 'application/pdf') {
     return json({ erreur: 'Seuls les PDF sont analysés.', ignore: true }, 200)
   }
-  if (!fichier.dossier_id) {
+  if (!fichier.dossier_id && !dryRun) {
     return json({ ignore: true, raison: 'PDF hors dossier' }, 200)
   }
   if ((fichier.taille ?? 0) > TAILLE_MAX) {
@@ -201,6 +206,20 @@ Un montant faux alimenterait un suivi de chiffre d'affaires : dans le doute, ne 
       montant_ttc: nombre(o?.montant_ttc),
     }))
     .filter((o: { montant_ttc: number | null }) => o.montant_ttc !== null)
+
+  if (dryRun) {
+    return json({
+      dryRun: true,
+      montant_ttc: ttc,
+      montant_ht: ht,
+      offres,
+      incertitude_ht_ttc: incertain,
+      reference: lu.reference ?? null,
+      extrait: lu.extrait ?? null,
+      page: lu.page ?? null,
+      doute: lu.doute ?? null,
+    })
+  }
 
   const maintenant = new Date().toISOString()
   const commun = {
