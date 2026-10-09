@@ -26,6 +26,8 @@ import {
   styleDossier,
   joursDevisSansReponse,
   joursEnAttente,
+  joursDepuisStatut,
+  estEnAttente,
   SEUIL_DEVIS_SANS_REPONSE_JOURS,
 } from '../constants/dossiers'
 
@@ -931,9 +933,10 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
     const aussiATraiter = bilan.elementsUrgents.filter((e) => e.cle !== prioriteJour?.cle)
     // Un contact (= un dossier) ne figure qu'une fois dans la feuille « À
     // appeler », même s'il porte plusieurs éléments urgents (deux tâches, un
-    // rappel et un devis…) : la première ligne l'emporte, les autres sont
-    // comptées dans son motif. « Aussi à traiter », dans la feuille, ne répète
-    // pas les dossiers déjà listés.
+    // rappel et un devis…) : son premier élément non ignoré le représente, les
+    // autres sont comptés dans son motif. « Plus tard » n'écarte que l'élément
+    // représenté : le suivant du même dossier prend alors la place.
+    // « Aussi à traiter », dans la feuille, ne répète pas les dossiers listés.
     const contacts = []
     const parDossier = new Map()
     for (const e of disponibles) {
@@ -949,13 +952,13 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
     return { prioriteJour, aussiATraiter, disponibles, contacts, aussiHorsContacts }
   }, [bilan.elementsUrgents, ignores])
 
-  // Dossiers au statut « En attente » (un SAV qui patiente sur un tiers) : la
+  // Dossiers « en attente » (bloque_par renseigné, statut non terminal) : la
   // liste derrière la tuile du même nom, la plus longue attente en tête.
   const enAttente = useMemo(
     () =>
       dossiers
-        .filter((d) => d.statut === 'en_attente' && joursEnAttente(d) != null)
-        .sort((a, b) => joursEnAttente(b) - joursEnAttente(a)),
+        .filter(estEnAttente)
+        .sort((a, b) => (joursEnAttente(b) ?? joursDepuisStatut(b) ?? 0) - (joursEnAttente(a) ?? joursDepuisStatut(a) ?? 0)),
     [dossiers]
   )
 
@@ -1386,7 +1389,7 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
                     </span>
                   </button>
                   <button
-                    onClick={() => [item, ...item.autres].forEach((e) => plusTard(e.cle))}
+                    onClick={() => plusTard(item.cle)}
                     className="flex-shrink-0 h-11 px-2 text-xs text-texte-doux"
                   >
                     Plus tard

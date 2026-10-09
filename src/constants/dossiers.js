@@ -153,6 +153,24 @@ export const joursEnAttente = (d) => {
   return Math.floor((Date.now() - new Date(d.statut_changed_at).getTime()) / 86_400_000)
 }
 
+// Statuts de fin de vie : un dossier qui n'a plus rien à attendre.
+export const STATUTS_TERMINAUX = ['termine', 'clos', 'solde', 'perdu']
+
+// « En attente » au sens de la tuile et des pastilles ⏳ du Board : tout dossier
+// dont `bloque_par` est renseigné (motif structuré ou texte libre) et qui n'est
+// pas terminé. Distinct de `joursEnAttente` (à qui la balle sur un devis ou un
+// SAV), qui reste inchangé.
+export const estEnAttente = (d) =>
+  Boolean((d?.bloque_par ?? '').trim()) && !STATUTS_TERMINAUX.includes(d.statut)
+
+// Jours depuis le dernier changement de statut, pour tout dossier (null sans
+// horodatage). Sert à dater l'attente d'un dossier qui n'est pas « en_attente »
+// mais porte un bloque_par.
+export const joursDepuisStatut = (d) =>
+  d?.statut_changed_at
+    ? Math.floor((Date.now() - new Date(d.statut_changed_at).getTime()) / 86_400_000)
+    : null
+
 // Pré-seuil : l'attente commence à traîner, une relance ne ferait pas de mal,
 // mais ce n'est pas encore l'alerte franche de SEUIL_DEVIS_SANS_REPONSE_JOURS
 // (30 j, seuil déjà utilisé ailleurs, réemployé tel quel pour le rouge plutôt

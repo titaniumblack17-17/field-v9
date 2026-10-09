@@ -1,27 +1,22 @@
 import React from 'react'
-import { joursEnAttente, MOTIFS_ATTENTE_SAV_LABELS } from '../constants/dossiers'
+import { estEnAttente, joursEnAttente, joursDepuisStatut, MOTIFS_ATTENTE_SAV_LABELS } from '../constants/dossiers'
 
 /**
- * « À qui la balle » : pastille « ⏳ <motif> · N j » sur un dossier qui attend
- * un tiers (SAV en attente, devis envoyé ou relancé). Rien si le dossier n'est
- * pas au statut En attente. Mêmes données qu'avant : `bloque_par` pour le motif d'un SAV,
- * `joursEnAttente` pour la durée.
+ * Pastille « ⏳ <bloque_par> · N j » : un dossier dont `bloque_par` est renseigné
+ * et qui n'est pas terminé. Le motif structuré d'un SAV est traduit en libellé ;
+ * un texte libre s'affiche tel quel (tronqué par la largeur). Rien sinon.
  */
 export default function PastilleAttente({ dossier, className = '' }) {
-  // Seulement le statut « En attente » : un dossier « nouveau » qui porte un
-  // bloque_par n'en reçoit pas, et un devis envoyé n'est pas « en attente ».
-  if (dossier.statut !== 'en_attente') return null
-  const jours = joursEnAttente(dossier)
-  if (jours == null) return null
-  const motif =
-    dossier.type === 'sav'
-      ? MOTIFS_ATTENTE_SAV_LABELS[dossier.bloque_par] ?? dossier.bloque_par ?? 'motif à préciser'
-      : 'réponse client'
+  if (!estEnAttente(dossier)) return null
+  const jours = joursEnAttente(dossier) ?? joursDepuisStatut(dossier)
+  const brut = dossier.bloque_par.trim()
+  const motif = MOTIFS_ATTENTE_SAV_LABELS[brut] ?? brut
   return (
     <span
       className={`inline-block max-w-full truncate align-middle bg-fond text-alerte text-[11px] font-bold rounded-lg px-[9px] py-[3px] leading-tight ${className}`}
     >
-      ⏳ {motif} · {jours} j
+      ⏳ {motif}
+      {jours != null && ` · ${jours} j`}
     </span>
   )
 }

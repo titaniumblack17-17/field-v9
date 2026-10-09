@@ -707,3 +707,10 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
 - `PastilleAttente` (« ⏳ motif · N j ») sur les cartes Pipeline et les dossiers de la fiche client.
 - Les couleurs de la spec correspondent aux tokens existants (carte #1B1D22, accent-vif #22D3EE, alerte, fond) : aucune nouvelle couleur.
 - Todoist : la limite de débit (429, `retry_after` ≈ 21 min) persiste ; la tâche de test `6hj4XM476rG7XGvw` (« ZZTEST-SMOKE rappel de test — à supprimer ») est restée dans Todoist faute de pouvoir la supprimer.
+
+### Correctifs 2 (phase 1) — règle : on ne retire aucune fonction
+
+- Pipeline : la pastille « ⏳ réponse client — N j » (Devis envoyé / Relance, `joursEnAttente` + `classeAttente`) est restaurée à l'identique ; elle ne compte pour rien dans la tuile « En attente ».
+- Tuile et pastilles ⏳ du Board : `estEnAttente` (constants/dossiers.js) = `bloque_par` renseigné et statut hors termine/clos/solde/perdu. Texte libre affiché tel quel, tronqué ; jours = `joursEnAttente`, sinon jours depuis `statut_changed_at`. Aujourd'hui : 3 (Youssef, Fellous, Kahloun).
+- « Plus tard » : n'écarte à nouveau que l'élément concerné ; le contact reste représenté par son élément suivant.
+- Écarts connus avec la carte « Priorité du jour » d'avant la bande (non corrigés, à décider) : plus d'étiquette de type (SAV / Rappel / Tâche…), plus de ligne « En retard de N jours / À traiter aujourd'hui », un tap de plus pour ouvrir le dossier (la bande ouvre la feuille), « Plus tard » désormais dans la feuille seulement.

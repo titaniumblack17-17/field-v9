@@ -113,8 +113,11 @@ test('tuile « En attente » : liste filtrée avec pastilles, contact, retour', 
   await accueil(page)
   const tuile = page.getByRole('button', { name: /^En attente\s*\d+/ })
   const n = Number((await tuile.innerText()).match(/\d+/)[0])
-  // Uniquement le statut En attente (devis envoyés/relancés exclus)
-  const enAttenteBase = await lire('dossiers?statut=eq.en_attente&select=id')
+  // bloque_par renseigné et statut non terminal (devis envoyés/relancés exclus)
+  const TERMINAUX = ['termine', 'clos', 'solde', 'perdu']
+  const enAttenteBase = (await lire('dossiers?bloque_par=not.is.null&select=id,statut,bloque_par')).filter(
+    (d) => d.bloque_par.trim() && !TERMINAUX.includes(d.statut)
+  )
   expect(n).toBe(enAttenteBase.length)
   expect(n).toBeGreaterThan(0)
   await tuile.click()
@@ -123,6 +126,7 @@ test('tuile « En attente » : liste filtrée avec pastilles, contact, retour', 
   await expect(feuille.locator('ul > li')).toHaveCount(n)
   const pastilles = feuille.getByText(/⏳ .+ · \d+ j/)
   await expect(pastilles).toHaveCount(n)
+  await expect(feuille).toContainText('Kahloun')
   const style = await pastilles.first().evaluate((el) => {
     const c = getComputedStyle(el)
     return { bg: c.backgroundColor, fg: c.color, taille: c.fontSize, poids: c.fontWeight }
@@ -157,19 +161,48 @@ test('« N devis · M dossiers » : chiffres alignés sur la base', async ({ pag
   expect(problemes).toEqual([])
 })
 
-test('Pipeline : pastilles seulement sur le statut En attente', async ({ page }) => {
+test('Pipeline : pastille « réponse client » restaurée sur les devis, pastilles ⏳ sur bloque_par', async ({ page }) => {
   const problemes = surveiller(page)
-  const attendus = await lire('dossiers?statut=eq.en_attente&select=id')
+  const TERMINAUX = ['termine', 'clos', 'solde', 'perdu']
+  const attendus = (await lire('dossiers?bloque_par=not.is.null&select=id,statut,bloque_par')).filter(
+    (d) => d.bloque_par.trim() && !TERMINAUX.includes(d.statut)
+  )
   await accueil(page)
-  // Vue Projet : devis envoyés et relancés ne portent plus de pastille
+  // Vue Projet : « ⏳ réponse client — N j » sur Devis envoyé / Relance, comme avant
   await page.getByRole('button', { name: 'Pipeline', exact: true }).click()
   await page.waitForTimeout(800)
-  await expect(page.getByText(/⏳/)).toHaveCount(0)
+  await expect(page.getByText(/⏳ réponse client — \d+ j/).first()).toBeVisible()
+  expect(await page.getByText(/⏳ réponse client — \d+ j/).count()).toBe(
+    (await lire('dossiers?type=eq.projet&statut=in.(devis_envoye,relance)&select=id')).length
+  )
   await page.goBack()
-  // Vue SAV : une pastille par SAV en attente, aucune sur le SAV « nouveau »
+  // Vue SAV : une pastille par dossier dont bloque_par est renseigné (Kahloun compris)
   await page.getByRole('button', { name: /^SAV ouverts/ }).first().click()
   await page.waitForTimeout(800)
   await expect(page.getByText(/⏳ .+ · \d+ j/)).toHaveCount(attendus.length)
   await pasDeDebordement(page)
   expect(problemes).toEqual([])
+})
+
+test('« Plus tard » : n\'écarte que l\'élément concerné', async ({ page }) => {
+  await accueil(page)
+  const b = bande(page)
+  const n = Number((await b.innerText()).match(/^\d+/)[0])
+  await b.click()
+  const feuille = page.getByRole('dialog')
+  const lignes = feuille.locator('ul').first().locator('> li')
+  const premiere = lignes.first()
+  const nom = (await premiere.locator('.font-bold').first().innerText()).trim()
+  const aDAutres = /\(\+\d+\)/.test(await premiere.innerText())
+  await premiere.getByRole('button', { name: 'Plus tard' }).click()
+  if (aDAutres) {
+    // Le contact reste, représenté par son élément suivant ; le nombre ne bouge pas
+    await expect(lignes).toHaveCount(n)
+    await expect(lignes.first().locator('.font-bold').first()).toHaveText(nom)
+  } else {
+    await expect(lignes).toHaveCount(n - 1)
+  }
+  // L'élément ignoré reste dans « Aussi à traiter » du Board (comportement d'avant)
+  await page.keyboard.press('Escape')
+  await expect(page.getByText('Aussi à traiter').first()).toBeVisible()
 })
