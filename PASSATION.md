@@ -683,5 +683,7 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
 - Le montant d'un devis à offres exclusives reste vide tant que Bruce n'a pas retenu une offre (un tap) ; le déclencheur existant recalcule alors le dossier. Les offres ne s'additionnent jamais.
 - Retirer à un devis chiffré son statut de devis (changement de type) remet son `montant_ttc` à vide **mais ne remet pas `montant_estime` du dossier à zéro** : le déclencheur `recalculer_montant_dossier` laisse le montant en place quand plus aucun fichier n'est chiffré (comportement antérieur, valable aussi à la suppression d'un fichier).
 - Les deux textes « n'a pas été reconnu comme un devis » encore en base sur les CDC V3 (Antoun) et V4 (Sharif) ne sont pas réécrits (migration additive) ; l'écran ne montre l'erreur d'analyse que pour un devis.
-- La sonde réseau (`src/lib/reseau.js`) appelle `/rest/v1/` sans clé : 401 attendu, visible en console au retour du réseau.
+- La sonde réseau (`src/lib/reseau.js`) portait un 401 en console : elle envoie maintenant l'apikey vers `/rest/v1/clients?select=id&limit=1` (la racine `/rest/v1/` répond 401 même avec la clé publique).
+- Un devis déposé sur une **fiche client** (hors dossier) n'est jamais analysé : Goual, Dahan, Laban (…020B) et Pagazani sont dans ce cas. À rattacher à leur dossier pour être lus.
+- Tests de parcours : `npm run e2e` (Playwright, devDependency, viewport 390x844). Ils créent un client `ZZTEST-E2E` sur la base réelle et le suppriment à la fin.
 - En attente de la maquette `docs/maquette-board.html` (absente du dépôt) pour la bande « À appeler » et les pastilles « En attente » (sous-point d).
