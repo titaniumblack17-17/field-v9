@@ -14,6 +14,7 @@ import {
   estDevis,
   fourchette,
   libellePastille,
+  typeParNom,
   variantesDe,
 } from '../lib/documents'
 
@@ -212,8 +213,14 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
     setTypage(f.id)
   }
 
+  const majVersion = async (f) => {
+    const v = versionSaisie.trim()
+    if (!/^\d+$/.test(v) || Number(v) === f.version_doc) return
+    await ecrire(f, { version_doc: Number(v) })
+  }
+
   const changerType = async (f, type) => {
-    if (type === f.type_doc && type !== 'cdc') {
+    if (type === f.type_doc) {
       setTypage(null)
       return
     }
@@ -226,7 +233,9 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
       )
       if (!ok) return
     }
-    const version = type === 'cdc' && /^\d+$/.test(versionSaisie.trim()) ? Number(versionSaisie) : null
+    // La version d'un cahier des charges se lit dans son nom (« _V3 ») ; elle
+    // se corrige ensuite à la main si le nom ne la porte pas.
+    const version = type === 'cdc' ? typeParNom(f.nom).version_doc : null
     const champs = { type_doc: type, version_doc: version }
     if (type !== 'devis') {
       // Un cahier des charges ou un plan n'a rien à chiffrer : le montant et
@@ -415,7 +424,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                   }}
                 />
               ) : (
-                <button onClick={() => ouvrir(f)} className="w-full min-w-0 text-left">
+                <button onClick={() => ouvrir(f)} className="w-full min-w-0 min-h-11 text-left">
                 <p className="text-texte truncate">{f.nom}</p>
                 <p className="text-xs text-texte-faible">
                   {[lisible(f.taille), new Date(f.created_at).toLocaleDateString('fr-FR')]
@@ -497,7 +506,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                 {renommage !== f.id && !suitLaNomenclature(f.nom) && (
                   <button
                     onClick={() => setRenommage(f.id)}
-                    className="text-texte-fantome text-[11px] h-9 px-2 -mr-2 flex items-center"
+                    className="text-texte-fantome text-[11px] h-11 px-2 -mr-2 flex items-center"
                   >
                     Renommer
                   </button>
@@ -505,7 +514,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                 {dossierId && estDevis(f) && estPdf(f.type_mime) && !analyse.has(f.id) && (
                   <button
                     onClick={() => lireDevis(f)}
-                    className="text-accent text-[11px] font-medium h-9 px-2 -mr-2 flex items-center"
+                    className="text-accent text-[11px] font-medium h-11 px-2 -mr-2 flex items-center"
                   >
                     {f.analyse_at ? 'Relire' : 'Lire le devis'}
                   </button>
@@ -532,17 +541,20 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                       </button>
                     ))}
                   </div>
-                  <label className="flex items-center gap-2 mt-2 text-xs text-texte-doux">
-                    Version du cahier des charges
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min="1"
-                      value={versionSaisie}
-                      onChange={(e) => setVersionSaisie(e.target.value)}
-                      className="w-16 h-11 text-center bg-fond border border-separateur rounded-imbrique text-texte"
-                    />
-                  </label>
+                  {f.type_doc === 'cdc' && (
+                    <label className="flex items-center gap-2 mt-2 text-xs text-texte-doux">
+                      Version du cahier des charges
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        value={versionSaisie}
+                        onChange={(e) => setVersionSaisie(e.target.value)}
+                        onBlur={() => majVersion(f)}
+                        className="w-16 h-11 text-center bg-fond border border-separateur rounded-imbrique text-texte"
+                      />
+                    </label>
+                  )}
                 </div>
               )}
 
