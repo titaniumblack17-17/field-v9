@@ -702,7 +702,8 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
 
 - `BandeAppeler` remplace le bloc « Priorité du jour » (mêmes données : `board.prioriteJour`, `board.disponibles`, « Plus tard » inchangé). Le nombre affiché est celui des éléments non ignorés du tri unique ; la feuille liste chacun (le premier porte la mention « Priorité du jour ») puis la section « Aussi à traiter » entière. Le bouton « Appeler » est un lien `tel:` (même geste qu'avant) ; sans numéro, il ouvre la fiche.
 - `FeuilleBasse` : dialogue modal réutilisable (focus piégé, Échap, fond, « Fermer »). Servie aussi par la tuile « En attente » et par la ligne « Devis à trancher · N devis · M dossiers ».
-- « En attente » compte les dossiers pour lesquels `joursEnAttente` n'est pas nul : SAV en attente **et** devis envoyés/relancés (la spec parlait du statut En attente ; les projets en attente d'un client y sont inclus pour que la pastille s'y retrouve).
+- « En attente » (tuile et pastille ⏳) : uniquement `statut = en_attente`. Les devis envoyés/relancés n'en reçoivent plus ; le SAV « nouveau » Kahloun, qui porte un `bloque_par` en texte libre (« Diagnostic Joël en attente »), n'a pas de pastille.
+- Feuille « À appeler » : un contact = un dossier, une seule ligne (les autres éléments urgents du même dossier sont comptés « (+N) » dans le motif, « Plus tard » les ignore tous) ; « Aussi à traiter » dans la feuille ne répète pas ces dossiers.
 - `PastilleAttente` (« ⏳ motif · N j ») sur les cartes Pipeline et les dossiers de la fiche client.
 - Les couleurs de la spec correspondent aux tokens existants (carte #1B1D22, accent-vif #22D3EE, alerte, fond) : aucune nouvelle couleur.
 - Todoist : la limite de débit (429, `retry_after` ≈ 21 min) persiste ; la tâche de test `6hj4XM476rG7XGvw` (« ZZTEST-SMOKE rappel de test — à supprimer ») est restée dans Todoist faute de pouvoir la supprimer.

@@ -4,10 +4,13 @@ import { joursEnAttente, MOTIFS_ATTENTE_SAV_LABELS } from '../constants/dossiers
 /**
  * « À qui la balle » : pastille « ⏳ <motif> · N j » sur un dossier qui attend
  * un tiers (SAV en attente, devis envoyé ou relancé). Rien si le dossier n'est
- * pas en attente. Mêmes données qu'avant : `bloque_par` pour le motif d'un SAV,
+ * pas au statut En attente. Mêmes données qu'avant : `bloque_par` pour le motif d'un SAV,
  * `joursEnAttente` pour la durée.
  */
 export default function PastilleAttente({ dossier, className = '' }) {
+  // Seulement le statut « En attente » : un dossier « nouveau » qui porte un
+  // bloque_par n'en reçoit pas, et un devis envoyé n'est pas « en attente ».
+  if (dossier.statut !== 'en_attente') return null
   const jours = joursEnAttente(dossier)
   if (jours == null) return null
   const motif =

@@ -929,15 +929,32 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
     const disponibles = bilan.elementsUrgents.filter((e) => !ignores.has(e.cle))
     const prioriteJour = disponibles[0] ?? null
     const aussiATraiter = bilan.elementsUrgents.filter((e) => e.cle !== prioriteJour?.cle)
-    return { prioriteJour, aussiATraiter, disponibles }
+    // Un contact (= un dossier) ne figure qu'une fois dans la feuille « À
+    // appeler », même s'il porte plusieurs éléments urgents (deux tâches, un
+    // rappel et un devis…) : la première ligne l'emporte, les autres sont
+    // comptées dans son motif. « Aussi à traiter », dans la feuille, ne répète
+    // pas les dossiers déjà listés.
+    const contacts = []
+    const parDossier = new Map()
+    for (const e of disponibles) {
+      const deja = parDossier.get(e.dossier.id)
+      if (deja) deja.autres.push(e)
+      else {
+        const c = { ...e, autres: [] }
+        parDossier.set(e.dossier.id, c)
+        contacts.push(c)
+      }
+    }
+    const aussiHorsContacts = aussiATraiter.filter((e) => !parDossier.has(e.dossier.id))
+    return { prioriteJour, aussiATraiter, disponibles, contacts, aussiHorsContacts }
   }, [bilan.elementsUrgents, ignores])
 
-  // Dossiers qui attendent un tiers (SAV en attente, devis envoyé ou relancé) :
-  // la liste derrière la tuile « En attente », la plus longue attente en tête.
+  // Dossiers au statut « En attente » (un SAV qui patiente sur un tiers) : la
+  // liste derrière la tuile du même nom, la plus longue attente en tête.
   const enAttente = useMemo(
     () =>
       dossiers
-        .filter((d) => joursEnAttente(d) != null)
+        .filter((d) => d.statut === 'en_attente' && joursEnAttente(d) != null)
         .sort((a, b) => joursEnAttente(b) - joursEnAttente(a)),
     [dossiers]
   )
@@ -1153,7 +1170,7 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
 
             {board.prioriteJour && (
               <BandeAppeler
-                nombre={board.disponibles.length}
+                nombre={board.contacts.length}
                 premier={board.prioriteJour}
                 onOuvrirFeuille={() => setFeuille('appeler')}
                 onOuvrirDossier={onOpenDossier}
@@ -1341,12 +1358,12 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
         )}
       </main>
       {feuille === 'appeler' && (
-        <FeuilleBasse titre={`À appeler · ${board.disponibles.length}`} onFermer={fermerFeuille}>
-          {board.disponibles.length === 0 ? (
+        <FeuilleBasse titre={`À appeler · ${board.contacts.length}`} onFermer={fermerFeuille}>
+          {board.contacts.length === 0 ? (
             <p className="text-texte-faible text-sm py-4">Rien à appeler.</p>
           ) : (
             <ul className="divide-y divide-separateur">
-              {board.disponibles.map((item) => (
+              {board.contacts.map((item) => (
                 <li key={item.cle} className="flex items-center gap-2 min-h-14 py-1">
                   <button
                     onClick={() => {
@@ -1363,10 +1380,13 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
                     <span className="block text-[15px] font-bold text-texte truncate">
                       {nomClient(item.dossier.clients) ?? '—'}
                     </span>
-                    <span className="block text-xs text-texte-doux truncate">{item.libelle}</span>
+                    <span className="block text-xs text-texte-doux truncate">
+                      {item.libelle}
+                      {item.autres.length > 0 && ` (+${item.autres.length})`}
+                    </span>
                   </button>
                   <button
-                    onClick={() => plusTard(item.cle)}
+                    onClick={() => [item, ...item.autres].forEach((e) => plusTard(e.cle))}
                     className="flex-shrink-0 h-11 px-2 text-xs text-texte-doux"
                   >
                     Plus tard
@@ -1383,10 +1403,10 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               ))}
             </ul>
           )}
-          {board.aussiATraiter.length > 0 && (
+          {board.aussiHorsContacts.length > 0 && (
             <section className="mt-5">
               <h3 className="text-xs text-texte-faible uppercase tracking-wider px-1 mb-2">Aussi à traiter</h3>
-              <ul className="space-y-2">{lignesAussi(board.aussiATraiter, fermerFeuille)}</ul>
+              <ul className="space-y-2">{lignesAussi(board.aussiHorsContacts, fermerFeuille)}</ul>
             </section>
           )}
         </FeuilleBasse>

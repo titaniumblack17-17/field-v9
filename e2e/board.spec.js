@@ -69,6 +69,18 @@ test('bande « À appeler » : gabarit, feuille, fermetures, focus, contact', as
   expect([Math.round(bo.width), Math.round(bo.height)]).toEqual([88, 44])
   await expect(feuille.getByText('Priorité du jour')).toBeVisible()
 
+  // Chaque contact une seule fois, et « Aussi à traiter » ne le répète pas
+  const noms = await lignes.locator('button').evaluateAll((bs) =>
+    bs.filter((b) => b.querySelector('.font-bold')).map((b) => b.querySelector('.font-bold').textContent.trim())
+  )
+  expect(noms.length).toBe(n)
+  expect(new Set(noms).size).toBe(n)
+  const aussi = feuille.locator('section ul > li')
+  if ((await aussi.count()) > 0) {
+    const texte = await feuille.locator('section').innerText()
+    for (const nom of noms) expect(texte).not.toContain(nom)
+  }
+
   // Focus piégé : 12 Tab ne sortent jamais de la feuille
   for (let i = 0; i < 12; i++) {
     await page.keyboard.press('Tab')
@@ -101,6 +113,9 @@ test('tuile « En attente » : liste filtrée avec pastilles, contact, retour', 
   await accueil(page)
   const tuile = page.getByRole('button', { name: /^En attente\s*\d+/ })
   const n = Number((await tuile.innerText()).match(/\d+/)[0])
+  // Uniquement le statut En attente (devis envoyés/relancés exclus)
+  const enAttenteBase = await lire('dossiers?statut=eq.en_attente&select=id')
+  expect(n).toBe(enAttenteBase.length)
   expect(n).toBeGreaterThan(0)
   await tuile.click()
   const feuille = page.getByRole('dialog')
@@ -142,11 +157,19 @@ test('« N devis · M dossiers » : chiffres alignés sur la base', async ({ pag
   expect(problemes).toEqual([])
 })
 
-test('Pipeline : pastilles « En attente » sur les cartes', async ({ page }) => {
+test('Pipeline : pastilles seulement sur le statut En attente', async ({ page }) => {
   const problemes = surveiller(page)
+  const attendus = await lire('dossiers?statut=eq.en_attente&select=id')
   await accueil(page)
+  // Vue Projet : devis envoyés et relancés ne portent plus de pastille
   await page.getByRole('button', { name: 'Pipeline', exact: true }).click()
-  await expect(page.getByText(/⏳ .+ · \d+ j/).first()).toBeVisible()
+  await page.waitForTimeout(800)
+  await expect(page.getByText(/⏳/)).toHaveCount(0)
+  await page.goBack()
+  // Vue SAV : une pastille par SAV en attente, aucune sur le SAV « nouveau »
+  await page.getByRole('button', { name: /^SAV ouverts/ }).first().click()
+  await page.waitForTimeout(800)
+  await expect(page.getByText(/⏳ .+ · \d+ j/)).toHaveCount(attendus.length)
   await pasDeDebordement(page)
   expect(problemes).toEqual([])
 })
