@@ -675,3 +675,13 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
      Testé en navigateur avec les vraies données : chaque lien vérifié un
      par un (vue et étape actives confirmées par script), Anomalies
      détectées confirmée toujours accordéon.
+
+## Phase 1 — typage des documents (branche `feat/phase1-typage-documents`, non fusionnée)
+
+- `fichiers` gagne `type_doc` (devis/cdc/plan/autre), `version_doc`, `variantes` (jsonb `[{libelle, montant_ttc}]`), `variante_retenue` (index base 0) et `a_trancher_raison` (colonne ajoutée en plus des quatre demandées : motif d'un HT/TTC douteux). Migration additive : `supabase/migrations/20261009_fichiers_type_doc.sql` (déjà appliquée en base).
+- Analyse : nouvelle fonction Edge `devis-montant-v2` (déjà déployée). L'ancienne `devis-montant` reste en place, plus appelée par le front de cette branche. Une fois la branche fusionnée et vérifiée, `devis-montant` peut être retirée.
+- Le montant d'un devis à offres exclusives reste vide tant que Bruce n'a pas retenu une offre (un tap) ; le déclencheur existant recalcule alors le dossier. Les offres ne s'additionnent jamais.
+- Retirer à un devis chiffré son statut de devis (changement de type) remet son `montant_ttc` à vide **mais ne remet pas `montant_estime` du dossier à zéro** : le déclencheur `recalculer_montant_dossier` laisse le montant en place quand plus aucun fichier n'est chiffré (comportement antérieur, valable aussi à la suppression d'un fichier).
+- Les deux textes « n'a pas été reconnu comme un devis » encore en base sur les CDC V3 (Antoun) et V4 (Sharif) ne sont pas réécrits (migration additive) ; l'écran ne montre l'erreur d'analyse que pour un devis.
+- La sonde réseau (`src/lib/reseau.js`) appelle `/rest/v1/` sans clé : 401 attendu, visible en console au retour du réseau.
+- En attente de la maquette `docs/maquette-board.html` (absente du dépôt) pour la bande « À appeler » et les pastilles « En attente » (sous-point d).
