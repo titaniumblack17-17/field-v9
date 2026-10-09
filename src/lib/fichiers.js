@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { typeParNom } from './documents'
 
 export const TAILLE_MAX = 25 * 1024 * 1024
 
@@ -59,7 +60,14 @@ export async function envoyerFichier({ clientId, dossierId, fichier }) {
 
   const { data: ligne, error: errBase } = await supabase
     .from('fichiers')
-    .insert({ [colonne]: valeur, chemin, nom, taille: fichier.size, type_mime: fichier.type || null })
+    .insert({
+      [colonne]: valeur,
+      chemin,
+      nom,
+      taille: fichier.size,
+      type_mime: fichier.type || null,
+      ...typeParNom(nom),
+    })
     .select()
     .single()
 
