@@ -18,3 +18,5 @@ agency-agents/
 # jamais suivis par git, ce sont des fichiers métier de Bruce, pas du code.
 scripts/*.xlsx
 scripts/*.xls
+test-results/
+playwright-report/
