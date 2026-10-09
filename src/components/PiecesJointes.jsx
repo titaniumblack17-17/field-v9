@@ -11,6 +11,8 @@ import {
   cdcEnVigueur,
   champsRemiseATrancher,
   champsRetenue,
+  champsRetenueHt,
+  ttcDepuisHt,
   estDevis,
   fourchette,
   libellePastille,
@@ -59,6 +61,9 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   // cahier des charges en cours de saisie dans ce panneau.
   const [typage, setTypage] = useState(null)
   const [versionSaisie, setVersionSaisie] = useState('')
+  // Offre touchée sur un devis au HT/TTC douteux : { id, i, base } où base est
+  // null (question posée) ou 'ht' (calcul affiché, en attente de confirmation).
+  const [choixHt, setChoixHt] = useState(null)
   const [erreur, setErreur] = useState(null)
   const [confirmer, boîteConfirmation] = useConfirm()
   const champFichier = useRef(null)
@@ -193,14 +198,23 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   }
 
   // Un tap : l'offre retenue donne son montant au devis, donc au dossier.
-  const retenir = async (f, i) => {
-    const champs = champsRetenue(f, i)
+  // Si le devis laisse un doute HT/TTC, on pose d'abord la question.
+  const toucherOffre = (f, i) => {
+    if (f.a_trancher_raison) setChoixHt({ id: f.id, i, base: null })
+    else retenir(f, i)
+  }
+
+  const retenir = async (f, i, enHt = false) => {
+    const champs = enHt ? champsRetenueHt(f, i) : champsRetenue(f, i)
     if (!champs) return
+    setChoixHt(null)
     await ecrire(f, champs)
     const v = variantesDe(f)[i]
     const note = {
       dossier_id: dossierId,
-      texte: `Offre retenue dans « ${f.nom} » : ${v.libelle} — ${eur(v.montant_ttc)} € TTC.`,
+      texte: enHt
+        ? `Offre retenue dans « ${f.nom} » : ${v.libelle} — ${eur(v.montant_ttc)} € HT, soit ${eur(champs.montant_ttc)} € TTC (TVA 20 %).`
+        : `Offre retenue dans « ${f.nom} » : ${v.libelle} — ${eur(v.montant_ttc)} € TTC.`,
     }
     const { error } = await supabase.from('dossier_notes').insert(note)
     if (error) mettreEnFile({ type: 'insert', table: 'dossier_notes', payload: note })
@@ -572,7 +586,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                         {offres.map((v, i) => (
                           <li key={i}>
                             <button
-                              onClick={() => retenir(f, i)}
+                              onClick={() => toucherOffre(f, i)}
                               className="w-full min-h-11 px-3 py-2 rounded-imbrique border border-separateur bg-fond flex items-center justify-between gap-3 text-left"
                             >
                               <span className="text-sm text-texte min-w-0">{v.libelle}</span>
@@ -583,6 +597,46 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                           </li>
                         ))}
                       </ul>
+                      {choixHt?.id === f.id && (
+                        <div className="mt-2 rounded-imbrique border border-alerte/40 bg-alerte/10 px-3 py-3">
+                          <p className="text-sm text-texte">
+                            {choixHt.base === 'ht'
+                              ? `${eur(offres[choixHt.i].montant_ttc)} € HT × 1,20 = ${eur(ttcDepuisHt(offres[choixHt.i].montant_ttc))} € TTC`
+                              : `Ce montant est HT ou TTC ? ${offres[choixHt.i].libelle} — ${eur(offres[choixHt.i].montant_ttc)} €`}
+                          </p>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {choixHt.base === 'ht' ? (
+                              <button
+                                onClick={() => retenir(f, choixHt.i, true)}
+                                className="h-11 px-4 rounded-full text-sm bg-accent text-white"
+                              >
+                                Confirmer {eur(ttcDepuisHt(offres[choixHt.i].montant_ttc))} € TTC
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => setChoixHt({ ...choixHt, base: 'ht' })}
+                                  className="h-11 px-5 rounded-full text-sm bg-fond text-texte border border-separateur"
+                                >
+                                  HT
+                                </button>
+                                <button
+                                  onClick={() => retenir(f, choixHt.i)}
+                                  className="h-11 px-5 rounded-full text-sm bg-fond text-texte border border-separateur"
+                                >
+                                  TTC
+                                </button>
+                              </>
+                            )}
+                            <button
+                              onClick={() => setChoixHt(null)}
+                              className="h-11 px-4 text-sm text-texte-doux"
+                            >
+                              Annuler
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </>
                   ) : null}
                   {f.a_trancher_raison && (

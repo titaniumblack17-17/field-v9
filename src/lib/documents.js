@@ -80,8 +80,30 @@ export function cdcEnVigueur(liste) {
 export function champsRetenue(f, i) {
   const v = variantesDe(f)[i]
   if (!v || typeof v.montant_ttc !== 'number') return null
-  return { variante_retenue: i, montant_ttc: v.montant_ttc, a_trancher_raison: null, analyse_erreur: null }
+  // Le motif de doute reste posé : si Bruce remet le devis à trancher, la
+  // question HT/TTC doit se reposer.
+  return { variante_retenue: i, montant_ttc: v.montant_ttc, analyse_erreur: null }
 }
 
 /** Remet le devis « à trancher » : l'offre retenue et le montant qui en venait sont retirés. */
 export const champsRemiseATrancher = () => ({ variante_retenue: null, montant_ttc: null })
+
+export const TAUX_TVA = 0.2
+
+/** TTC d'un montant HT (TVA 20 %), arrondi au centime. */
+export const ttcDepuisHt = (ht) => Math.round(ht * (1 + TAUX_TVA) * 100) / 100
+
+/**
+ * Quand le devis porte un doute HT/TTC (`a_trancher_raison`), le montant de
+ * l'offre est lu comme HT : il est rangé dans montant_ht et le TTC est calculé.
+ */
+export function champsRetenueHt(f, i) {
+  const v = variantesDe(f)[i]
+  if (!v || typeof v.montant_ttc !== 'number') return null
+  return {
+    variante_retenue: i,
+    montant_ht: v.montant_ttc,
+    montant_ttc: ttcDepuisHt(v.montant_ttc),
+    analyse_erreur: null,
+  }
+}
