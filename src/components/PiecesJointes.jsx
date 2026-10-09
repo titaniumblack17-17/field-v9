@@ -5,6 +5,19 @@ import { envoyerFichier, fichierColle } from '../lib/fichiers'
 import TexteModifiable from './TexteModifiable'
 import useConfirm from '../hooks/useConfirm'
 import Rubrique from './Rubrique'
+import {
+  TYPES_DOC,
+  aTrancher,
+  cdcEnVigueur,
+  champsRemiseATrancher,
+  champsRetenue,
+  estDevis,
+  fourchette,
+  libellePastille,
+  variantesDe,
+} from '../lib/documents'
+
+const eur = (n) => new Intl.NumberFormat('fr-FR').format(n)
 
 const lisible = (o) => {
   if (o == null) return ''
@@ -41,6 +54,10 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   // sur la ligne concernée.
   const [analyse, setAnalyse] = useState(() => new Set())
   const [renommage, setRenommage] = useState(null)
+  // Fichier dont le panneau « Changer le type » est ouvert, et la version de
+  // cahier des charges en cours de saisie dans ce panneau.
+  const [typage, setTypage] = useState(null)
+  const [versionSaisie, setVersionSaisie] = useState('')
   const [erreur, setErreur] = useState(null)
   const [confirmer, boîteConfirmation] = useConfirm()
   const champFichier = useRef(null)
@@ -49,7 +66,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   // Devis chiffrés en mode remplacement, du plus récent au plus ancien : le
   // premier est celui qui donne son montant au dossier.
   const remplacants = liste
-    .filter((f) => f.montant_ttc != null && !f.cumule)
+    .filter((f) => estDevis(f) && f.montant_ttc != null && !f.cumule)
     .sort((a, b) =>
       (b.date_devis ?? b.created_at.slice(0, 10)).localeCompare(
         a.date_devis ?? a.created_at.slice(0, 10)
@@ -108,7 +125,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
     }
     // Un devis déposé sur un dossier se lit tout de suite : c'est le moment où
     // le chiffre est utile, et le seul où l'on pense à le vérifier.
-    if (ligne && estPdf(fichier.type || null)) lireDevis(ligne)
+    if (ligne && estDevis(ligne) && estPdf(fichier.type || null)) lireDevis(ligne)
   }
 
   const envoyer = async (e) => {
@@ -137,9 +154,9 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   // Lecture du total TTC d'un devis. Réservée aux PDF d'un dossier : sur une
   // fiche client, un PDF n'appartient à aucun chiffrage.
   const lireDevis = async (fichier) => {
-    if (!dossierId || !estPdf(fichier.type_mime)) return
+    if (!dossierId || !estPdf(fichier.type_mime) || !estDevis(fichier)) return
     setAnalyse((cur) => new Set(cur).add(fichier.id))
-    const { error: err } = await supabase.functions.invoke('devis-montant', {
+    const { error: err } = await supabase.functions.invoke('devis-montant-v2', {
       body: { fichierId: fichier.id },
     })
     setAnalyse((cur) => {
@@ -152,19 +169,74 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
     else onMontantChange?.()
   }
 
-  // Pour un devis à variantes que le modèle refuse de trancher seul : le choix
-  // reste entre Bruce et le client, la saisie doit rester manuelle.
+  // Écriture d'un ou plusieurs champs d'un fichier : appliquée tout de suite à
+  // l'écran (hors-ligne, aucun événement temps réel ne reviendra), puis envoyée ;
+  // en cas d'échec — réseau coupé en pratique — elle part en file d'attente et
+  // sera rejouée au retour du réseau, jamais perdue.
+  const ecrire = async (f, champs) => {
+    setListe((cur) => cur.map((x) => (x.id === f.id ? { ...x, ...champs } : x)))
+    const { error } = await supabase.from('fichiers').update(champs).eq('id', f.id)
+    if (error) mettreEnFile({ type: 'update', table: 'fichiers', rowId: f.id, champs })
+    onMontantChange?.()
+  }
+
+  // Pour un devis que le modèle refuse de trancher seul : le choix reste entre
+  // Bruce et le client, la saisie doit rester manuelle.
   const saisirMontant = async (f, saisie) => {
     const nombre = saisie == null ? null : Number(String(saisie).replace(',', '.').replace(/\s/g, ''))
     if (saisie != null && (Number.isNaN(nombre) || nombre < 0)) {
       setErreur('Montant invalide.')
       return
     }
-    await supabase
-      .from('fichiers')
-      .update({ montant_ttc: nombre, analyse_erreur: null })
-      .eq('id', f.id)
-    onMontantChange?.()
+    await ecrire(f, { montant_ttc: nombre, analyse_erreur: null, a_trancher_raison: null })
+  }
+
+  // Un tap : l'offre retenue donne son montant au devis, donc au dossier.
+  const retenir = async (f, i) => {
+    const champs = champsRetenue(f, i)
+    if (!champs) return
+    await ecrire(f, champs)
+    const v = variantesDe(f)[i]
+    const note = {
+      dossier_id: dossierId,
+      texte: `Offre retenue dans « ${f.nom} » : ${v.libelle} — ${eur(v.montant_ttc)} € TTC.`,
+    }
+    const { error } = await supabase.from('dossier_notes').insert(note)
+    if (error) mettreEnFile({ type: 'insert', table: 'dossier_notes', payload: note })
+  }
+
+  const remettreATrancher = (f) => ecrire(f, champsRemiseATrancher())
+
+  const ouvrirTypage = (f) => {
+    setVersionSaisie(f.version_doc != null ? String(f.version_doc) : '')
+    setTypage(f.id)
+  }
+
+  const changerType = async (f, type) => {
+    if (type === f.type_doc && type !== 'cdc') {
+      setTypage(null)
+      return
+    }
+    // Sortir un devis chiffré de la catégorie « devis » retire son montant du
+    // dossier : ce n'est pas anodin, on le nomme avant de le faire.
+    if (estDevis(f) && type !== 'devis' && f.montant_ttc != null) {
+      const ok = await confirmer(
+        `« ${f.nom} » porte ${eur(f.montant_ttc)} € TTC, qui ne compteront plus dans le montant du dossier.`,
+        { titre: 'Ce document n’est plus un devis ?', confirmLabel: 'Changer le type' }
+      )
+      if (!ok) return
+    }
+    const version = type === 'cdc' && /^\d+$/.test(versionSaisie.trim()) ? Number(versionSaisie) : null
+    const champs = { type_doc: type, version_doc: version }
+    if (type !== 'devis') {
+      // Un cahier des charges ou un plan n'a rien à chiffrer : le montant et
+      // l'ancienne « erreur d'analyse » n'ont plus de sens ici.
+      Object.assign(champs, { montant_ttc: null, variante_retenue: null, a_trancher_raison: null, analyse_erreur: null })
+    }
+    setTypage(null)
+    await ecrire(f, champs)
+    // Devenu devis : on le lit tout de suite, comme à l'upload.
+    if (type === 'devis' && dossierId && estPdf(f.type_mime)) lireDevis({ ...f, ...champs })
   }
 
   const basculerCumul = async (f) => {
@@ -202,6 +274,12 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
     setListe((cur) => cur.filter((x) => x.id !== f.id))
   }
 
+  const nbATrancher = liste.filter(aTrancher).length
+  const cdcVigueur = cdcEnVigueur(liste)
+  const devisListe = liste.filter(estDevis)
+  const plans = liste.filter((f) => f.type_doc === 'plan')
+  const jour = (f) => (f ? new Date(f.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : null)
+
   return (
     <>
       {/* Hors de la Rubrique : le champ doit rester monté pour que le bouton
@@ -214,9 +292,9 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
         className="hidden"
       />
       <Rubrique
-        titre="Pièces jointes"
+        titre={dossierId ? 'Documents déposés' : 'Pièces jointes'}
         compte={liste.length}
-        forceOuvert={envoi}
+        forceOuvert={envoi || nbATrancher > 0}
         action={
           <button
             onClick={() => champFichier.current?.click()}
@@ -228,6 +306,56 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
         }
       >
       {erreur && <p className="text-erreur text-sm mb-2 px-1">{erreur}</p>}
+
+      {/* Les trois jalons documentaires d'un dossier, dans l'ordre où ils
+          arrivent : le cahier des charges cadre, le devis chiffre, le plan
+          matérialise. Le plus récent de chaque famille suffit ici. */}
+      {dossierId && liste.length > 0 && (
+        <div className="grid grid-cols-3 gap-2 mb-2" aria-label="Jalons du dossier">
+          {[
+            {
+              cle: 'cdc',
+              titre: 'Cahier des charges',
+              valeur: cdcVigueur ? libellePastille(cdcVigueur) : null,
+              detail: jour(cdcVigueur),
+            },
+            {
+              cle: 'devis',
+              titre: 'Devis',
+              valeur: devisListe.length
+                ? nbATrancher > 0
+                  ? `${nbATrancher} à trancher`
+                  : `${devisListe.length} devis`
+                : null,
+              detail: jour(devisListe[0]),
+              alerte: nbATrancher > 0,
+            },
+            {
+              cle: 'plan',
+              titre: 'Plan',
+              valeur: plans.length ? `${plans.length} plan${plans.length > 1 ? 's' : ''}` : null,
+              detail: jour(plans[0]),
+            },
+          ].map((j) => (
+            <div
+              key={j.cle}
+              className={`rounded-xl px-3 py-2 border ${
+                j.valeur ? 'bg-carte border-separateur' : 'border-dashed border-separateur'
+              }`}
+            >
+              <p className="text-[11px] text-texte-faible leading-tight">{j.titre}</p>
+              <p
+                className={`text-sm font-medium leading-snug mt-0.5 ${
+                  j.alerte ? 'text-alerte' : j.valeur ? 'text-texte' : 'text-texte-fantome'
+                }`}
+              >
+                {j.valeur ?? 'Aucun'}
+              </p>
+              {j.detail && <p className="text-[11px] text-texte-faible tabular-nums">{j.detail}</p>}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Champ toujours vide, jamais destiné à être lu : son seul rôle est
           d'être une cible focusable pour Cmd+V (Mac) ou le geste « Coller »
@@ -250,7 +378,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
         <div className="bg-alerte/10 border border-alerte/30 rounded-xl px-4 py-3 mb-2">
           <p className="text-sm text-texte">
             {remplacants.length} devis chiffrés se remplacent. Le plus récent fait foi :{' '}
-            {new Intl.NumberFormat('fr-FR').format(remplacants[0].montant_ttc)} € TTC.
+            {eur(remplacants[0].montant_ttc)} € TTC.
           </p>
           <p className="text-xs text-texte-doux mt-1">
             Cochez « devis complémentaire » sur ceux qui s'ajoutent au lieu de remplacer.
@@ -262,7 +390,12 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
         <p className="text-texte-faible text-sm px-1">Aucun document.</p>
       ) : (
         <ul className="space-y-2">
-          {liste.map((f) => (
+          {liste.map((f) => {
+            const offres = variantesDe(f)
+            const range = fourchette(f)
+            const doitTrancher = aTrancher(f)
+            const retenue = f.variante_retenue != null ? offres[f.variante_retenue] : null
+            return (
             <li key={f.id} className="bg-carte rounded-xl shadow-sm">
               <div className="px-4 py-3 flex items-center gap-3">
               <span className="text-lg flex-shrink-0" aria-hidden="true">
@@ -289,9 +422,9 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                     .filter(Boolean)
                     .join(' · ')}
                 </p>
-                {f.montant_ttc != null && (
+                {f.montant_ttc != null && estDevis(f) && (
                   <p className="text-sm text-texte font-medium mt-0.5 tabular-nums">
-                    {new Intl.NumberFormat('fr-FR').format(f.montant_ttc)} € TTC
+                    {eur(f.montant_ttc)} € TTC
                     {f.reference_devis ? (
                       <span className="text-xs text-texte-faible font-normal">
                         {' '}· devis {f.reference_devis}
@@ -299,15 +432,45 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                     ) : null}
                   </p>
                 )}
+                {doitTrancher && range && (
+                  <p className="text-sm text-alerte font-medium mt-0.5 tabular-nums">
+                    À trancher · {range.min === range.max ? eur(range.min) : `${eur(range.min)} – ${eur(range.max)}`} € TTC
+                  </p>
+                )}
                 {analyse.has(f.id) && (
                   <p className="text-xs text-texte-faible mt-0.5">Lecture du devis…</p>
                 )}
-                {!analyse.has(f.id) && f.analyse_erreur && (
+                {!analyse.has(f.id) && estDevis(f) && f.analyse_erreur && (
                   <p className="text-xs text-alerte mt-0.5">{f.analyse_erreur}</p>
                 )}
                 </button>
               )}
-              {f.montant_ttc == null && dossierId && estPdf(f.type_mime) && renommage !== f.id && (
+              {dossierId && renommage !== f.id && (
+                <div className="flex items-center gap-1 -ml-1">
+                  <button
+                    onClick={() => (typage === f.id ? setTypage(null) : ouvrirTypage(f))}
+                    aria-label={`Type de ${f.nom} : ${libellePastille(f)}. Changer le type`}
+                    aria-expanded={typage === f.id}
+                    className="h-11 px-1 inline-flex items-center"
+                  >
+                    <span
+                      className={`text-[11px] font-medium rounded-full px-2.5 py-1 leading-none ${
+                        f.type_doc === 'devis'
+                          ? 'bg-accent/15 text-accent'
+                          : f.type_doc === 'autre'
+                            ? 'bg-fond text-texte-faible border border-separateur'
+                            : 'bg-texte/10 text-texte'
+                      }`}
+                    >
+                      {libellePastille(f)} ▾
+                    </span>
+                  </button>
+                  {cdcVigueur?.id === f.id && liste.filter((x) => x.type_doc === 'cdc').length > 1 && (
+                    <span className="text-[11px] text-texte-doux">en vigueur</span>
+                  )}
+                </div>
+              )}
+              {estDevis(f) && f.montant_ttc == null && !doitTrancher && dossierId && estPdf(f.type_mime) && renommage !== f.id && (
                 <div onClick={(e) => e.stopPropagation()} className="mt-0.5">
                   <TexteModifiable
                     valeur={null}
@@ -339,7 +502,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                     Renommer
                   </button>
                 )}
-                {dossierId && estPdf(f.type_mime) && !analyse.has(f.id) && (
+                {dossierId && estDevis(f) && estPdf(f.type_mime) && !analyse.has(f.id) && (
                   <button
                     onClick={() => lireDevis(f)}
                     className="text-accent text-[11px] font-medium h-9 px-2 -mr-2 flex items-center"
@@ -349,7 +512,97 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                 )}
               </div>
               </div>
-              {f.montant_ttc != null && dossierId && (
+
+              {typage === f.id && (
+                <div className="px-4 pb-3 -mt-1">
+                  <p className="text-xs text-texte-faible mb-1.5">Type de document</p>
+                  <div className="flex flex-wrap gap-2">
+                    {TYPES_DOC.map(([valeur, libelle]) => (
+                      <button
+                        key={valeur}
+                        onClick={() => changerType(f, valeur)}
+                        aria-pressed={f.type_doc === valeur}
+                        className={`h-11 px-4 rounded-full text-sm border ${
+                          f.type_doc === valeur
+                            ? 'bg-accent text-white border-accent'
+                            : 'bg-fond text-texte border-separateur'
+                        }`}
+                      >
+                        {libelle}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="flex items-center gap-2 mt-2 text-xs text-texte-doux">
+                    Version du cahier des charges
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      value={versionSaisie}
+                      onChange={(e) => setVersionSaisie(e.target.value)}
+                      className="w-16 h-11 text-center bg-fond border border-separateur rounded-imbrique text-texte"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {doitTrancher && (
+                <div className="px-4 pb-3 -mt-1">
+                  {f.a_trancher_raison && (
+                    <p className="text-xs text-alerte mb-2">{f.a_trancher_raison}</p>
+                  )}
+                  {offres.length > 0 ? (
+                    <>
+                      <p className="text-xs text-texte-faible mb-1.5">
+                        Offres exclusives — retenez celle du client, elles ne s'additionnent pas
+                      </p>
+                      <ul className="space-y-1.5">
+                        {offres.map((v, i) => (
+                          <li key={i}>
+                            <button
+                              onClick={() => retenir(f, i)}
+                              className="w-full min-h-11 px-3 py-2 rounded-imbrique border border-separateur bg-fond flex items-center justify-between gap-3 text-left"
+                            >
+                              <span className="text-sm text-texte min-w-0">{v.libelle}</span>
+                              <span className="text-sm text-texte font-medium tabular-nums flex-shrink-0">
+                                {eur(v.montant_ttc)} €
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                  {f.a_trancher_raison && (
+                    <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+                      <TexteModifiable
+                        valeur={null}
+                        type="number"
+                        placeholder="Montant TTC en €"
+                        vide="Saisir le montant TTC à la main"
+                        className="text-sm text-accent font-medium"
+                        onEnregistrer={(v) => saisirMontant(f, v)}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {retenue && f.montant_ttc != null && (
+                <div className="px-4 pb-3 -mt-1 flex items-center justify-between gap-3">
+                  <p className="text-xs text-texte-doux min-w-0">
+                    Offre retenue : <span className="text-texte">{retenue.libelle}</span>
+                  </p>
+                  <button
+                    onClick={() => remettreATrancher(f)}
+                    className="text-accent text-xs font-medium h-11 px-2 -mr-2 flex-shrink-0"
+                  >
+                    Changer
+                  </button>
+                </div>
+              )}
+
+              {estDevis(f) && f.montant_ttc != null && dossierId && (
                 <label className="flex items-center gap-2 px-4 pb-3 -mt-1 cursor-pointer">
                   <input
                     type="checkbox"
@@ -363,7 +616,8 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                 </label>
               )}
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
 
