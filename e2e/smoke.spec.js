@@ -46,7 +46,11 @@ const surveiller = (page) => {
 test('Brief du soir : Priorité du jour, Aussi à traiter, rapport hebdo', async ({ page }) => {
   const problemes = surveiller(page)
   await page.goto('/')
-  await expect(page.getByText('Priorité du jour', { exact: false }).first()).toBeVisible()
+  // La carte « Priorité du jour » est devenue la bande « À appeler » ; son
+  // contenu reste accessible dans la feuille.
+  await page.getByRole('button', { name: /^\d+\s*À appeler/ }).click()
+  await expect(page.getByRole('dialog').getByText('Priorité du jour')).toBeVisible()
+  await page.keyboard.press('Escape')
   await expect(page.getByText('Aussi à traiter', { exact: false }).first()).toBeVisible()
   await page.getByRole('button', { name: /Voir les \d+ autres/ }).click()
   const rapport = page.getByRole('button', { name: /Rapport hebdo/ })
@@ -88,8 +92,8 @@ test('rappel : création, synchro Todoist, clôture', async ({ page }) => {
   await expect.poll(async () => (await rest('GET', `rappels?dossier_id=eq.${dossier.id}&select=todoist_task_id`))[0]?.todoist_task_id ?? null, { timeout: 30_000 }).not.toBeNull()
 
   await page.getByRole('button', { name: 'Marquer ce rappel comme fait' }).click()
-  const enregistrer = page.getByRole('button', { name: 'Enregistrer' })
-  if (await enregistrer.isVisible().catch(() => false)) await enregistrer.click()
+  const enregistrer = page.getByRole('button', { name: 'Valider' })
+  await enregistrer.click()
   await expect.poll(async () => (await rest('GET', `rappels?dossier_id=eq.${dossier.id}&select=fait_at`))[0]?.fait_at ?? null, { timeout: 20_000 }).not.toBeNull()
   expect(problemes).toEqual([])
 })

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import usePrompt from '../hooks/usePrompt'
 import { supabase } from '../lib/supabaseClient'
 import { lireAvecCache } from '../lib/cacheLecture'
@@ -14,6 +14,10 @@ import {
   aujourdhui as calculerAujourdhui,
 } from '../lib/rappel'
 import { nomClient } from '../lib/client'
+import { aTrancher } from '../lib/documents'
+import BandeAppeler, { BoutonAppeler } from '../components/BandeAppeler'
+import FeuilleBasse from '../components/FeuilleBasse'
+import PastilleAttente from '../components/PastilleAttente'
 import {
   ETAPES_PROJET,
   STATUTS_SAV_LABELS,
@@ -21,6 +25,7 @@ import {
   TYPE_LABELS,
   styleDossier,
   joursDevisSansReponse,
+  joursEnAttente,
   SEUIL_DEVIS_SANS_REPONSE_JOURS,
 } from '../constants/dossiers'
 
@@ -312,42 +317,6 @@ function CarteRapportHebdo({ rapport, ouverte, onToggle }) {
   )
 }
 
-function CartePriorite({ item, onOuvrir, onAppeler, onPlusTard }) {
-  return (
-    <section className="mt-4 bg-alerte/10 border border-alerte/40 rounded-xl px-4 py-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-alerte mb-2">Priorité du jour</p>
-      <button onClick={() => onOuvrir(item.dossier)} className="w-full text-left">
-        <p className="font-semibold text-texte truncate">
-          <span className="inline-block align-middle text-[10px] font-semibold uppercase tracking-wide text-alerte bg-carte rounded px-1.5 py-0.5 mr-1.5">
-            {TAG_LABELS[item.type]}
-          </span>
-          {nomClient(item.dossier.clients) ?? '—'}
-        </p>
-        <p className="text-sm text-alerte font-medium mt-1">
-          {item.joursRetard > 0
-            ? `En retard de ${item.joursRetard} jour${item.joursRetard > 1 ? 's' : ''}`
-            : "À traiter aujourd'hui"}
-        </p>
-        {item.libelle && <p className="text-sm text-texte-doux mt-0.5 truncate">{item.libelle}</p>}
-      </button>
-      <div className="flex gap-2 mt-3">
-        <button
-          onClick={() => onAppeler(item)}
-          className="flex-1 h-11 rounded-imbrique bg-accent text-white text-sm font-semibold"
-        >
-          Appeler
-        </button>
-        <button
-          onClick={() => onPlusTard(item.cle)}
-          className="flex-1 h-11 rounded-imbrique bg-carte text-texte-doux text-sm font-semibold"
-        >
-          Plus tard
-        </button>
-      </div>
-    </section>
-  )
-}
-
 export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPipeline, onCapture }) {
   const [dossiers, setDossiers] = useState([])
   // Sous-tâches de note en retard, tous dossiers confondus : chargées à part
@@ -359,6 +328,13 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
   const [erreur, setErreur] = useState(null)
   const [tentative, setTentative] = useState(0)
   const [demanderTexte, boîtePrompt] = usePrompt()
+  // Feuille du bas ouverte : 'appeler' (À appeler), 'attente' (dossiers en
+  // attente d'un tiers) ou 'trancher' (devis à départager), sinon null.
+  const [feuille, setFeuille] = useState(null)
+  const fermerFeuille = useCallback(() => setFeuille(null), [])
+  // Devis sans montant (offres à trancher, HT/TTC douteux) : lignes brutes de
+  // `fichiers`, rapprochées de leur dossier plus bas.
+  const [devisSansMontant, setDevisSansMontant] = useState([])
 
   // Écran d'entrée de l'app (depuis son passage en écran de démarrage) :
   // même secours hors-ligne que ClientList.jsx avait auparavant — sans lui,
@@ -493,15 +469,6 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
     if (item.type === 'sav') return savCloture(item.dossier)
   }
 
-  const appeler = (item) => {
-    const tel = item.dossier.clients?.telephone_portable || item.dossier.clients?.telephone_cabinet
-    if (tel) {
-      window.location.href = `tel:${tel}`
-    } else {
-      onOpenDossier(item.dossier)
-    }
-  }
-
   useEffect(() => {
     let actif = true
     setChargement(true)
@@ -573,6 +540,40 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
       supabase.removeChannel(canal)
     }
   }, [tentative])
+
+  useEffect(() => {
+    let actif = true
+    supabase
+      .from('fichiers')
+      .select('id, dossier_id, type_doc, montant_ttc, variantes, a_trancher_raison')
+      .eq('type_doc', 'devis')
+      .is('montant_ttc', null)
+      .not('dossier_id', 'is', null)
+      .then(({ data, error }) => {
+        if (actif && !error) setDevisSansMontant(data ?? [])
+      })
+      .catch(() => {})
+
+    // INSERT, UPDATE et DELETE : un devis retenu sort de la liste, un devis
+    // remis à trancher y revient, un devis supprimé disparaît.
+    const canal = supabase
+      .channel('brief-fichiers')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fichiers' }, (p) => {
+        setDevisSansMontant((cur) => {
+          if (p.eventType === 'DELETE') return cur.filter((f) => f.id !== p.old.id)
+          const f = p.new
+          const concerne = f.type_doc === 'devis' && f.montant_ttc == null && f.dossier_id
+          const sans = cur.filter((x) => x.id !== f.id)
+          return concerne ? [...sans, f] : sans
+        })
+      })
+      .subscribe()
+
+    return () => {
+      actif = false
+      supabase.removeChannel(canal)
+    }
+  }, [])
 
   useEffect(() => {
     let actif = true
@@ -928,8 +929,29 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
     const disponibles = bilan.elementsUrgents.filter((e) => !ignores.has(e.cle))
     const prioriteJour = disponibles[0] ?? null
     const aussiATraiter = bilan.elementsUrgents.filter((e) => e.cle !== prioriteJour?.cle)
-    return { prioriteJour, aussiATraiter }
+    return { prioriteJour, aussiATraiter, disponibles }
   }, [bilan.elementsUrgents, ignores])
+
+  // Dossiers qui attendent un tiers (SAV en attente, devis envoyé ou relancé) :
+  // la liste derrière la tuile « En attente », la plus longue attente en tête.
+  const enAttente = useMemo(
+    () =>
+      dossiers
+        .filter((d) => joursEnAttente(d) != null)
+        .sort((a, b) => joursEnAttente(b) - joursEnAttente(a)),
+    [dossiers]
+  )
+
+  // Devis à trancher : « N devis · M dossiers » (un dossier peut en porter deux).
+  const aTrancherPar = useMemo(() => {
+    const devis = devisSansMontant.filter(aTrancher)
+    const parDossier = new Map()
+    for (const f of devis) parDossier.set(f.dossier_id, (parDossier.get(f.dossier_id) ?? 0) + 1)
+    const lignes = [...parDossier.entries()]
+      .map(([id, n]) => ({ dossier: dossiers.find((d) => d.id === id), n }))
+      .filter((l) => l.dossier)
+    return { nbDevis: devis.length, nbDossiers: parDossier.size, lignes }
+  }, [devisSansMontant, dossiers])
 
   // Retour au tri continu unique (le sous-groupement temporel En retard/
   // Aujourd'hui/Cette semaine a été retiré le 01/10) : `board.aussiATraiter`
@@ -956,6 +978,25 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
       synchroniserTache(t.id).finally(() => syncTacheEnCours.current.delete(t.id))
     }
   }, [bilan.tachesEnRetard])
+
+  // Liste « Aussi à traiter » : la même sur le Board (repliée après 3 lignes) et
+  // dans la feuille « À appeler » (entière).
+  const lignesAussi = (items, fermer) =>
+    items.map((item) => (
+      <Ligne
+        key={item.cle}
+        dossier={item.dossier}
+        onOuvrir={(d) => {
+          fermer?.()
+          onOpenDossier(d)
+        }}
+        tag={item.type}
+        ligneSecondaire={item.libelle}
+        droite={item.droite}
+        alerte
+        onFait={item.type === 'devis' ? undefined : () => traiterElement(item)}
+      />
+    ))
 
   const couvertureFaible =
     bilan.signesSansMontant > 0 || (bilan.totalActifs > 0 && bilan.chiffres < bilan.totalActifs / 2)
@@ -1091,6 +1132,14 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
                 urgent={bilan.savEnRetard > 0}
                 onClick={() => onPipeline('sav')}
               />
+              <div className="col-span-2 lg:col-span-1 grid">
+                <TuileKPI
+                  titre="En attente"
+                  valeur={enAttente.length}
+                  sousTitre="un tiers doit répondre"
+                  onClick={() => setFeuille('attente')}
+                />
+              </div>
             </div>
 
             {/* Total remonté ici (retiré à côté du header « Aussi à
@@ -1103,11 +1152,11 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
             </p>
 
             {board.prioriteJour && (
-              <CartePriorite
-                item={board.prioriteJour}
-                onOuvrir={onOpenDossier}
-                onAppeler={appeler}
-                onPlusTard={plusTard}
+              <BandeAppeler
+                nombre={board.disponibles.length}
+                premier={board.prioriteJour}
+                onOuvrirFeuille={() => setFeuille('appeler')}
+                onOuvrirDossier={onOpenDossier}
               />
             )}
 
@@ -1118,21 +1167,9 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
               ) : (
                 <>
                   <ul className="space-y-2">
-                    {(aussiATraiterDeplie
-                      ? board.aussiATraiter
-                      : board.aussiATraiter.slice(0, LIMITE_AUSSI_A_TRAITER)
-                    ).map((item) => (
-                      <Ligne
-                        key={item.cle}
-                        dossier={item.dossier}
-                        onOuvrir={onOpenDossier}
-                        tag={item.type}
-                        ligneSecondaire={item.libelle}
-                        droite={item.droite}
-                        alerte
-                        onFait={item.type === 'devis' ? undefined : () => traiterElement(item)}
-                      />
-                    ))}
+                    {lignesAussi(
+                      aussiATraiterDeplie ? board.aussiATraiter : board.aussiATraiter.slice(0, LIMITE_AUSSI_A_TRAITER)
+                    )}
                   </ul>
                   {!aussiATraiterDeplie && board.aussiATraiter.length > LIMITE_AUSSI_A_TRAITER && (
                     <button
@@ -1203,6 +1240,19 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
                 urgent={bilan.aRappeler.length > 0}
                 onClick={allerAAussiATraiter}
               />
+              {aTrancherPar.nbDevis > 0 && (
+                <button
+                  onClick={() => setFeuille('trancher')}
+                  className="w-full flex items-center justify-between gap-3 bg-carte rounded-xl px-4 min-h-12 text-left active:scale-[0.99] transition"
+                >
+                  <span className="text-texte">Devis à trancher</span>
+                  <span className="flex items-center gap-2 text-alerte tabular-nums">
+                    {aTrancherPar.nbDevis} devis · {aTrancherPar.nbDossiers} dossier
+                    {aTrancherPar.nbDossiers > 1 ? 's' : ''}
+                    <span className="text-texte-faible" aria-hidden="true">›</span>
+                  </span>
+                </button>
+              )}
               <LigneNavigation
                 titre="Tâches en retard"
                 compte={bilan.tachesEnRetard.length}
@@ -1290,6 +1340,112 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
           </>
         )}
       </main>
+      {feuille === 'appeler' && (
+        <FeuilleBasse titre={`À appeler · ${board.disponibles.length}`} onFermer={fermerFeuille}>
+          {board.disponibles.length === 0 ? (
+            <p className="text-texte-faible text-sm py-4">Rien à appeler.</p>
+          ) : (
+            <ul className="divide-y divide-separateur">
+              {board.disponibles.map((item) => (
+                <li key={item.cle} className="flex items-center gap-2 min-h-14 py-1">
+                  <button
+                    onClick={() => {
+                      fermerFeuille()
+                      onOpenDossier(item.dossier)
+                    }}
+                    className="flex-1 min-w-0 min-h-11 text-left"
+                  >
+                    {item.cle === board.prioriteJour?.cle && (
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-alerte">
+                        Priorité du jour
+                      </span>
+                    )}
+                    <span className="block text-[15px] font-bold text-texte truncate">
+                      {nomClient(item.dossier.clients) ?? '—'}
+                    </span>
+                    <span className="block text-xs text-texte-doux truncate">{item.libelle}</span>
+                  </button>
+                  <button
+                    onClick={() => plusTard(item.cle)}
+                    className="flex-shrink-0 h-11 px-2 text-xs text-texte-doux"
+                  >
+                    Plus tard
+                  </button>
+                  <BoutonAppeler
+                    item={item}
+                    onOuvrir={(d) => {
+                      fermerFeuille()
+                      onOpenDossier(d)
+                    }}
+                    className="flex-shrink-0 w-[88px] h-11 rounded-imbrique bg-accent-vif text-fond text-sm font-bold flex items-center justify-center"
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+          {board.aussiATraiter.length > 0 && (
+            <section className="mt-5">
+              <h3 className="text-xs text-texte-faible uppercase tracking-wider px-1 mb-2">Aussi à traiter</h3>
+              <ul className="space-y-2">{lignesAussi(board.aussiATraiter, fermerFeuille)}</ul>
+            </section>
+          )}
+        </FeuilleBasse>
+      )}
+
+      {feuille === 'attente' && (
+        <FeuilleBasse titre={`En attente · ${enAttente.length}`} onFermer={fermerFeuille}>
+          {enAttente.length === 0 ? (
+            <p className="text-texte-faible text-sm py-4">Aucun dossier en attente.</p>
+          ) : (
+            <ul className="divide-y divide-separateur">
+              {enAttente.map((d) => (
+                <li key={d.id}>
+                  <button
+                    onClick={() => {
+                      fermerFeuille()
+                      onOpenDossier(d)
+                    }}
+                    className="w-full min-h-14 py-2 text-left"
+                  >
+                    <span className="block text-[15px] font-bold text-texte truncate">
+                      {nomClient(d.clients) ?? '—'}
+                    </span>
+                    <span className="block text-xs text-texte-doux truncate mb-1">{d.titre || TYPE_LABELS[d.type]}</span>
+                    <PastilleAttente dossier={d} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </FeuilleBasse>
+      )}
+
+      {feuille === 'trancher' && (
+        <FeuilleBasse
+          titre={`Devis à trancher · ${aTrancherPar.nbDevis} devis · ${aTrancherPar.nbDossiers} dossier${aTrancherPar.nbDossiers > 1 ? 's' : ''}`}
+          onFermer={fermerFeuille}
+        >
+          <ul className="divide-y divide-separateur">
+            {aTrancherPar.lignes.map(({ dossier: d, n }) => (
+              <li key={d.id}>
+                <button
+                  onClick={() => {
+                    fermerFeuille()
+                    onOpenDossier(d)
+                  }}
+                  className="w-full min-h-14 py-2 text-left"
+                >
+                  <span className="block text-[15px] font-bold text-texte truncate">{nomClient(d.clients) ?? '—'}</span>
+                  <span className="block text-xs text-texte-doux truncate">
+                    {d.titre || TYPE_LABELS[d.type]} · {n} devis à trancher
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </FeuilleBasse>
+      )}
+
       {boîtePrompt}
 
       {montrerRetourHaut && (

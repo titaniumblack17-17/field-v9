@@ -30,6 +30,7 @@ import {
   styleDossier,
   aChiffrer,
 } from '../constants/dossiers'
+import PastilleAttente from '../components/PastilleAttente'
 
 // Le statut est stocké en clé technique (« a_planifier ») : sans traduction,
 // la liste des dossiers affiche du jargon de base de données.
@@ -620,6 +621,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
             {libelleStatut(d)}
             {d.montant_estime != null ? ` · ${d.montant_estime} €` : aChiffrer(d) ? ' · à chiffrer' : ''}
           </p>
+          <PastilleAttente dossier={d} className="mt-1" />
           {/* Les rappels vivent sur le dossier, jamais remontés
               jusqu'ici : rien sur la fiche client ne disait qu'un
               de ses dossiers en portait un. La donnée était déjà

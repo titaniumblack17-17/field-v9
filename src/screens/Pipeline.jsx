@@ -23,12 +23,11 @@ import {
   PLAN_STATUT_LABELS,
   COMMERCIAUX_LABELS,
   PLAN_SANS_COMMERCIAL,
-  joursEnAttente,
-  classeAttente,
   MOTIFS_ATTENTE_SAV_LABELS,
   styleDossier,
   aChiffrer,
 } from '../constants/dossiers'
+import PastilleAttente from '../components/PastilleAttente'
 
 function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
   // Un plan encore dû sur son propre projet est emprunté au kanban Projet
@@ -142,19 +141,7 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
           attendent un tiers, pas nous — affiché dès le premier jour (pas
           seulement au-delà du seuil d'alerte) pour voir la durée réelle
           plutôt qu'un silence jusqu'au 30ᵉ jour. */}
-      {(() => {
-        const jours = joursEnAttente(dossier)
-        if (jours == null) return null
-        const motif =
-          dossier.type === 'sav'
-            ? MOTIFS_ATTENTE_SAV_LABELS[dossier.bloque_par] ?? dossier.bloque_par ?? 'motif à préciser'
-            : 'réponse client'
-        return (
-          <p className={`text-[10px] mt-1 truncate ${classeAttente(jours)}`}>
-            ⏳ {motif} — {jours} j
-          </p>
-        )
-      })()}
+      <PastilleAttente dossier={dossier} className="mt-1" />
       {/* Pour qui est ce plan se voit sans ouvrir la fiche : Bruce trie ses
           plans en premier lieu par commercial destinataire, pas par étape. */}
       {dossier.type === 'plan' && dossier.commercial && (
