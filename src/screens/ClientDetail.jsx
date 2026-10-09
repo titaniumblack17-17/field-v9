@@ -28,6 +28,7 @@ import {
   STATUTS_SAV,
   PLAN_SANS_COMMERCIAL,
   styleDossier,
+  aChiffrer,
 } from '../constants/dossiers'
 
 // Le statut est stocké en clé technique (« a_planifier ») : sans traduction,
@@ -617,7 +618,7 @@ export default function ClientDetail({ client, onBack, onNewDossier, onOpenDossi
           <p className="font-bold text-texte">{d.titre || TYPE_LABELS[d.type]}</p>
           <p className="text-sm text-texte-doux">
             {libelleStatut(d)}
-            {d.montant_estime != null ? ` · ${d.montant_estime} €` : d.type === 'projet' ? ' · à chiffrer' : ''}
+            {d.montant_estime != null ? ` · ${d.montant_estime} €` : aChiffrer(d) ? ' · à chiffrer' : ''}
           </p>
           {/* Les rappels vivent sur le dossier, jamais remontés
               jusqu'ici : rien sur la fiche client ne disait qu'un

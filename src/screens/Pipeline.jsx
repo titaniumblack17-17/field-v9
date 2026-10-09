@@ -27,6 +27,7 @@ import {
   classeAttente,
   MOTIFS_ATTENTE_SAV_LABELS,
   styleDossier,
+  aChiffrer,
 } from '../constants/dossiers'
 
 function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
@@ -112,7 +113,7 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
         </p>
       )}
       {/* Un montant vide n'est pas 0 € : c'est un dossier de vente à chiffrer. */}
-      {dossier.montant_estime == null && dossier.type === 'projet' && (
+      {aChiffrer(dossier) && (
         <p className="text-[11px] text-alerte">À chiffrer</p>
       )}
       {(() => {

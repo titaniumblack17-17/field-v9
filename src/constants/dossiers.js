@@ -169,6 +169,17 @@ export const classeAttente = (jours) => {
   return 'text-accent'
 }
 
+// « À chiffrer » : un dossier de vente dont le devis est parti (Devis envoyé et
+// toutes les étapes suivantes, hors « perdu ») sans montant renseigné. Jamais
+// sur un prospect ou un devis encore à faire — il n'y a rien à chiffrer là — et
+// jamais affiché « 0 € » : un montant vide n'est pas un montant nul.
+const ETAPES_APRES_DEVIS = [
+  'devis_envoye', 'relance', 'visite_local', 'negociation', 'confirmation',
+  'financement', 'commande', 'reunion_chantier', 'installation', 'finition', 'termine',
+]
+export const aChiffrer = (d) =>
+  d?.type === 'projet' && d.montant_estime == null && ETAPES_APRES_DEVIS.includes(d.statut)
+
 export const REMUNERATION = {
   facture: 'Facturé 500 € TTC',
   integre: 'Intégré au suivi normal',
