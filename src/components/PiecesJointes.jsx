@@ -59,6 +59,43 @@ const suitLaNomenclature = (nom) => /_\d{9}[A-Za-z]?\.[a-z0-9]+$/i.test(nom ?? '
  * jamais d'URL publique, on demande un lien signé au moment de l'ouverture.
  * Passer exactement un des deux : clientId ou dossierId.
  */
+// Au-delà, un écho attendu qui n'est pas venu (hors-ligne, écriture mise en file) est oublié :
+// les mises à jour extérieures reprennent la main.
+const DELAI_ECHO_MS = 5000
+
+const normaliser = (v) => JSON.parse(JSON.stringify(v ?? null))
+// Égalité profonde indifférente à l'ordre des clés (jsonb ne le conserve pas) ; null = absent.
+function memeValeur(a, b) {
+  if (a === b) return true
+  if (a == null || b == null) return a == null && b == null
+  if (typeof a !== 'object' || typeof b !== 'object') return String(a) === String(b)
+  if (Array.isArray(a) !== Array.isArray(b)) return false
+  const ka = Object.keys(a).filter((k) => a[k] != null)
+  const kb = Object.keys(b).filter((k) => b[k] != null)
+  return ka.length === kb.length && ka.every((k) => memeValeur(a[k], b[k]))
+}
+
+/**
+ * Un UPDATE temps réel d'un fichier que l'on est en train d'écrire est-il un écho dépassé ?
+ * Oui tant qu'une écriture est en vol, ou après coup s'il ne contient pas encore toutes les
+ * valeurs écrites ; le premier écho complet (ou le délai) rend la main aux mises à jour extérieures.
+ */
+export function echoPerime(suivis, ligne, maintenant = Date.now()) {
+  const suivi = suivis.get(ligne.id)
+  if (!suivi) return false
+  if (suivi.enCours > 0) return true
+  if (maintenant > suivi.expire) {
+    suivis.delete(ligne.id)
+    return false
+  }
+  const attendu = normaliser(suivi.attendu)
+  if (Object.keys(attendu).every((k) => memeValeur(attendu[k], normaliser(ligne[k])))) {
+    suivis.delete(ligne.id)
+    return false
+  }
+  return true
+}
+
 export default function PiecesJointes({ clientId, dossierId, onMontantChange }) {
   const colonne = clientId ? 'client_id' : 'dossier_id'
   const valeur = clientId ?? dossierId
@@ -83,6 +120,9 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   const [confirmer, boîteConfirmation] = useConfirm()
   const champFichier = useRef(null)
   const champCollage = useRef(null)
+  // Files d'écriture et écritures non encore échoées, par fichier (voir ecrire).
+  const chaines = useRef(new Map())
+  const ecritures = useRef(new Map())
 
   useEffect(() => {
     let actif = true
@@ -103,13 +143,17 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
         'postgres_changes',
         { event: '*', schema: 'public', table: 'fichiers', filter: `${colonne}=eq.${valeur}` },
         (p) => {
+          // Écho d'une écriture locale déjà dépassée par une plus récente : l'appliquer
+          // ferait reculer l'écran, et le geste suivant partirait d'un état périmé.
+          // Décidé ici, hors de l'updater, qui doit rester pur.
+          const perime = p.eventType === 'UPDATE' && echoPerime(ecritures.current, p.new)
           setListe((cur) => {
             if (p.eventType === 'INSERT') {
               return cur.some((f) => f.id === p.new.id) ? cur : [p.new, ...cur]
             }
             // L'analyse d'un devis remplit le montant par une mise à jour :
             // sans ce cas, le chiffre n'apparaîtrait qu'au rechargement.
-            if (p.eventType === 'UPDATE') return cur.map((f) => (f.id === p.new.id ? p.new : f))
+            if (p.eventType === 'UPDATE') return perime ? cur : cur.map((f) => (f.id === p.new.id ? p.new : f))
             if (p.eventType === 'DELETE') return cur.filter((f) => f.id !== p.old.id)
             return cur
           })
@@ -187,13 +231,24 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   // Les écritures d'un même fichier partent l'une après l'autre : deux taps rapprochés sur
   // deux offres envoient deux tableaux complets, et la réponse de la première ne doit pas
   // arriver après la seconde et la défaire.
-  const chaines = useRef(new Map())
+  // Idem côté retour : tant qu'une écriture locale d'un fichier est en vol, ou que son écho
+  // n'est pas revenu, les mises à jour temps réel de ce fichier qui ne reflètent pas encore
+  // tout ce qu'on a écrit sont ignorées (voir echoPerime).
   const ecrire = async (f, champs) => {
     setListe((cur) => cur.map((x) => (x.id === f.id ? { ...x, ...champs } : x)))
+    const suivi = ecritures.current.get(f.id) ?? { enCours: 0, attendu: {}, expire: 0 }
+    suivi.enCours += 1
+    suivi.attendu = { ...suivi.attendu, ...champs }
+    ecritures.current.set(f.id, suivi)
     const precedent = chaines.current.get(f.id) ?? Promise.resolve()
     const envoi = precedent.then(async () => {
-      const { error } = await supabase.from('fichiers').update(champs).eq('id', f.id)
-      if (error) mettreEnFile({ type: 'update', table: 'fichiers', rowId: f.id, champs })
+      try {
+        const { error } = await supabase.from('fichiers').update(champs).eq('id', f.id)
+        if (error) mettreEnFile({ type: 'update', table: 'fichiers', rowId: f.id, champs })
+      } finally {
+        suivi.enCours -= 1
+        suivi.expire = Date.now() + DELAI_ECHO_MS
+      }
     })
     chaines.current.set(f.id, envoi.catch(() => {}))
     await envoi

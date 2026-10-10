@@ -92,13 +92,13 @@ test('états par offre (retenue / à trancher / écartée / reportée) et annula
 
   await etat(page, 'Fauteuils', 'Retenue').click()
   await expect.poll(async () => num((await ligne(X.id)).montant_ttc)).toBe(1000)
-  expect((await etats(X))[0]).toBe('retenue')
-  expect((await ligne(X.id)).decision).toBe('retenu')
+  await expect.poll(async () => (await etats(X))[0]).toBe('retenue')
+  await expect.poll(async () => (await ligne(X.id)).decision).toBe('retenu')
   await expect.poll(async () => num(await montant())).toBe(1000)
 
   await etat(page, 'Local', 'Écartée').click()
   await expect.poll(async () => (await etats(X))[1]).toBe('ecartee')
-  expect(num(await montant())).toBe(1000) // écartée : ne compte pas
+  await expect.poll(async () => num(await montant())).toBe(1000) // écartée : ne compte pas
 
   // Annulation d'un tap (8 s) : l'offre redevient à trancher
   await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click()
@@ -107,7 +107,7 @@ test('états par offre (retenue / à trancher / écartée / reportée) et annula
   // Retenue → À trancher : le montant disparaît
   await etat(page, 'Fauteuils', 'À trancher').click()
   await expect.poll(async () => num(await montant())).toBeNull()
-  expect(await etats(X)).toEqual(['a_trancher', 'a_trancher', 'a_trancher'])
+  await expect.poll(async () => await etats(X)).toEqual(['a_trancher', 'a_trancher', 'a_trancher'])
   await pasDeDebordement(page)
   expect(problemes).toEqual([])
 })
@@ -118,8 +118,8 @@ test('cumul entre offres ET entre devis ; dossier partiellement retenu = potenti
   await etat(page, 'Fauteuils', 'Retenue').click()
   await etat(page, 'Local', 'Retenue').click()
   await expect.poll(async () => num((await ligne(X.id)).montant_ttc)).toBe(3000) // 1 000 + 2 000
-  expect((await ligne(X.id)).variantes_retenues).toEqual([0, 1])
-  expect((await ligne(X.id)).variante_retenue).toBe(0)
+  await expect.poll(async () => (await ligne(X.id)).variantes_retenues).toEqual([0, 1])
+  await expect.poll(async () => (await ligne(X.id)).variante_retenue).toBe(0)
   await expect.poll(async () => num(await montant())).toBe(3000)
 
   // Entre devis : le devis sans offres retenu s'ajoute
@@ -163,7 +163,7 @@ test('projets : étiquette par offre, sous-totaux, montants inchangés', async (
     await expect.poll(async () => (await ligne(X.id)).variantes[i].projet).toBe(projet)
   }
   await expect.poll(async () => (await ligne(X.id)).variantes.map((o) => o.projet)).toEqual(['Projet A', 'Projet A', 'Projet B'])
-  expect(num(await montant())).toBe(1000) // étiqueter ne change aucun montant
+  await expect.poll(async () => num(await montant())).toBe(1000) // étiqueter ne change aucun montant
   const sous = page.getByLabel('Sous-totaux par projet')
   await expect(sous).toContainText('Projet A')
   await expect(sous).toContainText(/Projet A[\s\S]*Retenu 1.000 € · À trancher 2.000 €/)

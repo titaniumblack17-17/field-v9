@@ -109,7 +109,7 @@ test('les 4 décisions, cumul entre devis, annulation', async ({ page }) => {
   // Alternative : ne compte pas ; Annuler rétablit
   await bouton(page, NC, 'Alternative').click()
   await expect.poll(async () => num(await montant())).toBe(10000)
-  expect((await ligne(C.id)).decision).toBe('alternative')
+  await expect.poll(async () => (await ligne(C.id)).decision).toBe('alternative')
   await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click()
   await expect.poll(async () => (await ligne(C.id)).decision).toBe('retenu')
   await expect.poll(async () => num(await montant())).toBe(15000)
@@ -117,7 +117,7 @@ test('les 4 décisions, cumul entre devis, annulation', async ({ page }) => {
   // Remplacé : ne compte pas, lié au devis retenu le plus récent, grisé avec sa date
   await bouton(page, NA, 'Remplacé').click()
   await expect.poll(async () => (await ligne(A.id)).decision).toBe('remplace')
-  expect((await ligne(A.id)).remplace_par).toBe(C.id)
+  await expect.poll(async () => (await ligne(A.id)).remplace_par).toBe(C.id)
   await expect.poll(async () => num(await montant())).toBe(5000)
   await expect(carte(page, NA)).toHaveClass(/opacity-60/)
   await expect(carte(page, NA)).toContainText(/Remplacé le \d+\/\d+\/\d+/)
@@ -144,8 +144,8 @@ test('proposition de remplacement par numéro : Oui / Non alternative / Non cumu
   // Oui : B retenu, A remplacé par B ; Annuler remet tout
   await prop.getByRole('button', { name: 'Oui', exact: true }).click()
   await expect.poll(async () => (await ligne(A.id)).decision).toBe('remplace')
-  expect((await ligne(A.id)).remplace_par).toBe(B.id)
-  expect((await ligne(B.id)).decision).toBe('retenu')
+  await expect.poll(async () => (await ligne(A.id)).remplace_par).toBe(B.id)
+  await expect.poll(async () => (await ligne(B.id)).decision).toBe('retenu')
   await expect.poll(async () => num(await montant())).toBe(12000)
   await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click()
   await expect.poll(async () => (await ligne(B.id)).decision).toBe('a_trancher')
