@@ -188,7 +188,6 @@ test('reportée avec date de reprise : rappel, Dashboard (Potentiel ouvert, anne
 
   // Dashboard : bloc « Potentiel ouvert », anneau à 4 segments, liste des reportées avec motif
   await page.goto('/')
-  await page.getByRole('button', { name: 'Dashboard', exact: true }).click()
   const potentiel = page.getByLabel('Potentiel ouvert')
   await expect(potentiel).toContainText('À trancher')
   await expect(potentiel).toContainText('Reportées')

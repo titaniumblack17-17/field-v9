@@ -183,7 +183,8 @@ const lire = (cle, requete) => lireAvecCache(cle, () => requete().then(({ data, 
   return data ?? []
 }))
 
-export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
+// `integre` : affiché dans la zone « Pilotage » de l'accueil — sans en-tête ni plein écran.
+export default function Dashboard({ onBack, onOpenDossier, onPipeline, integre = false }) {
   const [chiffres, setChiffres] = useState(null)
   const [dossiers, setDossiers] = useState([])
   const [fichiers, setFichiers] = useState([])
@@ -359,16 +360,19 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
     }
   }, [fichiers, dossiers])
 
+  // Une seule balise <main> par écran : celle de l'accueil, quand le Dashboard y est intégré.
+  const Corps = integre ? 'div' : 'main'
+  const enveloppe = integre ? 'mt-3' : 'min-h-screen bg-fond px-4 pt-6'
   if (chargement && !chiffres) {
     return (
-      <div className="min-h-screen bg-fond px-4 pt-6">
+      <div className={enveloppe}>
         <p className="text-texte-faible text-sm">Chargement…</p>
       </div>
     )
   }
   if (erreur && !chiffres) {
     return (
-      <div className="min-h-screen bg-fond px-4 pt-6">
+      <div className={enveloppe}>
         <EtatErreur message={erreur} onReessayer={() => setTentative((t) => t + 1)} />
       </div>
     )
@@ -424,20 +428,22 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
   }
 
   return (
-    <div className="min-h-screen bg-fond">
-      <header className="px-4 pt-6 pb-3 flex items-center gap-2">
-        <button onClick={onBack} className="text-accent text-sm font-semibold h-11 -ml-2 pl-2 pr-1 flex items-center">
-          ← Brief
-        </button>
-        <h1 className="text-lg font-bold text-texte">Dashboard</h1>
-      </header>
+    <div className={integre ? 'mt-3' : 'min-h-screen bg-fond'}>
+      {!integre && (
+        <header className="px-4 pt-6 pb-3 flex items-center gap-2">
+          <button onClick={onBack} className="text-accent text-sm font-semibold h-11 -ml-2 pl-2 pr-1 flex items-center">
+            ← Retour
+          </button>
+          <h1 className="text-lg font-bold text-texte">Dashboard</h1>
+        </header>
+      )}
 
-      <main className="px-4 pb-10">
+      <Corps className={integre ? 'pb-4' : 'px-4 pb-10'}>
         {depuisCache && (
           <p className="text-xs text-alerte mb-2 px-1">⚠ Dernières valeurs connues — hors ligne, peut ne pas refléter les derniers changements</p>
         )}
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className={`grid grid-cols-2 gap-3 ${integre ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
           <Tuile
             titre="À trancher"
             valeur={`${at.devis} devis · ${at.dossiers} dossier${at.dossiers > 1 ? 's' : ''}`}
@@ -452,12 +458,16 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
             detail={`${chiffres.incomplets.sans_devis} sans devis · ${chiffres.incomplets.sans_cdc} sans CDC`}
             onClick={() => setFeuille('incomplets')}
           />
-          <Tuile
-            titre="En attente"
-            valeur={chiffres.en_attente.dossiers}
-            detail="un tiers doit répondre"
-            onClick={() => setFeuille('attente')}
-          />
+          {/* Dans l'accueil, la tuile « En attente » d'« Aujourd'hui » (même
+              feuille, même nombre) tient lieu de celle-ci : jamais deux fois. */}
+          {!integre && (
+            <Tuile
+              titre="En attente"
+              valeur={chiffres.en_attente.dossiers}
+              detail="un tiers doit répondre"
+              onClick={() => setFeuille('attente')}
+            />
+          )}
           <Tuile
             titre="En retard"
             valeur={chiffres.en_retard.total}
@@ -579,7 +589,7 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
           <h2 className="text-xs text-texte-faible uppercase tracking-wider mb-3">Évolution</h2>
           <Evolution serie={serie} />
         </section>
-      </main>
+      </Corps>
 
       {feuille === 'nettoyer' && (
         <FeuilleBasse titre={`Nettoyer le potentiel · ${nettoyage.nbOffres} offre${nettoyage.nbOffres > 1 ? 's' : ''}`} onFermer={fermer}>

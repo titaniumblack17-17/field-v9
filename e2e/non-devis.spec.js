@@ -52,7 +52,6 @@ test('cdc / plan / autre « a_trancher » : jamais comptés, ni dans la RPC, ni 
   else expect(texteBoard).toBe('')
 
   // Dashboard : tuile et liste sans le dossier de test
-  await page.getByRole('button', { name: 'Dashboard', exact: true }).click()
   await expect(page.getByRole('button', { name: /^À trancher/ }).first()).toContainText(`${pa.devis} devis · ${pa.dossiers} dossier`)
   await page.getByRole('button', { name: /^À trancher/ }).first().click()
   const feuille = page.getByRole('dialog')
@@ -61,7 +60,6 @@ test('cdc / plan / autre « a_trancher » : jamais comptés, ni dans la RPC, ni 
   await page.keyboard.press('Escape')
 
   // Fiche du dossier : aucun « à trancher » dans les jalons, aucune décision proposée
-  await page.getByRole('button', { name: /Brief/ }).click()
   await page.locator('input[type=search]').fill('ZZTEST-NONDEVIS')
   await page.getByText('ZZTEST-NONDEVIS Essai').click()
   await page.getByText('ZZTEST-NONDEVIS dossier').click()

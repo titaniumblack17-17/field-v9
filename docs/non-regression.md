@@ -82,3 +82,9 @@ Viewport iPhone 390 × 844. Console sans erreur. Aucun défilement horizontal. C
 ## 11. Sécurité (inchangé)
 - [ ] RLS toujours désactivée, auth non touchée.
 - [ ] `widget_chiffres_board` ne renvoie aucune donnée nominative.
+
+## Accueil unique (feat/accueil-unique)
+
+- `e2e/accueil.spec.js` : ouverture à froid, N identique (ancien Board = « Aujourd'hui »), un test par fonction de l'inventaire (`docs/inventaire-accueil.md`), retour d'arrière-plan 29 / 31 min, URL d'ouverture, hors-ligne, cibles ≥ 44 px, aucune erreur console.
+- `board.spec.js` tourne désormais sur l'accueil (`/`) : chacun de ses tests est un test de fonction du Board retrouvée dans « Aujourd'hui ».
+- `dashboard.spec.js`, `non-devis`, `offres`, `nettoyage` : le Dashboard est la zone « Pilotage » de `/` (plus de pastille « Dashboard »).

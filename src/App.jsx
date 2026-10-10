@@ -1,10 +1,11 @@
 import React, { Suspense, useEffect, useRef, useState } from 'react'
-// Brief soir reste chargé d'un bloc : c'est le tout premier écran depuis son
-// passage en écran de démarrage, autant ne pas ajouter un aller-retour
+// L'accueil (Aujourd'hui + Pilotage, le Dashboard intégré) reste chargé d'un
+// bloc : c'est le tout premier écran, autant ne pas ajouter un aller-retour
 // réseau avant même de le voir apparaître. Les autres écrans ne se chargent
-// qu'une fois qu'on y navigue — Clients y compris désormais, qui a cédé sa
-// place de racine.
-import BriefSoir from './screens/BriefSoir'
+// qu'une fois qu'on y navigue. L'ancien Board (BriefSoir) n'est plus qu'un
+// écran secondaire, atteint par « Ancien accueil ».
+import Accueil from './screens/Accueil'
+const BriefSoir = React.lazy(() => import('./screens/BriefSoir'))
 const ClientList = React.lazy(() => import('./screens/ClientList'))
 const ClientDetail = React.lazy(() => import('./screens/ClientDetail'))
 const ClientForm = React.lazy(() => import('./screens/ClientForm'))
@@ -21,6 +22,9 @@ import { assurerRappelDeRelance, synchroniserRappel } from './lib/rappel'
 import { verifierConnexionReelle } from './lib/reseau'
 import { diagnosticActif, journaliser } from './lib/diagnosticReseau'
 import DiagnosticReseau from './components/DiagnosticReseau'
+
+// Au-delà de cette absence, la réouverture de l'app ramène à l'accueil.
+export const DELAI_RETOUR_ACCUEIL_MS = 30 * 60 * 1000
 
 // Balayage depuis le bord gauche pour revenir. Le geste natif d'iOS est
 // capricieux sur une application à écran unique, et le défilement horizontal
@@ -283,7 +287,7 @@ export default function App() {
   // Pile d'écrans doublée d'entrées dans l'historique du navigateur : le swipe
   // natif iOS et le bouton Retour du navigateur reviennent d'un écran, sans
   // geste maison qui entrerait en conflit avec le glisser-déposer du Pipeline.
-  const [stack, setStack] = useState([{ name: 'brief' }])
+  const [stack, setStack] = useState([{ name: 'accueil' }])
   const view = stack[stack.length - 1]
 
   // Le swipe est un geste réflexe : sans garde-fou, quitter une fiche modifiée
@@ -306,6 +310,10 @@ export default function App() {
 
   useEffect(() => {
     const onPop = async () => {
+      if (ignorerPopRef.current > 0) {
+        ignorerPopRef.current -= 1
+        return
+      }
       if (!(await confirmerAbandon())) {
         // On était déjà revenu d'un cran : on ré-empile pour rester sur place.
         window.history.pushState(null, '')
@@ -315,6 +323,35 @@ export default function App() {
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  // Retour d'arrière-plan après plus de 30 min : on repart de l'accueil, comme
+  // à froid. Jamais si une fiche porte des modifications non enregistrées. Le
+  // recul dans l'historique du navigateur est absorbé (ignorerPopRef) pour ne
+  // pas dépiler la pile une seconde fois.
+  const ignorerPopRef = useRef(0)
+  const profondeurRef = useRef(1)
+  profondeurRef.current = stack.length
+  useEffect(() => {
+    let masqueDepuis = null
+    const surVisibilite = () => {
+      if (document.visibilityState === 'hidden') {
+        masqueDepuis = Date.now()
+        return
+      }
+      if (masqueDepuis == null) return
+      const absence = Date.now() - masqueDepuis
+      masqueDepuis = null
+      const profondeur = profondeurRef.current
+      if (absence <= DELAI_RETOUR_ACCUEIL_MS || modifieRef.current) return
+      setStack([{ name: 'accueil' }])
+      if (profondeur > 1) {
+        ignorerPopRef.current += 1
+        window.history.go(-(profondeur - 1))
+      }
+    }
+    document.addEventListener('visibilitychange', surVisibilite)
+    return () => document.removeEventListener('visibilitychange', surVisibilite)
   }, [])
 
   const signalerModif = (d) => {
@@ -430,17 +467,33 @@ export default function App() {
         onOpenClient={(client) => push({ name: 'detail', client })}
       />
     )
-  } else {
-    // Écran de démarrage (stack initiale : [{ name: 'brief' }]) — aussi le
-    // repli par défaut pour un nom de vue inconnu, plutôt qu'un écran vide.
+  } else if (view.name === 'brief') {
+    // « Ancien accueil » : le Board d'avant, conservé le temps de valider
+    // l'inventaire. Empilé sur l'accueil : le retour ramène à l'accueil.
     écran = (
       <BriefSoir
+        onBack={back}
         onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
         onOpenClient={(client) => push({ name: 'detail', client })}
         onClients={() => push({ name: 'list' })}
         onPipeline={(vueInitiale, etapeInitiale) => push({ name: 'pipeline', vueInitiale, etapeInitiale })}
         onCapture={() => push({ name: 'capture' })}
         onDashboard={() => push({ name: 'dashboard' })}
+      />
+    )
+  } else {
+    // Écran de démarrage (stack initiale : [{ name: 'accueil' }]) — aussi le
+    // repli par défaut pour un nom de vue inconnu, plutôt qu'un écran vide.
+    écran = (
+      <Accueil
+        onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
+        onOpenClient={(client) => push({ name: 'detail', client })}
+        onClients={() => push({ name: 'list' })}
+        onPipeline={(vueInitiale, etapeInitiale, familleInitiale) =>
+          push({ name: 'pipeline', vueInitiale, etapeInitiale, familleInitiale })
+        }
+        onCapture={() => push({ name: 'capture' })}
+        onAncienAccueil={() => push({ name: 'brief' })}
       />
     )
   }
@@ -461,7 +514,7 @@ export default function App() {
   const plafondLargeur =
     view.name === 'pipeline'
       ? null
-      : view.name === 'brief' || view.name === 'catalogue' || view.name === 'dashboard'
+      : view.name === 'accueil' || view.name === 'brief' || view.name === 'catalogue' || view.name === 'dashboard'
         ? 'max-w-5xl'
         : 'max-w-3xl'
 

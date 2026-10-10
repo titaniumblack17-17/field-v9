@@ -27,11 +27,10 @@ const pasDeDebordement = async (page) => {
 const ouvrirDashboard = async (page) => {
   await page.goto('/')
   await expect(page.getByText('Dossiers actifs').first()).toBeVisible()
-  await page.getByRole('button', { name: 'Dashboard', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Pilotage' })).toBeVisible()
   await expect(page.getByLabel('Pipeline', { exact: true }).first()).toBeVisible()
 }
-const dashboardVisible = (page) => expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
+const dashboardVisible = (page) => expect(page.getByRole('heading', { name: 'Pilotage' })).toBeVisible()
 
 // Recalcul indépendant depuis la base
 const recalcul = async () => {
@@ -227,8 +226,7 @@ for (const [nom, largeur, hauteur] of [['iPhone 390', 390, 844], ['ordinateur 12
       const n = c.serie.length
       if (n < 7) await expect(page.getByText(`Courbe en construction · ${n} jour${n > 1 ? 's' : ''} de données`)).toBeVisible()
       else await expect(page.getByRole('img', { name: /Évolution/ })).toBeVisible()
-      // Retour au Board
-      await page.getByRole('button', { name: /Brief/ }).click()
+      // Même écran : « Aujourd'hui » au-dessus, « Pilotage » en dessous
       await expect(page.getByText('Dossiers actifs').first()).toBeVisible()
     })
 
@@ -236,9 +234,9 @@ for (const [nom, largeur, hauteur] of [['iPhone 390', 390, 844], ['ordinateur 12
       await ouvrirDashboard(page) // remplit le cache
       await page.route(/supabase\.co/, (route) => route.abort())
       await page.reload()
-      await page.getByRole('button', { name: 'Dashboard', exact: true }).click().catch(() => {})
-      await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 15_000 })
-      await expect(page.getByText(/Dernières valeurs connues/)).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Pilotage' })).toBeVisible({ timeout: 15_000 })
+      // La reprise hors-ligne attend les délais de réconciliation (6 à 12 s, inchangés)
+      await expect(page.getByText(/Dernières valeurs connues/)).toBeVisible({ timeout: 30_000 })
       await expect(page.getByLabel('Pipeline', { exact: true }).first()).toContainText('projets actifs')
       await pasDeDebordement(page)
     })
@@ -274,7 +272,6 @@ test('Objectif : le Board et le Dashboard affichent le même pourcentage et le m
   await expect(page.getByText('Dossiers actifs').first()).toBeVisible()
   const tuile = await page.getByText(/^Objectif \d{4}$/).first().locator('xpath=ancestor::button[1]').innerText()
   const [pourcentage, montant] = [tuile.match(/(\d+) %/)[1], nombre(tuile.split('\n').pop())]
-  await page.getByRole('button', { name: 'Dashboard', exact: true }).click()
   const obj = page.getByLabel('Objectif', { exact: true })
   await expect(obj).toContainText(`${pourcentage} %`)
   const signe = await obj.locator('button', { hasText: /^Signé/ }).innerText()

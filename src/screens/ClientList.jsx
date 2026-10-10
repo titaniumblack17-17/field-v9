@@ -158,7 +158,7 @@ export default function ClientList({ onBack, onSelect, onCreate }) {
             onClick={onBack}
             className="text-accent text-sm font-semibold h-11 -ml-2 pl-2 pr-1 flex items-center flex-shrink-0"
           >
-            ← Brief
+            ← Accueil
           </button>
           <h1 className="text-xl font-bold text-texte flex-1">Clients</h1>
           {/* Action principale de l'écran : dans la variante accent-vif

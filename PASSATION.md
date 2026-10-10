@@ -757,3 +757,12 @@ Voir `docs/phase2-historique.md` (état des lieux, définition de « signé », 
 - Dashboard › Potentiel ouvert › « Nettoyer » : liste les devis concernés, bouton « Écarter les autres » par devis, bouton global avec confirmation (nombre d'offres, devis, montant retiré du plancher « À trancher »). Rien n'est écrit avant confirmation.
 - « Décision requise » en tête (devis à montant retenu mais aucune offre retenue — cas Ponsart) : signalement seul, aucune action, aucune écriture.
 - Helpers : `devisANettoyer`, `champsEcarterAutres`, `decisionsRequises` (`src/lib/documents.js`). Test : `e2e/nettoyage.spec.js` (fixtures ZZTEST-NET).
+
+## Accueil unique (feat/accueil-unique, non fusionné)
+
+- `/` = `screens/Accueil.jsx` : « Aujourd'hui » (le Board) puis « Pilotage » (le Dashboard, `Dashboard integre`). L'ancien Board (`screens/BriefSoir.jsx`) est conservé derrière « Ancien accueil » (pied de page) en attendant la validation de `docs/inventaire-accueil.md`.
+- Un seul calcul : `lib/bilanBoard.js` (calculerBilan / calculerBoard / calculerEnAttente / calculerATrancherPar), état et gestes dans `hooks/useBoardData.js`, affichage dans `components/BoardAffichage.jsx` et `BoardBlocs.jsx`. Ne plus dupliquer ce calcul.
+- `App.jsx` : pile initiale `[accueil]` ; retour d'arrière-plan > 30 min → accueil (`DELAI_RETOUR_ACCUEIL_MS`), sauf fiche modifiée ; le recul dans l'historique est absorbé par `ignorerPopRef`.
+- Pastilles d'en-tête à 44 px ; pastille Dashboard retirée ; tuile « En attente » du Dashboard masquée dans l'accueil.
+- Hors-ligne à froid : 6 à 12 s de réconciliation avant l'affichage du cache (comportement de l'ancien Board, inchangé).
+- Dette connue : perte de mise à jour intermittente sur deux gestes rapprochés d'offres (écho temps réel d'une écriture précédente) — tâche ouverte, voir `e2e/offres.spec.js` / `decisions.spec.js`.

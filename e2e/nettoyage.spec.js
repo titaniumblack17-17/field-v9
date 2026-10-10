@@ -124,7 +124,6 @@ test('Dashboard « Nettoyer » : décision requise en tête, unitaire, global av
   const instantane = JSON.stringify(reels.map((f) => [f.id, f.variantes, f.montant_ttc, f.decision]).sort())
 
   await page.goto('/')
-  await page.getByRole('button', { name: 'Dashboard', exact: true }).click()
   const bloc = page.getByLabel('Potentiel ouvert')
   await expect(bloc.getByRole('button', { name: 'Nettoyer' })).toBeVisible()
   // Aucun effet tant qu'on n'a pas confirmé
