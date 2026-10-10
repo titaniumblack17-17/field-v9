@@ -48,7 +48,19 @@ const recalcul = async () => {
   const reportes = new Set(fichiers.filter((f) => f.type_doc === 'devis' && f.decision === 'mis_de_cote' && !retenus.has(f.dossier_id)).map((f) => f.dossier_id))
   const signes = projets.filter((d) => !reportes.has(d.id) && d.statut !== 'perdu' && ETAPES_SIGNEES.includes(d.statut) && exerciceDe(d, annee) === annee)
   const devis = fichiers.filter((f) => aTrancher(f) && !reportes.has(f.dossier_id))
+  // « À trancher » = décision a_trancher uniquement ; montant potentiel = offre la plus basse
+  // (ou le montant du devis), seulement pour les dossiers pas encore signés.
+  const idsSignes = new Set(signes.map((d) => d.id))
+  const montantMin = devis
+    .filter((f) => !idsSignes.has(f.dossier_id))
+    .reduce((t, f) => {
+      const offres = (f.variantes ?? []).map((v) => v.montant_ttc).filter((m) => typeof m === 'number')
+      return t + (offres.length ? Math.min(...offres) : Number(f.montant_ttc) || 0)
+    }, 0)
+  const misDeCoteDevis = fichiers.filter((f) => f.type_doc === 'devis' && f.decision === 'mis_de_cote' && reportes.has(f.dossier_id))
   return {
+    montantMin,
+    reportes: { dossiers: reportes.size, devis: misDeCoteDevis.length, montant: misDeCoteDevis.reduce((t, f) => t + (Number(f.montant_ttc) || 0), 0) },
     annee, actifs: actifs.length, familles, signes,
     signeMontant: signes.reduce((t, d) => t + (Number(d.montant_estime) || 0), 0),
     devis: devis.length, dossiersATrancher: new Set(devis.map((f) => f.dossier_id)).size,
@@ -75,6 +87,12 @@ for (const [nom, largeur, hauteur] of [['iPhone 390', 390, 844], ['ordinateur 12
       expect([c.signe.nb, Number(c.signe.montant)]).toEqual([r.signes.length, r.signeMontant])
       expect([c.a_trancher.devis, c.a_trancher.dossiers]).toEqual([r.devis, r.dossiersATrancher])
       expect(c.en_attente.dossiers).toBe(r.attente)
+      // « À trancher » : décision a_trancher uniquement, montant potentiel cohérent
+      expect(Number(c.a_trancher.montant_min_hors_signes)).toBe(r.montantMin)
+      // « Reportés » : nombre et montant des devis mis de côté (dossiers sans devis retenu)
+      expect({ dossiers: c.reportes.dossiers, devis: c.reportes.devis, montant: Number(c.reportes.montant) }).toEqual(r.reportes)
+      // Aucune donnée nominative dans la RPC
+      expect(JSON.stringify(c)).not.toMatch(/nom_praticien|prenom|@|titre/)
 
       await ouvrirDashboard(page)
       // L'écran affiche ces mêmes chiffres
@@ -223,4 +241,20 @@ test('temps réel : un dossier créé, déplacé puis supprimé met le Dashboard
     if (dossier) await fetch(`${URL_DB}/rest/v1/dossiers?id=eq.${dossier.id}&titre=eq.ZZTEST-DASH dossier`, { method: 'DELETE', headers: entetes })
     await fetch(`${URL_DB}/rest/v1/clients?id=eq.${client.id}&nom_praticien=eq.ZZTEST-DASH`, { method: 'DELETE', headers: entetes })
   }
+})
+
+test('Objectif : le Board et le Dashboard affichent le même pourcentage et le même montant signé', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByText('Dossiers actifs').first()).toBeVisible()
+  const tuile = await page.getByText(/^Objectif \d{4}$/).first().locator('xpath=ancestor::button[1]').innerText()
+  const [pourcentage, montant] = [tuile.match(/(\d+) %/)[1], nombre(tuile.split('\n').pop())]
+  await page.getByRole('button', { name: 'Dashboard', exact: true }).click()
+  const obj = page.getByLabel('Objectif', { exact: true })
+  await expect(obj).toContainText(`${pourcentage} %`)
+  const signe = await obj.locator('button', { hasText: /^Signé/ }).innerText()
+  expect(nombre(signe.split('\n').filter((l) => /€/.test(l)).pop())).toBe(montant)
+  // …et tous deux égalent le calcul indépendant de la base
+  const r = await recalcul()
+  expect(montant).toBe(r.signeMontant)
+  expect(Number(pourcentage)).toBe(Math.round((r.signeMontant / 5_000_000) * 100))
 })

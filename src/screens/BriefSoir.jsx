@@ -792,7 +792,13 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
     )
 
     const somme = (liste) => liste.reduce((t, d) => t + (Number(d.montant_estime) || 0), 0)
-    const signes = actifs.filter((d) => ETAPES_SIGNEES.includes(d.statut))
+    // Même définition que le Dashboard : un dossier « reporté » (devis mis de côté,
+    // aucun devis retenu) ne compte pas en signé.
+    const retenusIds = new Set(devisSansMontant.filter((f) => f.decision === 'retenu').map((f) => f.dossier_id))
+    const reportesIds = new Set(
+      devisSansMontant.filter((f) => f.decision === 'mis_de_cote' && !retenusIds.has(f.dossier_id)).map((f) => f.dossier_id)
+    )
+    const signes = actifs.filter((d) => ETAPES_SIGNEES.includes(d.statut) && !reportesIds.has(d.id))
     const factures = actifs.filter((d) => ETAPES_FACTUREES.includes(d.statut))
 
     // Score commun « jours de retard équivalent » : chaque famille a sa
@@ -903,7 +909,7 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
         (d) => d.type === 'plan' && d.remuneration_type === 'facture' && d.statut === 'solde'
       ).length,
     }
-  }, [dossiers, taches])
+  }, [dossiers, taches, devisSansMontant])
 
   // Priorité du jour = le premier élément non ignoré (« Plus tard ») du tri
   // unique ; « Aussi à traiter » garde tout le monde, y compris les ignorés
