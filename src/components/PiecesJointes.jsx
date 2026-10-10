@@ -5,29 +5,29 @@ import { envoyerFichier, fichierColle } from '../lib/fichiers'
 import TexteModifiable from './TexteModifiable'
 import useConfirm from '../hooks/useConfirm'
 import Rubrique from './Rubrique'
+import OffresDevis from './OffresDevis'
 import { ajouterRappel } from '../lib/rappel'
 import {
   TYPES_DOC,
   aTrancher,
   cdcEnVigueur,
-  champsRemiseATrancher,
-  champsRetenue,
-  champsRetenueHt,
-  champsCumul,
   champsDecision,
-  champsDecisionActuels,
+  champsEcarterAutres,
+  champsEtatOffre,
+  champsProjetOffre,
   decisionDe,
   DECISIONS,
   DECISIONS_LIBELLES,
-  groupeDevis,
-  parserReference,
-  proposerRemplacement,
-  retenuesDe,
-  ttcOffre,
-  ttcDepuisHt,
+  ETATS_OFFRE_LIBELLES,
   estDevis,
   fourchette,
+  groupeDevis,
   libellePastille,
+  offresDe,
+  parserReference,
+  proposerRemplacement,
+  sousTotauxProjets,
+  ttcDepuisHt,
   typeParNom,
   variantesDe,
 } from '../lib/documents'
@@ -73,12 +73,6 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   // cahier des charges en cours de saisie dans ce panneau.
   const [typage, setTypage] = useState(null)
   const [versionSaisie, setVersionSaisie] = useState('')
-  // Offre touchée sur un devis au HT/TTC douteux : { id, i, base } où base est
-  // null (question posée) ou 'ht' (calcul affiché, en attente de confirmation).
-  const [choixHt, setChoixHt] = useState(null)
-  // Cumul de plusieurs offres d'un même devis : { id, choix: { [indice]: 'ttc' | 'ht' | null } }.
-  // Une offre absente de `choix` n'est pas cochée ; null = cochée, base HT/TTC à préciser.
-  const [cumul, setCumul] = useState(null)
   // Dernière décision prise, annulable d'un tap pendant quelques secondes :
   // { libelle, avant: [{ id, champs }] } (champs = valeurs d'avant les décisions).
   const [annulable, setAnnulable] = useState(null)
@@ -190,10 +184,19 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   // l'écran (hors-ligne, aucun événement temps réel ne reviendra), puis envoyée ;
   // en cas d'échec — réseau coupé en pratique — elle part en file d'attente et
   // sera rejouée au retour du réseau, jamais perdue.
+  // Les écritures d'un même fichier partent l'une après l'autre : deux taps rapprochés sur
+  // deux offres envoient deux tableaux complets, et la réponse de la première ne doit pas
+  // arriver après la seconde et la défaire.
+  const chaines = useRef(new Map())
   const ecrire = async (f, champs) => {
     setListe((cur) => cur.map((x) => (x.id === f.id ? { ...x, ...champs } : x)))
-    const { error } = await supabase.from('fichiers').update(champs).eq('id', f.id)
-    if (error) mettreEnFile({ type: 'update', table: 'fichiers', rowId: f.id, champs })
+    const precedent = chaines.current.get(f.id) ?? Promise.resolve()
+    const envoi = precedent.then(async () => {
+      const { error } = await supabase.from('fichiers').update(champs).eq('id', f.id)
+      if (error) mettreEnFile({ type: 'update', table: 'fichiers', rowId: f.id, champs })
+    })
+    chaines.current.set(f.id, envoi.catch(() => {}))
+    await envoi
     onMontantChange?.()
   }
 
@@ -209,90 +212,74 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
     await ecrire(f, { montant_ttc: nombre, analyse_erreur: null, a_trancher_raison: null, ...(nombre != null ? champsDecision('retenu') : {}) })
   }
 
-  // Un tap : l'offre retenue donne son montant au devis, donc au dossier.
-  // Si le devis laisse un doute HT/TTC, on pose d'abord la question.
-  const toucherOffre = (f, i) => {
-    if (f.a_trancher_raison) setChoixHt({ id: f.id, i, base: null })
-    else retenir(f, i)
-  }
-
-  const retenir = async (f, i, enHt = false) => {
-    const champs = enHt ? champsRetenueHt(f, i) : champsRetenue(f, i)
-    if (!champs) return
-    setChoixHt(null)
-    await ecrire(f, champs)
-    const v = variantesDe(f)[i]
-    const note = {
-      dossier_id: dossierId,
-      texte: enHt
-        ? `Offre retenue dans « ${f.nom} » : ${v.libelle} — ${eur(v.montant_ttc)} € HT, soit ${eur(champs.montant_ttc)} € TTC (TVA 20 %).`
-        : `Offre retenue dans « ${f.nom} » : ${v.libelle} — ${eur(v.montant_ttc)} € TTC.`,
-    }
-    const { error } = await supabase.from('dossier_notes').insert(note)
-    if (error) mettreEnFile({ type: 'insert', table: 'dossier_notes', payload: note })
-  }
-
-  const ouvrirCumul = (f) => {
-    setChoixHt(null)
-    setCumul({ id: f.id, choix: {} })
-  }
-
-  const basculerOffreCumul = (f, i) =>
-    setCumul((cur) => {
-      const choix = { ...cur.choix }
-      if (i in choix) delete choix[i]
-      // Sans doute HT/TTC sur ce devis, la base est TTC d'office ; sinon elle reste à préciser.
-      else choix[i] = f.a_trancher_raison ? null : 'ttc'
-      return { ...cur, choix }
-    })
-
-  const choisirBaseCumul = (i, base) => setCumul((cur) => ({ ...cur, choix: { ...cur.choix, [i]: base } }))
-
-  const selectionCumul = () =>
-    Object.entries(cumul?.choix ?? {}).map(([i, base]) => ({ i: Number(i), base }))
-
-  // Valide le cumul : le montant du devis est la somme des offres cochées. Écriture
-  // absolue (mêmes valeurs si elle est rejouée) : jamais de doublon au rejeu.
-  const validerCumul = async (f) => {
-    const choix = selectionCumul()
-    const champs = champsCumul(f, choix)
-    if (!champs) return
-    setCumul(null)
-    await ecrire(f, champs)
-    const offres = variantesDe(f)
-    const detail = [...choix]
-      .sort((a, b) => a.i - b.i)
-      .map(({ i, base }) =>
-        base === 'ht'
-          ? `${offres[i].libelle} (${eur(offres[i].montant_ttc)} € HT, soit ${eur(ttcOffre(offres[i], 'ht'))} € TTC)`
-          : `${offres[i].libelle} (${eur(offres[i].montant_ttc)} € TTC)`
-      )
-      .join(' + ')
-    const note = {
-      dossier_id: dossierId,
-      texte: `Offres cumulées dans « ${f.nom} » : ${detail} — total ${eur(champs.montant_ttc)} € TTC.`,
-    }
-    const { error } = await supabase.from('dossier_notes').insert(note)
-    if (error) mettreEnFile({ type: 'insert', table: 'dossier_notes', payload: note })
-  }
-
   // Décisions ────────────────────────────────────────────────────────────────
   // Chaque changement est annulable : on retient les valeurs d'avant de toutes les
   // lignes touchées, et « Annuler » les réécrit (écritures absolues : rejouables
   // sans doublon par la file hors-ligne).
-  const appliquerDecisions = async (changements, libelle) => {
-    const avant = changements.map(({ f }) => ({ id: f.id, champs: champsDecisionActuels(f) }))
+  const appliquerDecisions = async (changements, libelle, inverse = null) => {
+    // Valeurs d'avant des seuls champs réécrits : « Annuler » les remet telles quelles.
+    const avant = changements.map(({ f, champs }) => ({
+      id: f.id,
+      champs: Object.fromEntries(Object.keys(champs).map((k) => [k, f[k] ?? null])),
+    }))
     for (const { f, champs } of changements) await ecrire(f, champs)
     clearTimeout(minuteurAnnulation.current)
-    setAnnulable({ libelle, avant })
+    setAnnulable({ libelle, avant, inverse })
     minuteurAnnulation.current = setTimeout(() => setAnnulable(null), 8000)
   }
 
+  // Offre : état en un tap (annulable), avec note au journal quand une offre est retenue
+  // et rappel de reprise quand une offre est reportée avec une date.
+  const changerOffre = async (f, i, etat, extras) => {
+    const o = offresDe(f)[i]
+    // Inverse au niveau de l'offre seule : « Annuler » rejoue l'ancien état de CETTE offre sur
+    // la version courante du devis, sans écraser ce qui a pu changer ailleurs entre-temps.
+    const inverse = { id: f.id, i, etat: o.etat, extras: { base: o.base ?? undefined, date_reprise: o.date_reprise ?? undefined } }
+    await appliquerDecisions([{ f, champs: champsEtatOffre(f, i, etat, extras) }], `« ${o.libelle} » : ${ETATS_OFFRE_LIBELLES[etat].toLowerCase()}`, inverse)
+    if (etat === 'retenue') {
+      const note = {
+        dossier_id: dossierId,
+        texte: `Offre retenue dans « ${f.nom} » : ${o.libelle} — ${eur(extras.base === 'ht' ? ttcDepuisHt(o.montant) : o.montant)} € TTC${extras.base === 'ht' ? ` (${eur(o.montant)} € HT + TVA 20 %)` : ''}.`,
+      }
+      const { error } = await supabase.from('dossier_notes').insert(note)
+      if (error) mettreEnFile({ type: 'insert', table: 'dossier_notes', payload: note })
+    }
+    if (etat === 'reportee' && extras.date_reprise) {
+      const texte = `Reprendre l'offre « ${o.libelle} » du devis ${f.nom.replace(/\.[^.]+$/, '')}`
+      const res = await ajouterRappel(dossierId, extras.date_reprise, texte, null)
+      if (res?.erreur) {
+        mettreEnFile({ type: 'insert', table: 'rappels', payload: { dossier_id: dossierId, date: extras.date_reprise, note: texte } })
+      } else if (res?.id) {
+        // « Annuler » retire aussi le rappel que ce report vient de créer.
+        setAnnulable((cur) => (cur ? { ...cur, rappelId: res.id } : cur))
+      }
+    }
+  }
+
+  // Proposition en un tap, annulable : écarte les offres restées « à trancher » d'un devis
+  // dont une offre est retenue. N'écrit que les états : aucun montant ne change.
+  const ecarterAutres = (f) =>
+    appliquerDecisions(
+      [{ f, champs: champsEcarterAutres(f) }],
+      `Autres offres de « ${f.nom} » : écartées`
+    )
+
+  const changerProjet = (f, i, texte) => ecrire(f, champsProjetOffre(f, i, texte))
+
   const annulerDecision = async () => {
     if (!annulable) return
-    const { avant } = annulable
+    const { avant, rappelId, inverse } = annulable
     clearTimeout(minuteurAnnulation.current)
     setAnnulable(null)
+    if (rappelId) {
+      const { error } = await supabase.from('rappels').delete().eq('id', rappelId)
+      if (error) mettreEnFile({ type: 'delete', table: 'rappels', rowId: rappelId })
+    }
+    if (inverse) {
+      const f = liste.find((x) => x.id === inverse.id)
+      if (f) await ecrire(f, champsEtatOffre(f, inverse.i, inverse.etat, inverse.extras))
+      return
+    }
     for (const { id, champs } of avant) {
       const f = liste.find((x) => x.id === id) ?? { id }
       await ecrire(f, champs)
@@ -357,7 +344,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
     await appliquerDecisions(changements, reponse === 'remplace' ? `« ${f.nom} » remplace « ${precedent.nom} »` : `« ${f.nom} » cumulé avec « ${precedent.nom} »`)
   }
 
-  const remettreATrancher = (f) => ecrire(f, champsRemiseATrancher())
+
 
   const ouvrirTypage = (f) => {
     setVersionSaisie(f.version_doc != null ? String(f.version_doc) : '')
@@ -551,6 +538,24 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
         </div>
       )}
 
+      {/* Sous-totaux par projet : seulement quand des offres portent une étiquette. */}
+      {dossierId && sousTotauxProjets(liste).length > 0 && (
+        <div className="mb-2 bg-carte rounded-xl px-4 py-3" aria-label="Sous-totaux par projet">
+          <p className="text-xs text-texte-faible mb-2">Sous-totaux par projet</p>
+          <ul className="space-y-2">
+            {sousTotauxProjets(liste).map((g) => (
+              <li key={g.projet} className="text-xs tabular-nums">
+                <span className="text-sm text-texte font-medium">{g.projet}</span>
+                <span className="block text-texte-doux">
+                  Retenu {eur(g.retenu)} € · À trancher {eur(g.a_trancher)} € · Reporté {eur(g.reportee)} €
+                  {g.ecartee > 0 ? ` · Écarté ${eur(g.ecartee)} €` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Champ toujours vide, jamais destiné à être lu : son seul rôle est
           d'être une cible focusable pour Cmd+V (Mac) ou le geste « Coller »
           natif d'iOS (appui long → Coller, ou la suggestion au-dessus du
@@ -570,7 +575,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
       ) : (
         <ul className="space-y-2">
           {listeAffichee.map((f, idx) => {
-            const offres = variantesDe(f)
+            const aDesOffres = variantesDe(f).length >= 1
             const decision = decisionDe(f)
             const groupe = dossierId && estDevis(f) ? groupeDevis(f) : 'autres'
             const precedentGroupe = idx > 0 && dossierId && estDevis(listeAffichee[idx - 1]) ? groupeDevis(listeAffichee[idx - 1]) : null
@@ -578,8 +583,6 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
             const proposition = dossierId ? proposerRemplacement(liste, f) : null
             const range = fourchette(f)
             const doitTrancher = aTrancher(f)
-            const retenues = retenuesDe(f).map((i) => offres[i]).filter(Boolean)
-            const retenue = retenues.length > 0 ? retenues : null
             return (
             <React.Fragment key={f.id}>
             {enTete && (
@@ -704,7 +707,13 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
               </div>
               </div>
 
-              {dossierId && estDevis(f) && renommage !== f.id && (
+              {dossierId && estDevis(f) && renommage !== f.id && aDesOffres && (
+                <p className="px-4 pb-1 -mt-1 text-[11px] text-texte-faible">
+                  Décision du devis : <span className={decision === 'a_trancher' ? 'text-alerte' : 'text-texte'}>{DECISIONS_LIBELLES[decision]}</span> (selon ses offres)
+                </p>
+              )}
+
+              {dossierId && estDevis(f) && renommage !== f.id && !aDesOffres && (
                 <div className="px-4 pb-2 -mt-1">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[11px] text-texte-faible">
@@ -802,200 +811,8 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                 </div>
               )}
 
-              {doitTrancher && (
-                <div className="px-4 pb-3 -mt-1">
-                  {f.a_trancher_raison && (
-                    <p className="text-xs text-alerte mb-2">{f.a_trancher_raison}</p>
-                  )}
-                  {offres.length > 0 ? (
-                    <>
-                      <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <p className="text-xs text-texte-faible">
-                          {cumul?.id === f.id
-                            ? 'Cochez les offres à cumuler : leur somme devient le montant du devis'
-                            : "Offres exclusives — retenez celle du client, ou cumulez-en plusieurs"}
-                        </p>
-                        {offres.length > 1 && (
-                          <button
-                            onClick={() => (cumul?.id === f.id ? setCumul(null) : ouvrirCumul(f))}
-                            className="flex-shrink-0 h-11 px-2 -mr-2 text-xs font-medium text-accent"
-                          >
-                            {cumul?.id === f.id ? 'Annuler' : 'Cumuler'}
-                          </button>
-                        )}
-                      </div>
-                      {cumul?.id === f.id ? (
-                        <>
-                          <ul className="space-y-1.5">
-                            {offres.map((v, i) => {
-                              const coche = i in cumul.choix
-                              const base = cumul.choix[i]
-                              return (
-                                <li key={i}>
-                                  <button
-                                    role="checkbox"
-                                    aria-checked={coche}
-                                    onClick={() => basculerOffreCumul(f, i)}
-                                    className={`w-full min-h-11 px-3 py-2 rounded-imbrique border flex items-center gap-3 text-left ${
-                                      coche ? 'border-accent bg-accent/10' : 'border-separateur bg-fond'
-                                    }`}
-                                  >
-                                    <span
-                                      aria-hidden="true"
-                                      className={`flex-shrink-0 w-5 h-5 rounded border flex items-center justify-center text-[11px] ${
-                                        coche ? 'bg-accent border-accent text-white' : 'border-separateur'
-                                      }`}
-                                    >
-                                      {coche ? '✓' : ''}
-                                    </span>
-                                    <span className="text-sm text-texte min-w-0 flex-1">{v.libelle}</span>
-                                    <span className="text-sm text-texte font-medium tabular-nums flex-shrink-0">
-                                      {eur(v.montant_ttc)} €
-                                    </span>
-                                  </button>
-                                  {coche && f.a_trancher_raison && (
-                                    <div className="flex items-center gap-2 mt-1 pl-1">
-                                      <span className="text-xs text-texte-doux">Ce montant est</span>
-                                      {['ht', 'ttc'].map((b) => (
-                                        <button
-                                          key={b}
-                                          onClick={() => choisirBaseCumul(i, b)}
-                                          aria-pressed={base === b}
-                                          className={`h-11 px-4 rounded-full text-sm border ${
-                                            base === b
-                                              ? 'bg-accent text-white border-accent'
-                                              : 'bg-fond text-texte border-separateur'
-                                          }`}
-                                        >
-                                          {b.toUpperCase()}
-                                        </button>
-                                      ))}
-                                      {base === 'ht' && (
-                                        <span className="text-xs text-texte-doux tabular-nums">
-                                          × 1,20 = {eur(ttcOffre(v, 'ht'))} €
-                                        </span>
-                                      )}
-                                    </div>
-                                  )}
-                                </li>
-                              )
-                            })}
-                          </ul>
-                          {(() => {
-                            const sel = selectionCumul()
-                            const pret = sel.length > 0 && sel.every((c) => c.base)
-                            const total = pret
-                              ? Math.round(sel.reduce((t, c) => t + ttcOffre(offres[c.i], c.base), 0) * 100) / 100
-                              : null
-                            return (
-                              <div className="mt-2">
-                                {pret && (
-                                  <p className="text-sm text-texte tabular-nums mb-2">
-                                    {[...sel]
-                                      .sort((a, b) => a.i - b.i)
-                                      .map((c) => eur(ttcOffre(offres[c.i], c.base)))
-                                      .join(' + ')}{' '}
-                                    = {eur(total)} € TTC
-                                  </p>
-                                )}
-                                <button
-                                  onClick={() => validerCumul(f)}
-                                  disabled={!pret}
-                                  className="h-11 px-4 rounded-full text-sm bg-accent text-white disabled:opacity-40"
-                                >
-                                  {pret ? `Valider le cumul · ${eur(total)} € TTC` : 'Valider le cumul'}
-                                </button>
-                              </div>
-                            )
-                          })()}
-                        </>
-                      ) : (
-                      <ul className="space-y-1.5">
-                        {offres.map((v, i) => (
-                          <li key={i}>
-                            <button
-                              onClick={() => toucherOffre(f, i)}
-                              className="w-full min-h-11 px-3 py-2 rounded-imbrique border border-separateur bg-fond flex items-center justify-between gap-3 text-left"
-                            >
-                              <span className="text-sm text-texte min-w-0">{v.libelle}</span>
-                              <span className="text-sm text-texte font-medium tabular-nums flex-shrink-0">
-                                {eur(v.montant_ttc)} €
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                      )}
-                      {cumul?.id !== f.id && choixHt?.id === f.id && (
-                        <div className="mt-2 rounded-imbrique border border-alerte/40 bg-alerte/10 px-3 py-3">
-                          <p className="text-sm text-texte">
-                            {choixHt.base === 'ht'
-                              ? `${eur(offres[choixHt.i].montant_ttc)} € HT × 1,20 = ${eur(ttcDepuisHt(offres[choixHt.i].montant_ttc))} € TTC`
-                              : `Ce montant est HT ou TTC ? ${offres[choixHt.i].libelle} — ${eur(offres[choixHt.i].montant_ttc)} €`}
-                          </p>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {choixHt.base === 'ht' ? (
-                              <button
-                                onClick={() => retenir(f, choixHt.i, true)}
-                                className="h-11 px-4 rounded-full text-sm bg-accent text-white"
-                              >
-                                Confirmer {eur(ttcDepuisHt(offres[choixHt.i].montant_ttc))} € TTC
-                              </button>
-                            ) : (
-                              <>
-                                <button
-                                  onClick={() => setChoixHt({ ...choixHt, base: 'ht' })}
-                                  className="h-11 px-5 rounded-full text-sm bg-fond text-texte border border-separateur"
-                                >
-                                  HT
-                                </button>
-                                <button
-                                  onClick={() => retenir(f, choixHt.i)}
-                                  className="h-11 px-5 rounded-full text-sm bg-fond text-texte border border-separateur"
-                                >
-                                  TTC
-                                </button>
-                              </>
-                            )}
-                            <button
-                              onClick={() => setChoixHt(null)}
-                              className="h-11 px-4 text-sm text-texte-doux"
-                            >
-                              Annuler
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : null}
-                  {f.a_trancher_raison && (
-                    <div className="mt-1" onClick={(e) => e.stopPropagation()}>
-                      <TexteModifiable
-                        valeur={null}
-                        type="number"
-                        placeholder="Montant TTC en €"
-                        vide="Saisir le montant TTC à la main"
-                        className="text-sm text-accent font-medium"
-                        onEnregistrer={(v) => saisirMontant(f, v)}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {retenue && f.montant_ttc != null && (
-                <div className="px-4 pb-3 -mt-1 flex items-center justify-between gap-3">
-                  <p className="text-xs text-texte-doux min-w-0">
-                    {retenue.length > 1 ? 'Offres cumulées' : 'Offre retenue'} :{' '}
-                    <span className="text-texte">{retenue.map((v) => v.libelle).join(' + ')}</span>
-                  </p>
-                  <button
-                    onClick={() => remettreATrancher(f)}
-                    className="text-accent text-xs font-medium h-11 px-2 -mr-2 flex-shrink-0"
-                  >
-                    Changer
-                  </button>
-                </div>
+              {variantesDe(f).length >= 1 && (
+                <OffresDevis f={f} onEtat={changerOffre} onProjet={changerProjet} onEcarterAutres={ecarterAutres} />
               )}
 
             </li>

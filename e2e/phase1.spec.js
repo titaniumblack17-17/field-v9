@@ -56,11 +56,12 @@ const ouvrirDossierTest = async (page) => {
   await page.getByText('ZZTEST e2e dossier').click()
   const rubrique = page.getByText(/^Documents déposés/)
   await expect(rubrique).toBeVisible()
-  // La rubrique s'ouvre seule tant qu'un devis reste à trancher ; sinon on l'ouvre.
+  await page.waitForTimeout(1200) // la rubrique s'ouvre seule tant qu'une offre reste à trancher
   if (!(await page.getByLabel('Jalons du dossier').isVisible())) await rubrique.click()
   await expect(page.getByLabel('Jalons du dossier')).toBeVisible()
 }
 
+const offre = (page, libelle) => page.getByRole('group', { name: new RegExp(`État de l'offre ${libelle}`) })
 const ligne = async (id) => (await rest('GET', `fichiers?id=eq.${id}&select=*`))[0]
 
 test('parcours général : écrans, retour, pas de débordement, pas d\'erreur', async ({ page }) => {
@@ -98,14 +99,14 @@ test('documents : à trancher, question HT/TTC, calcul TVA, cibles ≥ 44 px', a
   // Cibles tactiles de la section
   const petits = await page.evaluate(() =>
     [...document.querySelectorAll('button')]
-      .filter((b) => /Retenir|Étude|Offre|Type de|Lire|Relire|Renommer|Changer/.test(b.textContent + (b.getAttribute('aria-label') ?? '')))
+      .filter((b) => /Retenue|À trancher|Écartée|Reportée|Type de|Lire|Relire|Renommer|Changer/.test(b.textContent + (b.getAttribute('aria-label') ?? '')))
       .map((b) => ({ t: b.textContent.trim().slice(0, 30), h: b.getBoundingClientRect().height }))
       .filter((x) => x.h > 0 && x.h < 43.5)
   )
   expect(petits).toEqual([])
 
   // Offre au HT/TTC douteux : la question puis le calcul
-  await page.getByRole('button', { name: /Étude p\.3/ }).click()
+  await offre(page, 'Étude p\\.3').getByRole('button', { name: 'Retenue', exact: true }).click()
   await expect(page.getByText(/Ce montant est HT ou TTC/)).toBeVisible()
   await page.getByRole('button', { name: 'HT', exact: true }).click()
   await expect(page.getByText('50 360 € HT × 1,20 = 60 432 € TTC')).toBeVisible()
@@ -117,19 +118,19 @@ test('documents : à trancher, question HT/TTC, calcul TVA, cibles ≥ 44 px', a
   expect(l.variante_retenue).toBe(1)
 
   // Offre sans doute HT/TTC : un seul tap
-  await page.getByRole('button', { name: /Étude 2/ }).click()
+  await offre(page, 'Étude 2').getByRole('button', { name: 'Retenue', exact: true }).click()
   await expect.poll(async () => (await ligne(devisTtc.id)).montant_ttc).toBe(65385)
   expect(problemes).toEqual([])
 })
 
 test('documents : changement de type et file hors-ligne rejouée', async ({ page, context }) => {
   await ouvrirDossierTest(page)
-  await expect(page.getByText('Offre retenue : Étude 2')).toBeVisible()
+  await expect(offre(page, 'Étude 2').getByRole('button', { name: 'Retenue', exact: true })).toHaveAttribute('aria-pressed', 'true')
 
-  // Hors-ligne : « Changer » puis retenir une autre offre
+  // Hors-ligne : l'offre 2 repasse à trancher, puis l'offre 3 est retenue
   await context.setOffline(true)
-  await page.getByRole('button', { name: 'Changer', exact: true }).first().click()
-  await page.getByRole('button', { name: /Étude 3/ }).click()
+  await offre(page, 'Étude 2').getByRole('button', { name: 'À trancher', exact: true }).click()
+  await offre(page, 'Étude 3').getByRole('button', { name: 'Retenue', exact: true }).click()
   await page.waitForTimeout(600)
   expect((await page.evaluate(() => JSON.parse(localStorage.getItem('fv9:file-attente') ?? '[]').length))).toBeGreaterThan(0)
   expect((await ligne(devisTtc.id)).montant_ttc).toBe(65385) // la base n'a rien reçu

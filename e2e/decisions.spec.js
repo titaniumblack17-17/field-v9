@@ -202,14 +202,11 @@ test('cumul entre offres d\'un même devis + autre devis retenu ; hors-ligne rej
   const NA = 'ZZTEST_PROD_202699101'
   await bouton(page, NA, 'Retenu').click()
   await expect.poll(async () => num(await montant())).toBe(10000)
-  // « Retenu » sur un devis à plusieurs offres sans choix : on oriente vers les offres
-  await bouton(page, NE, 'Retenu').click()
-  await expect(page.getByText(/plusieurs offres/)).toBeVisible()
-  const e = carte(page, NE)
-  await e.getByRole('button', { name: 'Cumuler', exact: true }).click()
-  await e.getByRole('checkbox', { name: /Fauteuils/ }).click()
-  await e.getByRole('checkbox', { name: /Local/ }).click()
-  await e.getByRole('button', { name: /^Valider le cumul/ }).click()
+  // Un devis à plusieurs offres se décide offre par offre (pas de boutons de décision au niveau du devis)
+  await expect(page.getByRole('group', { name: new RegExp(`Décision pour ${NE}`) })).toHaveCount(0)
+  for (const nom of ['Fauteuils', 'Local']) {
+    await page.getByRole('group', { name: new RegExp(`État de l'offre ${nom}`) }).getByRole('button', { name: 'Retenue', exact: true }).click()
+  }
   await expect.poll(async () => (await ligne(E.id)).decision).toBe('retenu')
   await expect.poll(async () => num(await montant())).toBe(13000) // 10 000 + (1 000 + 2 000)
 

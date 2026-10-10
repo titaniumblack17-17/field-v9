@@ -14,7 +14,7 @@ import {
   aujourdhui as calculerAujourdhui,
 } from '../lib/rappel'
 import { nomClient } from '../lib/client'
-import { aTrancher } from '../lib/documents'
+import { dossiersReportes, offresPlat } from '../lib/documents'
 import BandeAppeler, { BoutonAppeler } from '../components/BandeAppeler'
 import FeuilleBasse from '../components/FeuilleBasse'
 import PastilleAttente from '../components/PastilleAttente'
@@ -792,12 +792,9 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
     )
 
     const somme = (liste) => liste.reduce((t, d) => t + (Number(d.montant_estime) || 0), 0)
-    // Même définition que le Dashboard : un dossier « reporté » (devis mis de côté,
-    // aucun devis retenu) ne compte pas en signé.
-    const retenusIds = new Set(devisSansMontant.filter((f) => f.decision === 'retenu').map((f) => f.dossier_id))
-    const reportesIds = new Set(
-      devisSansMontant.filter((f) => f.decision === 'mis_de_cote' && !retenusIds.has(f.dossier_id)).map((f) => f.dossier_id)
-    )
+    // Même définition que le Dashboard : un dossier « reporté » (offre ou devis mis de
+    // côté, rien de retenu) ne compte pas en signé.
+    const reportesIds = dossiersReportes(devisSansMontant)
     const signes = actifs.filter((d) => ETAPES_SIGNEES.includes(d.statut) && !reportesIds.has(d.id))
     const factures = actifs.filter((d) => ETAPES_FACTUREES.includes(d.statut))
 
@@ -950,20 +947,15 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
     [dossiers]
   )
 
-  // Devis à trancher : « N devis · M dossiers » (un dossier peut en porter deux).
+  // Potentiel à trancher (par offre) : « N devis · M dossiers » — même calcul que le Dashboard.
   const aTrancherPar = useMemo(() => {
-    // Un dossier « reporté » (devis mis de côté, aucun retenu) ne compte pas en à trancher.
-    const retenus = new Set(devisSansMontant.filter((f) => f.decision === 'retenu').map((f) => f.dossier_id))
-    const reportes = new Set(
-      devisSansMontant.filter((f) => f.decision === 'mis_de_cote' && !retenus.has(f.dossier_id)).map((f) => f.dossier_id)
-    )
-    const devis = devisSansMontant.filter((f) => aTrancher(f) && !reportes.has(f.dossier_id))
+    const ouvertes = offresPlat(devisSansMontant).filter((o) => o.etat === 'a_trancher')
     const parDossier = new Map()
-    for (const f of devis) parDossier.set(f.dossier_id, (parDossier.get(f.dossier_id) ?? 0) + 1)
+    for (const o of ouvertes) parDossier.set(o.dossier_id, (parDossier.get(o.dossier_id) ?? new Set()).add(o.fichier_id))
     const lignes = [...parDossier.entries()]
-      .map(([id, n]) => ({ dossier: dossiers.find((d) => d.id === id), n }))
+      .map(([id, devis]) => ({ dossier: dossiers.find((d) => d.id === id), n: devis.size }))
       .filter((l) => l.dossier)
-    return { nbDevis: devis.length, nbDossiers: parDossier.size, lignes }
+    return { nbDevis: new Set(ouvertes.map((o) => o.fichier_id)).size, nbDossiers: parDossier.size, lignes }
   }, [devisSansMontant, dossiers])
 
   // Retour au tri continu unique (le sous-groupement temporel En retard/

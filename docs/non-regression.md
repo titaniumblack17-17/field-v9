@@ -49,6 +49,14 @@ Viewport iPhone 390 × 844. Console sans erreur. Aucun défilement horizontal. C
 - [ ] Proposition « Ce devis remplace-t-il le précédent ? » (même racine, numéro plus élevé) : Oui / Non, alternative / Non, cumul — jamais d'automatisme.
 - [ ] Ligne de temps des devis (n°, date, montant, décision) ; dossiers reportés exposés sous « reportes » (RPC).
 
+## 5 ter. Décision par offre et « Potentiel ouvert »
+- [ ] Chaque offre d'un devis : 4 états en un tap (Retenue / À trancher / Écartée / Reportée), cibles ≥ 44 px, « Annuler » 8 s (retire aussi le rappel créé par un report).
+- [ ] Étiquette « projet » facultative par offre ; sous-totaux par projet seulement quand des étiquettes existent ; aucun montant modifié par une étiquette.
+- [ ] Montant du dossier = somme des offres retenues (entre offres ET entre devis) ; question HT/TTC par offre avec calcul de TVA ; dossier partiellement retenu = potentiel ouvert.
+- [ ] Offre reportée : date de reprise facultative → rappel.
+- [ ] Dashboard : « Potentiel ouvert » (À trancher / Reportées : offres · devis · dossiers + montants), anneau à 4 segments cliquables, listes avec motif par ligne.
+- [ ] Board et Dashboard affichent le même signé ; la RPC égale un recalcul indépendant.
+
 ## 6. Capture / dictée
 - [ ] Capture texte et dictée créent la capture ; suggestion de dossier ; lien capture → dossier.
 

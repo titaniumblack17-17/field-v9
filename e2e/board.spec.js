@@ -152,10 +152,13 @@ test('tuile « En attente » : liste filtrée avec pastilles, contact, retour', 
 
 test('« N devis · M dossiers » : chiffres alignés sur la base', async ({ page }) => {
   const problemes = surveiller(page)
-  const fichiers = await lire('fichiers?type_doc=eq.devis&dossier_id=not.is.null&select=id,dossier_id,type_doc,montant_ttc,variantes,a_trancher_raison,decision')
-  const retenus = new Set(fichiers.filter((f) => f.decision === 'retenu').map((f) => f.dossier_id))
-  const reportes = new Set(fichiers.filter((f) => f.decision === 'mis_de_cote' && !retenus.has(f.dossier_id)).map((f) => f.dossier_id))
-  const devis = fichiers.filter((f) => aTrancher(f) && !reportes.has(f.dossier_id))
+  const fichiers = await lire('fichiers?type_doc=eq.devis&dossier_id=not.is.null&select=id,dossier_id,montant_ttc,variantes,decision')
+  // Devis ayant au moins une offre à trancher (un devis sans offres = une offre selon sa décision)
+  const devis = fichiers.filter((f) => {
+    const v = Array.isArray(f.variantes) ? f.variantes : []
+    if (v.length >= 1) return v.some((o) => !['retenue', 'ecartee', 'reportee'].includes(o.etat))
+    return f.montant_ttc != null && f.decision === 'a_trancher'
+  })
   const dossiers = new Set(devis.map((f) => f.dossier_id))
   await accueil(page)
   const ligne = page.getByRole('button', { name: /Devis à trancher/ })

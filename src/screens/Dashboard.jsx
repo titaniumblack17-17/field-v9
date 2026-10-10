@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabaseClient'
 import { lireAvecCache } from '../lib/cacheLecture'
 import { nomClient } from '../lib/client'
 import { aujourdhui as calculerAujourdhui, etatEcheanceTache, etatRappel } from '../lib/rappel'
-import { aTrancher, fourchette, variantesDe } from '../lib/documents'
+import { champsEcarterAutres, decisionsRequises, devisANettoyer, dossiersReportes, offresPlat, potentiel } from '../lib/documents'
+import { mettreEnFile } from '../lib/fileAttente'
 import {
   ETAPES_PROJET_LABELS,
   ETAPES_SIGNEES,
@@ -28,6 +29,9 @@ const montantOuAChiffrer = (montant, aChiffrer, nb) => {
   if (montant === 0) return aChiffrer > 0 ? 'à chiffrer' : '—'
   return euros(montant) + (aChiffrer > 0 ? ` · ${aChiffrer} à chiffrer` : '')
 }
+
+// Accord : « 1 offre », « 2 offres ».
+const pl = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`
 
 const R = 50
 const TRAIT = 18
@@ -189,7 +193,14 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
   const [erreur, setErreur] = useState(null)
   const [tentative, setTentative] = useState(0)
   const [feuille, setFeuille] = useState(null)
-  const fermer = useCallback(() => setFeuille(null), [])
+  const fermer = useCallback(() => {
+    setFeuille(null)
+    setConfirmationGlobale(false)
+  }, [])
+  // Nettoyage : confirmation du « tout écarter » en cours, et dernière action annulable (8 s).
+  const [confirmationGlobale, setConfirmationGlobale] = useState(false)
+  const [annulable, setAnnulable] = useState(null)
+  const minuteurAnnulation = useRef(null)
 
   const charger = useCallback(async () => {
     try {
@@ -263,10 +274,12 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
     const nom = (d) => nomClient(d.clients) ?? '—'
     const ligne = (d, motif, cle = d.id) => ({ cle, dossier: d, nom: nom(d), titre: d.titre || TYPE_LABELS[d.type], motif })
 
-    // Dossiers reportés : au moins un devis mis de côté, aucun retenu — hors signé et hors à trancher.
-    const retenus = new Set(fichiers.filter((f) => f.type_doc === 'devis' && f.decision === 'retenu').map((f) => f.dossier_id))
-    const misDeCote = fichiers.filter((f) => f.type_doc === 'devis' && f.decision === 'mis_de_cote')
-    const reportesIds = new Set(misDeCote.map((f) => f.dossier_id).filter((id) => !retenus.has(id)))
+    // Dossiers reportés (offre ou devis mis de côté, rien de retenu) : hors signé.
+    const reportesIds = dossiersReportes(fichiers)
+    const offres = offresPlat(fichiers)
+    const dateFr = (iso) => new Date(iso + 'T00:00:00').toLocaleDateString('fr-FR')
+    const motifOffre = (o, plus = '') =>
+      `${o.libelle} — ${o.montant == null ? 'à chiffrer' : euros(o.montant)}${o.projet ? ` · ${o.projet}` : ''}${plus}`
 
     const signes = projets
       .filter((d) => !reportesIds.has(d.id) && d.statut !== 'perdu' && ETAPES_SIGNEES.includes(d.statut) && exerciceDe(d, annee) === annee)
@@ -274,23 +287,16 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
         ligne(d, `${ETAPES_PROJET_LABELS[d.statut] ?? d.statut} · ${d.montant_estime == null ? 'à chiffrer' : euros(d.montant_estime)}`)
       )
 
-    const devisATrancher = fichiers.filter((f) => aTrancher(f) && !reportesIds.has(f.dossier_id))
-    const dossiersATrancher = [...new Set(devisATrancher.map((f) => f.dossier_id))]
-    const atrancher = dossiersATrancher
-      .map((id) => dossiers.find((d) => d.id === id))
+    // Potentiel ouvert : une ligne par offre, avec son motif.
+    const ligneOffre = (o, plus) => {
+      const d = dossiers.find((x) => x.id === o.dossier_id)
+      return d ? ligne(d, motifOffre(o, plus), `${o.fichier_id}-${o.i ?? 'u'}`) : null
+    }
+    const atrancher = offres.filter((o) => o.etat === 'a_trancher').map((o) => ligneOffre(o, ' · à trancher')).filter(Boolean)
+    const reportees = offres
+      .filter((o) => o.etat === 'reportee')
+      .map((o) => ligneOffre(o, o.date_reprise ? ` · reprise le ${dateFr(o.date_reprise)}` : ' · reportée'))
       .filter(Boolean)
-      .map((d) => {
-        const siens = devisATrancher.filter((f) => f.dossier_id === d.id)
-        const motifs = siens.map((f) => {
-          const r = fourchette(f)
-          const offres = variantesDe(f).length
-          const plage = r ? (r.min === r.max ? euros(r.min) : `${euros(r.min)} – ${euros(r.max)}`) : null
-          return f.a_trancher_raison
-            ? `HT ou TTC à préciser${plage ? ` (${plage})` : ''}`
-            : `${offres} offres à trancher${plage ? ` · ${plage}` : ''}`
-        })
-        return ligne(d, `${siens.length} devis · ${motifs.join(' ; ')}`)
-      })
 
     const apresDevis = ['devis_envoye', 'relance', 'visite_local', 'negociation', 'confirmation', 'financement', 'commande', 'reunion_chantier', 'installation', 'finition']
     const incomplets = projets
@@ -302,15 +308,6 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
         return manques.length ? ligne(d, manques.join(' · ')) : null
       })
       .filter(Boolean)
-
-    const reportes = [...reportesIds]
-      .map((id) => dossiers.find((d) => d.id === id))
-      .filter(Boolean)
-      .map((d) => {
-        const siens = misDeCote.filter((f) => f.dossier_id === d.id)
-        const reprise = siens.map((f) => f.date_reprise).filter(Boolean).sort()[0]
-        return ligne(d, `${siens.length} devis mis de côté${reprise ? ` · reprise le ${new Date(reprise + 'T00:00:00').toLocaleDateString('fr-FR')}` : ''}`)
-      })
 
     const attente = dossiers.filter(estEnAttente).map((d) => ({ ...ligne(d, null), pastille: true }))
 
@@ -334,8 +331,33 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
       if (jours != null && !dusIds.has(d.id)) retard.push(ligne(d, `Devis sans réponse · ${jours} j`, `devis-${d.id}`))
     }
 
-    return { signes, atrancher, nbDevisATrancher: devisATrancher.length, incomplets, attente, retard, reportes }
+    return { signes, atrancher, incomplets, attente, retard, reportees }
   }, [chiffres, dossiers, fichiers, taches])
+
+  // Nettoyage du potentiel ouvert : devis déjà retenus dont d'autres offres traînent « à trancher ».
+  // Rien n'est appliqué sans geste ; « décision requise » n'est qu'un signalement.
+  const nettoyage = useMemo(() => {
+    const cibles = devisANettoyer(fichiers)
+    const requis = decisionsRequises(fichiers)
+    const nomDe = (id) => {
+      const d = dossiers.find((x) => x.id === id)
+      return d ? { dossier: d, nom: nomClient(d.clients) ?? '—', titre: d.titre || TYPE_LABELS[d.type] } : null
+    }
+    const lignes = cibles
+      .map((x) => ({ ...x, ...nomDe(x.f.dossier_id) }))
+      .filter((x) => x.dossier)
+    const apres = fichiers.map((f) => (cibles.some((x) => x.f.id === f.id) ? { ...f, ...champsEcarterAutres(f) } : f))
+    const avantP = potentiel(fichiers).aTrancher
+    const apresP = potentiel(apres).aTrancher
+    return {
+      lignes,
+      requis: requis.map((f) => ({ f, ...nomDe(f.dossier_id) })).filter((x) => x.dossier),
+      nbOffres: lignes.reduce((t, x) => t + x.ouvertes.length, 0),
+      retire: avantP.montantMin - apresP.montantMin,
+      offresAvant: avantP.offres,
+      offresApres: apresP.offres,
+    }
+  }, [fichiers, dossiers])
 
   if (chargement && !chiffres) {
     return (
@@ -352,23 +374,54 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
     )
   }
 
-  const { objectif, signe, a_trancher: at, familles, projets_actifs: nbActifs } = chiffres
+  const { objectif, signe, familles, projets_actifs: nbActifs } = chiffres
+  // Potentiel ouvert (par offre) : à trancher et reportées.
+  const at = chiffres.potentiel.a_trancher
+  const rp = chiffres.potentiel.reportees
   const pourcentage = Math.round((Number(signe.montant) / objectif) * 100)
-  const aTrancherMontant = Number(at.montant_min_hors_signes)
-  const reste = Math.max(0, objectif - Number(signe.montant) - aTrancherMontant)
+  const aTrancherMontant = Number(at.montant_min)
+  const reporteMontant = Number(rp.montant)
+  const reste = Math.max(0, objectif - Number(signe.montant) - aTrancherMontant - reporteMontant)
   const serie = chiffres.serie ?? []
 
   const vers = (f) => onPipeline('projet', f.etapes[0], f)
 
   const configListe = {
     signes: { titre: `Signé · ${signe.nb} dossiers`, lignes: listes.signes },
-    trancher: { titre: `À trancher · ${at.devis} devis · ${at.dossiers} dossier${at.dossiers > 1 ? 's' : ''}`, lignes: listes.atrancher },
+    trancher: { titre: `À trancher · ${pl(at.offres, 'offre')} · ${at.devis} devis · ${pl(at.dossiers, 'dossier')}`, lignes: listes.atrancher },
     incomplets: { titre: `Incomplets · ${chiffres.incomplets.dossiers} dossiers`, lignes: listes.incomplets },
     attente: { titre: `En attente · ${chiffres.en_attente.dossiers}`, lignes: listes.attente },
     retard: { titre: `En retard · ${chiffres.en_retard.total}`, lignes: listes.retard },
-    reportes: { titre: `Reportés · ${chiffres.reportes?.devis ?? 0} devis · ${chiffres.reportes?.dossiers ?? 0} dossier${(chiffres.reportes?.dossiers ?? 0) > 1 ? 's' : ''}`, lignes: listes.reportes },
+    reportees: { titre: `Reportées · ${pl(rp.offres, 'offre')} · ${rp.devis} devis · ${pl(rp.dossiers, 'dossier')}`, lignes: listes.reportees },
   }
-  const liste = feuille ? configListe[feuille] : null
+  const liste = feuille && feuille !== 'nettoyer' ? configListe[feuille] : null
+
+  // Écrit les états d'offres de plusieurs devis (variantes seulement : aucun montant ne bouge),
+  // erreur Supabase vérifiée, file hors-ligne en cas d'échec, annulation 8 s.
+  const ecarterAutres = async (cibles, libelle) => {
+    const avant = cibles.map(({ f }) => ({ id: f.id, variantes: f.variantes }))
+    for (const { f } of cibles) {
+      const champs = champsEcarterAutres(f)
+      const { error } = await supabase.from('fichiers').update(champs).eq('id', f.id)
+      if (error) mettreEnFile({ type: 'update', table: 'fichiers', rowId: f.id, champs })
+    }
+    clearTimeout(minuteurAnnulation.current)
+    setAnnulable({ libelle, avant })
+    minuteurAnnulation.current = setTimeout(() => setAnnulable(null), 8000)
+    setConfirmationGlobale(false)
+    charger()
+  }
+  const annulerNettoyage = async () => {
+    if (!annulable) return
+    const { avant } = annulable
+    clearTimeout(minuteurAnnulation.current)
+    setAnnulable(null)
+    for (const { id, variantes } of avant) {
+      const { error } = await supabase.from('fichiers').update({ variantes }).eq('id', id)
+      if (error) mettreEnFile({ type: 'update', table: 'fichiers', rowId: id, champs: { variantes } })
+    }
+    charger()
+  }
 
   return (
     <div className="min-h-screen bg-fond">
@@ -388,7 +441,7 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
           <Tuile
             titre="À trancher"
             valeur={`${at.devis} devis · ${at.dossiers} dossier${at.dossiers > 1 ? 's' : ''}`}
-            detail="offres ou HT/TTC à décider"
+            detail={`${pl(at.offres, 'offre')} à décider`}
             petit
             urgent={at.devis > 0}
             onClick={() => setFeuille('trancher')}
@@ -414,17 +467,33 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
           />
         </div>
 
-        {(chiffres.reportes?.dossiers ?? 0) > 0 && (
-          <button
-            onClick={() => setFeuille('reportes')}
-            className="mt-3 w-full min-h-11 bg-carte rounded-xl px-4 flex items-center justify-between gap-3 text-left"
-          >
-            <span className="text-sm text-texte">Reportés</span>
-            <span className="text-sm text-texte-doux tabular-nums">
-              {chiffres.reportes.devis} devis · {chiffres.reportes.dossiers} dossier{chiffres.reportes.dossiers > 1 ? 's' : ''} ›
-            </span>
-          </button>
-        )}
+        <section className="mt-3 bg-carte rounded-xl px-4 pt-3 pb-1" aria-label="Potentiel ouvert">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs text-texte-faible uppercase tracking-wider">Potentiel ouvert</h2>
+            {(nettoyage.lignes.length > 0 || nettoyage.requis.length > 0) && (
+              <button
+                onClick={() => setFeuille('nettoyer')}
+                className="min-h-11 px-2 -mr-2 text-sm font-medium text-accent-vif"
+              >
+                Nettoyer
+              </button>
+            )}
+          </div>
+          <LigneLegende
+            couleur={COULEURS_OBJECTIF.aTrancher}
+            titre="À trancher"
+            valeur={aTrancherMontant > 0 ? `≥ ${euros(aTrancherMontant)}` : '—'}
+            detail={`${pl(at.offres, 'offre')} · ${at.devis} devis · ${pl(at.dossiers, 'dossier')}`}
+            onClick={() => setFeuille('trancher')}
+          />
+          <LigneLegende
+            couleur={COULEURS_OBJECTIF.reporte}
+            titre="Reportées"
+            valeur={rp.offres > 0 ? euros(reporteMontant) : '—'}
+            detail={`${pl(rp.offres, 'offre')} · ${rp.devis} devis · ${pl(rp.dossiers, 'dossier')}`}
+            onClick={() => setFeuille('reportees')}
+          />
+        </section>
 
         <section className="mt-4 bg-carte rounded-xl p-4" aria-label="Objectif">
           <h2 className="text-xs text-texte-faible uppercase tracking-wider mb-3">Objectif {chiffres.annee}</h2>
@@ -434,6 +503,7 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
               segments={[
                 { cle: 'signe', valeur: Number(signe.montant), couleur: COULEURS_OBJECTIF.signe, label: 'Signé : voir les dossiers', onClick: () => setFeuille('signes') },
                 { cle: 'a-trancher', valeur: aTrancherMontant, couleur: COULEURS_OBJECTIF.aTrancher, label: 'À trancher : voir les devis', onClick: () => setFeuille('trancher') },
+                { cle: 'reporte', valeur: reporteMontant, couleur: COULEURS_OBJECTIF.reporte, label: 'Reporté : voir les offres', onClick: () => setFeuille('reportees') },
                 { cle: 'reste', valeur: reste, couleur: COULEURS_OBJECTIF.reste, label: 'Reste à faire' },
               ]}
               centre={
@@ -455,8 +525,13 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
                 couleur={COULEURS_OBJECTIF.aTrancher}
                 titre="À trancher"
                 valeur={aTrancherMontant > 0 ? `≥ ${euros(aTrancherMontant)}` : '—'}
-                detail={`${at.devis} devis · ${at.dossiers} dossier${at.dossiers > 1 ? 's' : ''}`}
                 onClick={() => setFeuille('trancher')}
+              />
+              <LigneLegende
+                couleur={COULEURS_OBJECTIF.reporte}
+                titre="Reporté"
+                valeur={rp.offres > 0 ? euros(reporteMontant) : '—'}
+                onClick={() => setFeuille('reportees')}
               />
               <LigneLegende couleur={COULEURS_OBJECTIF.reste} titre="Reste à faire" valeur={euros(reste)} />
             </div>
@@ -505,6 +580,106 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
           <Evolution serie={serie} />
         </section>
       </main>
+
+      {feuille === 'nettoyer' && (
+        <FeuilleBasse titre={`Nettoyer le potentiel · ${nettoyage.nbOffres} offre${nettoyage.nbOffres > 1 ? 's' : ''}`} onFermer={fermer}>
+          {nettoyage.requis.length > 0 && (
+            <section className="mt-1 mb-3 rounded-imbrique border border-alerte/40 bg-alerte/10 px-3 py-3" aria-label="Décision requise">
+              <p className="text-xs font-semibold uppercase tracking-wide text-alerte">Décision requise</p>
+              <ul className="mt-1 space-y-2">
+                {nettoyage.requis.map((x) => (
+                  <li key={x.f.id}>
+                    <button
+                      onClick={() => {
+                        fermer()
+                        onOpenDossier(x.dossier)
+                      }}
+                      className="w-full min-h-11 text-left"
+                    >
+                      <span className="block text-[15px] font-bold text-texte truncate">{x.nom}</span>
+                      <span className="block text-xs text-texte-doux">
+                        {x.f.nom?.replace(/\.[^.]+$/, '')} — montant retenu {euros(Number(x.f.montant_ttc))}, mais aucune offre n'est marquée retenue
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {nettoyage.lignes.length === 0 ? (
+            <p className="text-texte-faible text-sm py-3">Aucun devis à nettoyer.</p>
+          ) : (
+            <>
+              <ul className="divide-y divide-separateur">
+                {nettoyage.lignes.map((x) => {
+                  const somme = (l) => l.reduce((t, o) => t + (Number(o.montant) || 0), 0)
+                  return (
+                    <li key={x.f.id} className="py-2">
+                      <button
+                        onClick={() => {
+                          fermer()
+                          onOpenDossier(x.dossier)
+                        }}
+                        className="w-full min-h-11 text-left"
+                      >
+                        <span className="block text-[15px] font-bold text-texte truncate">{x.nom}</span>
+                        <span className="block text-xs text-texte-doux truncate">{x.f.nom?.replace(/\.[^.]+$/, '')}</span>
+                        <span className="block text-xs text-alerte mt-0.5">
+                          {x.retenues.length} retenue{x.retenues.length > 1 ? 's' : ''} ({euros(somme(x.retenues))}) · {x.ouvertes.length} autre{x.ouvertes.length > 1 ? 's' : ''} à trancher ({euros(somme(x.ouvertes))})
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => ecarterAutres([x], `Autres offres de « ${x.f.nom} » : écartées`)}
+                        className="mt-1 min-h-11 px-4 rounded-full text-sm bg-fond text-texte border border-separateur"
+                      >
+                        Écarter les autres
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+              {confirmationGlobale ? (
+                <div className="mt-3 rounded-imbrique border border-alerte/40 bg-alerte/10 px-3 py-3" role="alertdialog" aria-label="Confirmer le nettoyage">
+                  <p className="text-sm text-texte">
+                    Écarter {nettoyage.nbOffres} offre{nettoyage.nbOffres > 1 ? 's' : ''} sur {nettoyage.lignes.length} devis ?
+                  </p>
+                  <p className="text-xs text-texte-doux mt-1 tabular-nums">
+                    Retiré du potentiel à trancher : {euros(nettoyage.retire)} (plancher) · offres à trancher : {nettoyage.offresAvant} → {nettoyage.offresApres}. Aucun montant de dossier ne change.
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => ecarterAutres(nettoyage.lignes, `${nettoyage.nbOffres} offres écartées sur ${nettoyage.lignes.length} devis`)}
+                      className="min-h-11 px-4 rounded-full text-sm bg-accent text-white"
+                    >
+                      Confirmer
+                    </button>
+                    <button onClick={() => setConfirmationGlobale(false)} className="min-h-11 px-3 text-sm text-texte-doux">
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmationGlobale(true)}
+                  className="mt-3 w-full min-h-11 px-4 rounded-imbrique bg-fond text-sm text-texte border border-separateur"
+                >
+                  Tout écarter ({nettoyage.nbOffres} offre{nettoyage.nbOffres > 1 ? 's' : ''})
+                </button>
+              )}
+            </>
+          )}
+        </FeuilleBasse>
+      )}
+
+      {annulable && (
+        <div role="status" className="fixed bottom-4 left-4 right-4 z-[60] max-w-md mx-auto bg-carte-douce rounded-xl shadow-lg pl-4 pr-1 flex items-center justify-between gap-2">
+          <span className="text-sm text-texte truncate py-2">{annulable.libelle}</span>
+          <button onClick={annulerNettoyage} className="flex-shrink-0 min-h-11 px-3 text-sm font-semibold text-accent-vif">
+            Annuler
+          </button>
+        </div>
+      )}
 
       {liste && (
         <FeuilleBasse titre={liste.titre} onFermer={fermer}>
