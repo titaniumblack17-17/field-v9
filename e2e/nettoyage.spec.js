@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { ouvrirDocuments, versDashboard } from './aides.js'
+import { ouvrirDocuments, versDashboard, annuler } from './aides.js'
 import { journaliser } from './diag.js'
 import { potentiel } from '../src/lib/documents.js'
 
@@ -117,7 +117,7 @@ test('geste unitaire sur la fiche : proposé seulement quand une offre est reten
   await expect.poll(async () => (await contribution()).offres).toBeLessThan(avant.offres)
 
   // Annuler (8 s) : tout revient
-  await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click()
+  await annuler(page, /écartées/)
   await expect.poll(async () => (await etats(P)).join(',') + '|' + (await etats(Q)).join(',')).toBe('retenue,a_trancher,a_trancher|retenue,a_trancher')
   await expect.poll(async () => (await contribution()).offres).toBe(avant.offres)
   await pasDeDebordement(page)
@@ -155,7 +155,7 @@ test('Dashboard « Nettoyer » : décision requise en tête, unitaire, global av
   await ligneQ.getByRole('button', { name: 'Écarter les autres' }).click()
   await expect.poll(async () => (await etats(Q)).join(',')).toBe('retenue,ecartee')
   await expect(ligneQ).toHaveCount(0) // le Dashboard a relu la base : plus rien à nettoyer sur ce devis
-  await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click()
+  await annuler(page, /écartées/)
   await expect.poll(async () => (await etats(Q)).join(',')).toBe('retenue,a_trancher')
   await expect(ligneQ).toHaveCount(1) // …et il a relu l'annulation : l'état affiché suit la base avant le geste global
 
@@ -175,7 +175,7 @@ test('Dashboard « Nettoyer » : décision requise en tête, unitaire, global av
   await expect.poll(async () => await montantDossier()).toBe(dossiersAvant)
 
   // Annulation du global : tout revient
-  await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click()
+  await annuler(page, /offres écartées/)
   await expect.poll(async () => (await etats(P)).join(',') + '|' + (await etats(Q)).join(',')).toBe('retenue,a_trancher,a_trancher|retenue,a_trancher')
   await expect.poll(async () => (await contribution()).offres).toBe(avant.offres)
 

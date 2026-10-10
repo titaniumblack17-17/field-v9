@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { ouvrirDocuments } from './aides.js'
+import { ouvrirDocuments, annuler } from './aides.js'
 import { journaliser, noter } from './diag.js'
 
 // Fixtures propres à ce passage : jamais de doublon avec une autre session ou un reste d'un passage interrompu.
@@ -113,7 +113,7 @@ test('les 4 décisions, cumul entre devis, annulation', async ({ page }) => {
   await bouton(page, NC, 'Alternative').click()
   await expect.poll(async () => num(await montant())).toBe(10000)
   await expect.poll(async () => (await ligne(C.id)).decision).toBe('alternative')
-  await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click()
+  await annuler(page, /alternative/)
   await expect.poll(async () => (await ligne(C.id)).decision).toBe('retenu')
   await expect.poll(async () => num(await montant())).toBe(15000)
 
@@ -150,7 +150,7 @@ test('proposition de remplacement par numéro : Oui / Non alternative / Non cumu
   await expect.poll(async () => (await ligne(A.id)).remplace_par).toBe(B.id)
   await expect.poll(async () => (await ligne(B.id)).decision).toBe('retenu')
   await expect.poll(async () => num(await montant())).toBe(12000)
-  await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click()
+  await annuler(page, /remplace/)
   await expect.poll(async () => (await ligne(B.id)).decision).toBe('a_trancher')
   await expect.poll(async () => (await ligne(A.id)).decision).toBe('retenu')
   await expect.poll(async () => num(await montant())).toBe(10000)

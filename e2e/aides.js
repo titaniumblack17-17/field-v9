@@ -40,3 +40,14 @@ export async function versAccueil(page) {
   if (await retour.count()) await retour.click()
   await expect(page.getByText('Dossiers actifs').first()).toBeVisible()
 }
+
+/**
+ * Touche « Annuler » de la décision en cours. Le bandeau d'annulation ne passe à la nouvelle décision qu'une
+ * fois son écriture terminée côté application : la base peut déjà la montrer alors que le bandeau porte encore
+ * la décision précédente. On attend donc que le bandeau nomme la bonne décision avant de l'annuler.
+ */
+export async function annuler(page, motif) {
+  const bandeau = page.getByRole('status')
+  await expect(bandeau).toContainText(motif)
+  await bandeau.getByRole('button', { name: 'Annuler' }).click()
+}

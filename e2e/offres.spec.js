@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { ouvrirDocuments, versDashboard } from './aides.js'
+import { ouvrirDocuments, versDashboard, annuler } from './aides.js'
 import { journaliser, noter } from './diag.js'
 
 // Fixtures propres à ce passage : jamais de doublon avec une autre session ou un reste d'un passage interrompu.
@@ -105,7 +105,7 @@ test('états par offre (retenue / à trancher / écartée / reportée) et annula
   expect(num(await montant())).toBe(1000) // écartée : ne compte pas
 
   // Annulation d'un tap (8 s) : l'offre redevient à trancher
-  await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click()
+  await annuler(page, /écartée/)
   await expect.poll(async () => (await etats(X))[1]).toBe('a_trancher')
 
   // Retenue → À trancher : le montant disparaît
@@ -210,7 +210,7 @@ test('reportée avec date de reprise : rappel, Dashboard (Potentiel ouvert, anne
   // Annulation : l'offre redevient à trancher ET le rappel créé est retiré
   await ouvrir(page)
   await etat(page, 'Local', 'Écartée').click() // nouvelle décision annulable
-  await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click()
+  await annuler(page, /écartée/)
   await expect.poll(async () => (await etats(X))[1]).toBe('a_trancher')
   expect(problemes).toEqual([])
 })
@@ -221,7 +221,7 @@ test('annuler un report supprime son rappel', async ({ page }) => {
   await page.getByLabel("Date de reprise de l'offre").fill('2026-11-04')
   await page.getByRole('button', { name: "Reporter l'offre" }).click()
   await expect.poll(async () => (await rest('GET', `rappels?dossier_id=eq.${dossier.id}&select=id`)).length).toBe(1)
-  await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click()
+  await annuler(page, /reportée/)
   await expect.poll(async () => (await etats(X))[2]).toBe('a_trancher')
   await expect.poll(async () => (await rest('GET', `rappels?dossier_id=eq.${dossier.id}&select=id`)).length).toBe(0)
 })
