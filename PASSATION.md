@@ -733,3 +733,12 @@ Voir `docs/phase2-historique.md` (état des lieux, définition de « signé », 
 - « À chiffrer » (RPC `a_chiffrer`) : seulement à partir de Devis envoyé ; jamais « 0 € ».
 - Série d'évolution : `pipeline_snapshots` ; signé par statut (sans la règle d'exercice) ; courbe affichée à partir de 7 jours de données.
 - Une table nouvelle doit être ajoutée à la publication realtime : `pipeline_snapshots` ne l'était pas, et l'abonnement ENTIER du Dashboard échouait sans erreur visible (corrigé).
+
+## Décisions par devis (branche `feat/decisions-devis`, depuis `feat/phase3-dashboard`, non fusionnée)
+
+- Colonnes `fichiers.decision` (a_trancher par défaut | retenu | alternative | remplace | mis_de_cote), `remplace_par`, `mis_de_cote_le`, `date_reprise`, et `decision_le` (ajoutée : date de chaque décision, sert à « Remplacé le… »). Migrations `20261012_decisions_devis.sql` et `20261012_dashboard_decisions.sql`, rollbacks dans `supabase/rollback/`.
+- Calcul (`recalculer_montant_dossier`) : montant du dossier = somme des devis `retenu` ; des devis existent mais aucun n'est retenu → NULL ; aucun devis du tout → saisie manuelle intacte (sauf retrait d'un devis chiffré). La règle « deux devis chiffrés se remplacent toujours » et la case « devis complémentaire » (colonne `cumule`, conservée mais sans effet) sont supprimées.
+- Remplissage : le devis le plus récent de chaque dossier (et les cumulés) → retenu ; les autres devis chiffrés que l'ancienne règle ignorait → remplacé (remplace_par = le devis retenu) ; devis sans montant → à trancher. Aucun montant modifié.
+- Numéro de devis : `parserReference` (racine = NOM_PRODUIT, numéro = 9 chiffres + lettre de révision). Proposition seulement quand la racine est identique et le rang plus élevé.
+- « Reportés » : dossier avec un devis mis de côté et aucun retenu ; hors signé et hors à trancher dans la RPC `dashboard_chiffres()` (clé `reportes`).
+- L'analyse (`devis-montant-v2`, v4) ne décide jamais : un devis analysé reste « à trancher » jusqu'à un tap (ou une saisie manuelle du montant, qui le retient).

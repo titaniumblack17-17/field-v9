@@ -35,7 +35,7 @@ const dashboardVisible = (page) => expect(page.getByRole('heading', { name: 'Das
 // Recalcul indépendant depuis la base
 const recalcul = async () => {
   const dossiers = await lire('dossiers?select=id,type,statut,montant_estime,closed_at,date_installation,bloque_par')
-  const fichiers = await lire('fichiers?select=id,dossier_id,type_doc,montant_ttc,variantes,a_trancher_raison&dossier_id=not.is.null')
+  const fichiers = await lire('fichiers?select=id,dossier_id,type_doc,montant_ttc,variantes,a_trancher_raison,decision&dossier_id=not.is.null')
   const annee = Number(new Date().toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' }).slice(0, 4))
   const projets = dossiers.filter((d) => d.type === 'projet')
   const actifs = projets.filter((d) => !['perdu', 'termine'].includes(d.statut))
@@ -43,8 +43,11 @@ const recalcul = async () => {
     const l = actifs.filter((d) => f.etapes.includes(d.statut))
     return { cle: f.cle, nb: l.length, montant: l.reduce((t, d) => t + (Number(d.montant_estime) || 0), 0), sans: l.filter((d) => d.montant_estime == null).length }
   })
-  const signes = projets.filter((d) => d.statut !== 'perdu' && ETAPES_SIGNEES.includes(d.statut) && exerciceDe(d, annee) === annee)
-  const devis = fichiers.filter((f) => f.type_doc === 'devis' && f.montant_ttc == null && aTrancher(f))
+  // Dossiers reportés : un devis mis de côté, aucun retenu — hors signé et hors à trancher
+  const retenus = new Set(fichiers.filter((f) => f.type_doc === 'devis' && f.decision === 'retenu').map((f) => f.dossier_id))
+  const reportes = new Set(fichiers.filter((f) => f.type_doc === 'devis' && f.decision === 'mis_de_cote' && !retenus.has(f.dossier_id)).map((f) => f.dossier_id))
+  const signes = projets.filter((d) => !reportes.has(d.id) && d.statut !== 'perdu' && ETAPES_SIGNEES.includes(d.statut) && exerciceDe(d, annee) === annee)
+  const devis = fichiers.filter((f) => aTrancher(f) && !reportes.has(f.dossier_id))
   return {
     annee, actifs: actifs.length, familles, signes,
     signeMontant: signes.reduce((t, d) => t + (Number(d.montant_estime) || 0), 0),

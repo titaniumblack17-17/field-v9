@@ -43,14 +43,85 @@ export function libellePastille(f) {
 /** Offres exclusives enregistrées sur un devis (liste vide si aucune). */
 export const variantesDe = (f) => (Array.isArray(f?.variantes) ? f.variantes : [])
 
+// ── Décision par devis : retenu / alternative / remplacé / mis de côté ──────────
+// Défaut « à trancher ». Seuls les devis « retenus » comptent dans le montant du
+// dossier (leur somme : cumul entre devis, et entre offres d'un même devis).
+export const DECISIONS = [
+  ['retenu', 'Retenu'],
+  ['alternative', 'Alternative'],
+  ['remplace', 'Remplacé'],
+  ['mis_de_cote', 'Mis de côté'],
+]
+export const DECISIONS_LIBELLES = { a_trancher: 'À trancher', ...Object.fromEntries(DECISIONS) }
+export const decisionDe = (f) => f?.decision ?? 'a_trancher'
+const maintenant = () => new Date().toISOString()
+
+/** Champs à écrire pour une décision ; `extras` : remplace_par, date_reprise… */
+export function champsDecision(decision, extras = {}) {
+  const champs = { decision, decision_le: maintenant() }
+  if (decision !== 'remplace') champs.remplace_par = null
+  if (decision !== 'mis_de_cote') {
+    champs.mis_de_cote_le = null
+    champs.date_reprise = null
+  } else {
+    champs.mis_de_cote_le = maintenant()
+    champs.date_reprise = extras.date_reprise ?? null
+  }
+  if (decision === 'remplace') champs.remplace_par = extras.remplace_par ?? null
+  return champs
+}
+
+/** Valeurs actuelles des champs de décision d'un devis (pour pouvoir annuler). */
+export const champsDecisionActuels = (f) => ({
+  decision: decisionDe(f),
+  decision_le: f.decision_le ?? null,
+  remplace_par: f.remplace_par ?? null,
+  mis_de_cote_le: f.mis_de_cote_le ?? null,
+  date_reprise: f.date_reprise ?? null,
+})
+
+// ── Numéro de devis : « NOM_PRODUIT_AAAAMMNNN[révision] » ──────────────────────
+// La racine (NOM_PRODUIT) identifie l'affaire ; le numéro (neuf chiffres) puis la
+// lettre de révision donnent l'ordre.
+export function parserReference(nom) {
+  const m = String(nom ?? '').match(/^(.*)_(\d{9})([A-Za-z]?)\.[A-Za-z0-9]+$/)
+  if (!m) return null
+  return { racine: m[1].trim().toLowerCase(), numero: Number(m[2]), revision: m[3].toUpperCase() }
+}
+
+/** Compare deux références parsées : <0 si a précède b. */
+export const comparerReferences = (a, b) =>
+  a.numero - b.numero || (a.revision || '').localeCompare(b.revision || '')
+
+/**
+ * Proposition « ce devis remplace-t-il le précédent ? » : même racine, numéro
+ * plus élevé. Renvoie le devis précédent le plus proche, ou null. Jamais
+ * d'automatisme : la proposition ne fait que s'afficher.
+ */
+export function proposerRemplacement(liste, f) {
+  if (!estDevis(f) || decisionDe(f) !== 'a_trancher') return null
+  const ref = parserReference(f.nom)
+  if (!ref) return null
+  const precedents = (liste ?? [])
+    .filter((g) => g.id !== f.id && estDevis(g) && g.dossier_id === f.dossier_id && decisionDe(g) !== 'remplace')
+    .map((g) => ({ g, r: parserReference(g.nom) }))
+    .filter(({ r }) => r && r.racine === ref.racine && comparerReferences(r, ref) < 0)
+    .sort((x, y) => comparerReferences(y.r, x.r))
+  return precedents[0]?.g ?? null
+}
+
+/** Rang d'affichage : devis actifs, puis mis de côté (« Reportés »), puis remplacés. */
+export const groupeDevis = (f) =>
+  decisionDe(f) === 'mis_de_cote' ? 'reportes' : decisionDe(f) === 'remplace' ? 'remplaces' : 'actifs'
+
 /**
  * Un devis est « à trancher » tant que Bruce n'a pas retenu d'offre alors que
  * plusieurs coexistent, ou qu'un motif de doute (HT/TTC…) est posé sans montant.
  * Un devis dont le TTC est déjà écrit n'est jamais « à trancher ».
  */
 export function aTrancher(f) {
-  if (!estDevis(f) || f.montant_ttc != null) return false
-  return variantesDe(f).length >= 2 || Boolean(f.a_trancher_raison)
+  if (!estDevis(f) || decisionDe(f) !== 'a_trancher') return false
+  return f.montant_ttc != null || variantesDe(f).length >= 2 || Boolean(f.a_trancher_raison)
 }
 
 /** Plus petit et plus grand montant TTC des offres, ou null s'il n'y en a pas. */
@@ -82,11 +153,11 @@ export function champsRetenue(f, i) {
   if (!v || typeof v.montant_ttc !== 'number') return null
   // Le motif de doute reste posé : si Bruce remet le devis à trancher, la
   // question HT/TTC doit se reposer.
-  return { variante_retenue: i, variantes_retenues: [i], montant_ttc: v.montant_ttc, analyse_erreur: null }
+  return { variante_retenue: i, variantes_retenues: [i], montant_ttc: v.montant_ttc, analyse_erreur: null, ...champsDecision('retenu') }
 }
 
 /** Remet le devis « à trancher » : l'offre retenue et le montant qui en venait sont retirés. */
-export const champsRemiseATrancher = () => ({ variante_retenue: null, variantes_retenues: null, montant_ttc: null })
+export const champsRemiseATrancher = () => ({ variante_retenue: null, variantes_retenues: null, montant_ttc: null, ...champsDecision('a_trancher') })
 
 export const TAUX_TVA = 0.2
 
@@ -106,6 +177,7 @@ export function champsRetenueHt(f, i) {
     montant_ht: v.montant_ttc,
     montant_ttc: ttcDepuisHt(v.montant_ttc),
     analyse_erreur: null,
+    ...champsDecision('retenu'),
   }
 }
 
@@ -134,6 +206,7 @@ export function champsCumul(f, choix) {
     variantes_retenues: tri.map((c) => c.i),
     montant_ttc: total,
     analyse_erreur: null,
+    ...champsDecision('retenu'),
   }
   if (tri.every((c) => c.base === 'ht')) {
     champs.montant_ht = tri.reduce((t, c) => t + offres[c.i].montant_ttc, 0)

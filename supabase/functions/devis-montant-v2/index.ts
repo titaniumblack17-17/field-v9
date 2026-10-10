@@ -277,18 +277,12 @@ Un montant faux alimenterait un suivi de chiffre d'affaires : dans le doute, ne 
 
   // Trace au journal : un montant qui change tout seul doit dire d'où il vient.
   if (ttc !== null) {
-    const { data: dossier } = await db
-      .from('dossiers')
-      .select('montant_estime')
-      .eq('id', fichier.dossier_id)
-      .single()
-
     await db.from('dossier_notes').insert({
       dossier_id: fichier.dossier_id,
       texte:
         `Montant lu dans « ${fichier.nom} » : ${eur(ttc)} € TTC` +
         (lu.reference ? ` (devis ${lu.reference})` : '') +
-        `. Montant du dossier porté à ${eur(dossier?.montant_estime ?? ttc)} € TTC.` +
+        `. À trancher : le devis ne compte dans le montant du dossier qu'une fois retenu.` +
         (lu.extrait ? `\nLu : « ${lu.extrait} »${lu.page ? ` (page ${lu.page})` : ''}` : '') +
         (lu.somme_calculee ? `\n⚠ Aucun montant global annoncé : somme des postes.` : '') +
         (lu.doute ? `\n⚠ ${lu.doute}` : ''),

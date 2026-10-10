@@ -41,6 +41,14 @@ Viewport iPhone 390 × 844. Console sans erreur. Aucun défilement horizontal. C
 - [ ] Analyse devis → montant TTC ; saisie manuelle ; case « devis complémentaire » ; un devis remplace, ne s'additionne pas.
 - [ ] Montant dossier = trigger `recalculer_montant_dossier` ; `montant_estime` manuel préservé sans devis chiffré.
 
+## 5 bis. Décisions par devis (retenu / alternative / remplacé / mis de côté)
+- [ ] Défaut « À trancher » : aucun devis ne compte ; montant du dossier NULL = « À chiffrer », jamais 0 €.
+- [ ] Les 4 boutons (≥ 44 px) changent la décision en un tap ; « Annuler » rétablit.
+- [ ] Montant du dossier = somme des devis « retenu » (cumul entre devis ET entre offres d'un même devis).
+- [ ] « Mis de côté » : date de reprise facultative → rappel ; groupe « Reportés » ; remplacés grisés avec la date.
+- [ ] Proposition « Ce devis remplace-t-il le précédent ? » (même racine, numéro plus élevé) : Oui / Non, alternative / Non, cumul — jamais d'automatisme.
+- [ ] Ligne de temps des devis (n°, date, montant, décision) ; dossiers reportés exposés sous « reportes » (RPC).
+
 ## 6. Capture / dictée
 - [ ] Capture texte et dictée créent la capture ; suggestion de dossier ; lien capture → dossier.
 

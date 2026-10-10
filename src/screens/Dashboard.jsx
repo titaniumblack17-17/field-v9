@@ -207,7 +207,7 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
         lire('dashboard-fichiers', () =>
           supabase
             .from('fichiers')
-            .select('id, dossier_id, type_doc, montant_ttc, variantes, a_trancher_raison')
+            .select('id, dossier_id, type_doc, montant_ttc, variantes, a_trancher_raison, decision, date_reprise, nom')
             .not('dossier_id', 'is', null)
         ),
         lire('brief-taches', () =>
@@ -263,13 +263,18 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
     const nom = (d) => nomClient(d.clients) ?? '—'
     const ligne = (d, motif, cle = d.id) => ({ cle, dossier: d, nom: nom(d), titre: d.titre || TYPE_LABELS[d.type], motif })
 
+    // Dossiers reportés : au moins un devis mis de côté, aucun retenu — hors signé et hors à trancher.
+    const retenus = new Set(fichiers.filter((f) => f.type_doc === 'devis' && f.decision === 'retenu').map((f) => f.dossier_id))
+    const misDeCote = fichiers.filter((f) => f.type_doc === 'devis' && f.decision === 'mis_de_cote')
+    const reportesIds = new Set(misDeCote.map((f) => f.dossier_id).filter((id) => !retenus.has(id)))
+
     const signes = projets
-      .filter((d) => d.statut !== 'perdu' && ETAPES_SIGNEES.includes(d.statut) && exerciceDe(d, annee) === annee)
+      .filter((d) => !reportesIds.has(d.id) && d.statut !== 'perdu' && ETAPES_SIGNEES.includes(d.statut) && exerciceDe(d, annee) === annee)
       .map((d) =>
         ligne(d, `${ETAPES_PROJET_LABELS[d.statut] ?? d.statut} · ${d.montant_estime == null ? 'à chiffrer' : euros(d.montant_estime)}`)
       )
 
-    const devisATrancher = fichiers.filter((f) => f.type_doc === 'devis' && f.montant_ttc == null && aTrancher(f))
+    const devisATrancher = fichiers.filter((f) => aTrancher(f) && !reportesIds.has(f.dossier_id))
     const dossiersATrancher = [...new Set(devisATrancher.map((f) => f.dossier_id))]
     const atrancher = dossiersATrancher
       .map((id) => dossiers.find((d) => d.id === id))
@@ -298,6 +303,15 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
       })
       .filter(Boolean)
 
+    const reportes = [...reportesIds]
+      .map((id) => dossiers.find((d) => d.id === id))
+      .filter(Boolean)
+      .map((d) => {
+        const siens = misDeCote.filter((f) => f.dossier_id === d.id)
+        const reprise = siens.map((f) => f.date_reprise).filter(Boolean).sort()[0]
+        return ligne(d, `${siens.length} devis mis de côté${reprise ? ` · reprise le ${new Date(reprise + 'T00:00:00').toLocaleDateString('fr-FR')}` : ''}`)
+      })
+
     const attente = dossiers.filter(estEnAttente).map((d) => ({ ...ligne(d, null), pastille: true }))
 
     const retard = []
@@ -320,7 +334,7 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
       if (jours != null && !dusIds.has(d.id)) retard.push(ligne(d, `Devis sans réponse · ${jours} j`, `devis-${d.id}`))
     }
 
-    return { signes, atrancher, nbDevisATrancher: devisATrancher.length, incomplets, attente, retard }
+    return { signes, atrancher, nbDevisATrancher: devisATrancher.length, incomplets, attente, retard, reportes }
   }, [chiffres, dossiers, fichiers, taches])
 
   if (chargement && !chiffres) {
@@ -352,6 +366,7 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
     incomplets: { titre: `Incomplets · ${chiffres.incomplets.dossiers} dossiers`, lignes: listes.incomplets },
     attente: { titre: `En attente · ${chiffres.en_attente.dossiers}`, lignes: listes.attente },
     retard: { titre: `En retard · ${chiffres.en_retard.total}`, lignes: listes.retard },
+    reportes: { titre: `Reportés · ${chiffres.reportes?.devis ?? 0} devis · ${chiffres.reportes?.dossiers ?? 0} dossier${(chiffres.reportes?.dossiers ?? 0) > 1 ? 's' : ''}`, lignes: listes.reportes },
   }
   const liste = feuille ? configListe[feuille] : null
 
@@ -398,6 +413,18 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
             onClick={() => setFeuille('retard')}
           />
         </div>
+
+        {(chiffres.reportes?.dossiers ?? 0) > 0 && (
+          <button
+            onClick={() => setFeuille('reportes')}
+            className="mt-3 w-full min-h-11 bg-carte rounded-xl px-4 flex items-center justify-between gap-3 text-left"
+          >
+            <span className="text-sm text-texte">Reportés</span>
+            <span className="text-sm text-texte-doux tabular-nums">
+              {chiffres.reportes.devis} devis · {chiffres.reportes.dossiers} dossier{chiffres.reportes.dossiers > 1 ? 's' : ''} ›
+            </span>
+          </button>
+        )}
 
         <section className="mt-4 bg-carte rounded-xl p-4" aria-label="Objectif">
           <h2 className="text-xs text-texte-faible uppercase tracking-wider mb-3">Objectif {chiffres.annee}</h2>

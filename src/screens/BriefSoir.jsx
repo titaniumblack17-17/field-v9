@@ -530,9 +530,8 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
     let actif = true
     supabase
       .from('fichiers')
-      .select('id, dossier_id, type_doc, montant_ttc, variantes, a_trancher_raison')
+      .select('id, dossier_id, type_doc, montant_ttc, variantes, a_trancher_raison, decision')
       .eq('type_doc', 'devis')
-      .is('montant_ttc', null)
       .not('dossier_id', 'is', null)
       .then(({ data, error }) => {
         if (actif && !error) setDevisSansMontant(data ?? [])
@@ -547,7 +546,7 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
         setDevisSansMontant((cur) => {
           if (p.eventType === 'DELETE') return cur.filter((f) => f.id !== p.old.id)
           const f = p.new
-          const concerne = f.type_doc === 'devis' && f.montant_ttc == null && f.dossier_id
+          const concerne = f.type_doc === 'devis' && f.dossier_id
           const sans = cur.filter((x) => x.id !== f.id)
           return concerne ? [...sans, f] : sans
         })
@@ -947,7 +946,12 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
 
   // Devis à trancher : « N devis · M dossiers » (un dossier peut en porter deux).
   const aTrancherPar = useMemo(() => {
-    const devis = devisSansMontant.filter(aTrancher)
+    // Un dossier « reporté » (devis mis de côté, aucun retenu) ne compte pas en à trancher.
+    const retenus = new Set(devisSansMontant.filter((f) => f.decision === 'retenu').map((f) => f.dossier_id))
+    const reportes = new Set(
+      devisSansMontant.filter((f) => f.decision === 'mis_de_cote' && !retenus.has(f.dossier_id)).map((f) => f.dossier_id)
+    )
+    const devis = devisSansMontant.filter((f) => aTrancher(f) && !reportes.has(f.dossier_id))
     const parDossier = new Map()
     for (const f of devis) parDossier.set(f.dossier_id, (parDossier.get(f.dossier_id) ?? 0) + 1)
     const lignes = [...parDossier.entries()]

@@ -101,7 +101,7 @@ test('cumul avec doute HT/TTC : base par offre, TVA, total, HT conservé seuleme
 
 test('hors-ligne : le cumul est mis en file et rejoué sans doublon', async ({ page, context }) => {
   // Remettre le devis sans doute à trancher
-  await rest('PATCH', `fichiers?id=eq.${sansDoute.id}`, { montant_ttc: null, variante_retenue: null, variantes_retenues: null })
+  await rest('PATCH', `fichiers?id=eq.${sansDoute.id}`, { montant_ttc: null, variante_retenue: null, variantes_retenues: null, decision: 'a_trancher' })
   const avant = await notes(dossier.id)
   await ouvrir(page)
   const c = carte(page, 'ZZTEST_PCICLASSIC_202699014')
