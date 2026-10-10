@@ -714,3 +714,9 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
 - Tuile et pastilles ⏳ du Board : `estEnAttente` (constants/dossiers.js) = `bloque_par` renseigné et statut hors termine/clos/solde/perdu. Texte libre affiché tel quel, tronqué ; jours = `joursEnAttente`, sinon jours depuis `statut_changed_at`. Aujourd'hui : 3 (Youssef, Fellous, Kahloun).
 - « Plus tard » : n'écarte à nouveau que l'élément concerné ; le contact reste représenté par son élément suivant.
 - Écarts connus avec la carte « Priorité du jour » d'avant la bande (non corrigés, à décider) : plus d'étiquette de type (SAV / Rappel / Tâche…), plus de ligne « En retard de N jours / À traiter aujourd'hui », un tap de plus pour ouvrir le dossier (la bande ouvre la feuille), « Plus tard » désormais dans la feuille seulement.
+
+### Correctif 5 (phase 1) — cumul d'offres
+
+- Migration `20261010_variantes_retenues.sql` (+ rollback) : colonne `fichiers.variantes_retenues integer[]` ; les choix déjà faits y sont recopiés. `variante_retenue` reste la première offre retenue (compatibilité), `montant_ttc` porte la somme. Un cumul se fait par « Cumuler » → cocher → « Valider le cumul » ; HT/TTC se précise par offre quand le devis porte un doute ; `montant_ht` n'est renseigné que si toutes les offres retenues sont lues en HT.
+- `devis-montant-v2` (v3) : relire un devis dont les offres n'ont pas changé conserve le choix et le montant (y compris un cumul).
+- Deux devis chiffrés sur un même dossier se remplacent toujours (règle du déclencheur inchangée) : le cumul d'offres est interne à un devis.

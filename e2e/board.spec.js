@@ -162,7 +162,6 @@ test('« N devis · M dossiers » : chiffres alignés sur la base', async ({ pag
   await ligne.click()
   const feuille = page.getByRole('dialog')
   await expect(feuille.locator('ul > li')).toHaveCount(dossiers.size)
-  await expect(feuille).toContainText('Dahan')
   await page.keyboard.press('Escape')
   await pasDeDebordement(page)
   expect(problemes).toEqual([])

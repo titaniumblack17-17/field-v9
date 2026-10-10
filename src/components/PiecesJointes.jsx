@@ -12,6 +12,9 @@ import {
   champsRemiseATrancher,
   champsRetenue,
   champsRetenueHt,
+  champsCumul,
+  retenuesDe,
+  ttcOffre,
   ttcDepuisHt,
   estDevis,
   fourchette,
@@ -64,6 +67,9 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   // Offre touchée sur un devis au HT/TTC douteux : { id, i, base } où base est
   // null (question posée) ou 'ht' (calcul affiché, en attente de confirmation).
   const [choixHt, setChoixHt] = useState(null)
+  // Cumul de plusieurs offres d'un même devis : { id, choix: { [indice]: 'ttc' | 'ht' | null } }.
+  // Une offre absente de `choix` n'est pas cochée ; null = cochée, base HT/TTC à préciser.
+  const [cumul, setCumul] = useState(null)
   const [erreur, setErreur] = useState(null)
   const [confirmer, boîteConfirmation] = useConfirm()
   const champFichier = useRef(null)
@@ -215,6 +221,50 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
       texte: enHt
         ? `Offre retenue dans « ${f.nom} » : ${v.libelle} — ${eur(v.montant_ttc)} € HT, soit ${eur(champs.montant_ttc)} € TTC (TVA 20 %).`
         : `Offre retenue dans « ${f.nom} » : ${v.libelle} — ${eur(v.montant_ttc)} € TTC.`,
+    }
+    const { error } = await supabase.from('dossier_notes').insert(note)
+    if (error) mettreEnFile({ type: 'insert', table: 'dossier_notes', payload: note })
+  }
+
+  const ouvrirCumul = (f) => {
+    setChoixHt(null)
+    setCumul({ id: f.id, choix: {} })
+  }
+
+  const basculerOffreCumul = (f, i) =>
+    setCumul((cur) => {
+      const choix = { ...cur.choix }
+      if (i in choix) delete choix[i]
+      // Sans doute HT/TTC sur ce devis, la base est TTC d'office ; sinon elle reste à préciser.
+      else choix[i] = f.a_trancher_raison ? null : 'ttc'
+      return { ...cur, choix }
+    })
+
+  const choisirBaseCumul = (i, base) => setCumul((cur) => ({ ...cur, choix: { ...cur.choix, [i]: base } }))
+
+  const selectionCumul = () =>
+    Object.entries(cumul?.choix ?? {}).map(([i, base]) => ({ i: Number(i), base }))
+
+  // Valide le cumul : le montant du devis est la somme des offres cochées. Écriture
+  // absolue (mêmes valeurs si elle est rejouée) : jamais de doublon au rejeu.
+  const validerCumul = async (f) => {
+    const choix = selectionCumul()
+    const champs = champsCumul(f, choix)
+    if (!champs) return
+    setCumul(null)
+    await ecrire(f, champs)
+    const offres = variantesDe(f)
+    const detail = [...choix]
+      .sort((a, b) => a.i - b.i)
+      .map(({ i, base }) =>
+        base === 'ht'
+          ? `${offres[i].libelle} (${eur(offres[i].montant_ttc)} € HT, soit ${eur(ttcOffre(offres[i], 'ht'))} € TTC)`
+          : `${offres[i].libelle} (${eur(offres[i].montant_ttc)} € TTC)`
+      )
+      .join(' + ')
+    const note = {
+      dossier_id: dossierId,
+      texte: `Offres cumulées dans « ${f.nom} » : ${detail} — total ${eur(champs.montant_ttc)} € TTC.`,
     }
     const { error } = await supabase.from('dossier_notes').insert(note)
     if (error) mettreEnFile({ type: 'insert', table: 'dossier_notes', payload: note })
@@ -417,7 +467,8 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
             const offres = variantesDe(f)
             const range = fourchette(f)
             const doitTrancher = aTrancher(f)
-            const retenue = f.variante_retenue != null ? offres[f.variante_retenue] : null
+            const retenues = retenuesDe(f).map((i) => offres[i]).filter(Boolean)
+            const retenue = retenues.length > 0 ? retenues : null
             return (
             <li key={f.id} className="bg-carte rounded-xl shadow-sm">
               <div className="px-4 py-3 flex items-center gap-3">
@@ -579,9 +630,107 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                   )}
                   {offres.length > 0 ? (
                     <>
-                      <p className="text-xs text-texte-faible mb-1.5">
-                        Offres exclusives — retenez celle du client, elles ne s'additionnent pas
-                      </p>
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <p className="text-xs text-texte-faible">
+                          {cumul?.id === f.id
+                            ? 'Cochez les offres à cumuler : leur somme devient le montant du devis'
+                            : "Offres exclusives — retenez celle du client, ou cumulez-en plusieurs"}
+                        </p>
+                        {offres.length > 1 && (
+                          <button
+                            onClick={() => (cumul?.id === f.id ? setCumul(null) : ouvrirCumul(f))}
+                            className="flex-shrink-0 h-11 px-2 -mr-2 text-xs font-medium text-accent"
+                          >
+                            {cumul?.id === f.id ? 'Annuler' : 'Cumuler'}
+                          </button>
+                        )}
+                      </div>
+                      {cumul?.id === f.id ? (
+                        <>
+                          <ul className="space-y-1.5">
+                            {offres.map((v, i) => {
+                              const coche = i in cumul.choix
+                              const base = cumul.choix[i]
+                              return (
+                                <li key={i}>
+                                  <button
+                                    role="checkbox"
+                                    aria-checked={coche}
+                                    onClick={() => basculerOffreCumul(f, i)}
+                                    className={`w-full min-h-11 px-3 py-2 rounded-imbrique border flex items-center gap-3 text-left ${
+                                      coche ? 'border-accent bg-accent/10' : 'border-separateur bg-fond'
+                                    }`}
+                                  >
+                                    <span
+                                      aria-hidden="true"
+                                      className={`flex-shrink-0 w-5 h-5 rounded border flex items-center justify-center text-[11px] ${
+                                        coche ? 'bg-accent border-accent text-white' : 'border-separateur'
+                                      }`}
+                                    >
+                                      {coche ? '✓' : ''}
+                                    </span>
+                                    <span className="text-sm text-texte min-w-0 flex-1">{v.libelle}</span>
+                                    <span className="text-sm text-texte font-medium tabular-nums flex-shrink-0">
+                                      {eur(v.montant_ttc)} €
+                                    </span>
+                                  </button>
+                                  {coche && f.a_trancher_raison && (
+                                    <div className="flex items-center gap-2 mt-1 pl-1">
+                                      <span className="text-xs text-texte-doux">Ce montant est</span>
+                                      {['ht', 'ttc'].map((b) => (
+                                        <button
+                                          key={b}
+                                          onClick={() => choisirBaseCumul(i, b)}
+                                          aria-pressed={base === b}
+                                          className={`h-11 px-4 rounded-full text-sm border ${
+                                            base === b
+                                              ? 'bg-accent text-white border-accent'
+                                              : 'bg-fond text-texte border-separateur'
+                                          }`}
+                                        >
+                                          {b.toUpperCase()}
+                                        </button>
+                                      ))}
+                                      {base === 'ht' && (
+                                        <span className="text-xs text-texte-doux tabular-nums">
+                                          × 1,20 = {eur(ttcOffre(v, 'ht'))} €
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </li>
+                              )
+                            })}
+                          </ul>
+                          {(() => {
+                            const sel = selectionCumul()
+                            const pret = sel.length > 0 && sel.every((c) => c.base)
+                            const total = pret
+                              ? Math.round(sel.reduce((t, c) => t + ttcOffre(offres[c.i], c.base), 0) * 100) / 100
+                              : null
+                            return (
+                              <div className="mt-2">
+                                {pret && (
+                                  <p className="text-sm text-texte tabular-nums mb-2">
+                                    {[...sel]
+                                      .sort((a, b) => a.i - b.i)
+                                      .map((c) => eur(ttcOffre(offres[c.i], c.base)))
+                                      .join(' + ')}{' '}
+                                    = {eur(total)} € TTC
+                                  </p>
+                                )}
+                                <button
+                                  onClick={() => validerCumul(f)}
+                                  disabled={!pret}
+                                  className="h-11 px-4 rounded-full text-sm bg-accent text-white disabled:opacity-40"
+                                >
+                                  {pret ? `Valider le cumul · ${eur(total)} € TTC` : 'Valider le cumul'}
+                                </button>
+                              </div>
+                            )
+                          })()}
+                        </>
+                      ) : (
                       <ul className="space-y-1.5">
                         {offres.map((v, i) => (
                           <li key={i}>
@@ -597,7 +746,8 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
                           </li>
                         ))}
                       </ul>
-                      {choixHt?.id === f.id && (
+                      )}
+                      {cumul?.id !== f.id && choixHt?.id === f.id && (
                         <div className="mt-2 rounded-imbrique border border-alerte/40 bg-alerte/10 px-3 py-3">
                           <p className="text-sm text-texte">
                             {choixHt.base === 'ht'
@@ -657,7 +807,8 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
               {retenue && f.montant_ttc != null && (
                 <div className="px-4 pb-3 -mt-1 flex items-center justify-between gap-3">
                   <p className="text-xs text-texte-doux min-w-0">
-                    Offre retenue : <span className="text-texte">{retenue.libelle}</span>
+                    {retenue.length > 1 ? 'Offres cumulées' : 'Offre retenue'} :{' '}
+                    <span className="text-texte">{retenue.map((v) => v.libelle).join(' + ')}</span>
                   </p>
                   <button
                     onClick={() => remettreATrancher(f)}

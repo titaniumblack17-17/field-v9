@@ -82,11 +82,11 @@ export function champsRetenue(f, i) {
   if (!v || typeof v.montant_ttc !== 'number') return null
   // Le motif de doute reste posé : si Bruce remet le devis à trancher, la
   // question HT/TTC doit se reposer.
-  return { variante_retenue: i, montant_ttc: v.montant_ttc, analyse_erreur: null }
+  return { variante_retenue: i, variantes_retenues: [i], montant_ttc: v.montant_ttc, analyse_erreur: null }
 }
 
 /** Remet le devis « à trancher » : l'offre retenue et le montant qui en venait sont retirés. */
-export const champsRemiseATrancher = () => ({ variante_retenue: null, montant_ttc: null })
+export const champsRemiseATrancher = () => ({ variante_retenue: null, variantes_retenues: null, montant_ttc: null })
 
 export const TAUX_TVA = 0.2
 
@@ -102,8 +102,41 @@ export function champsRetenueHt(f, i) {
   if (!v || typeof v.montant_ttc !== 'number') return null
   return {
     variante_retenue: i,
+    variantes_retenues: [i],
     montant_ht: v.montant_ttc,
     montant_ttc: ttcDepuisHt(v.montant_ttc),
     analyse_erreur: null,
   }
+}
+
+/** Indices des offres retenues : le cumul si présent, sinon l'offre unique d'avant. */
+export function retenuesDe(f) {
+  if (Array.isArray(f?.variantes_retenues) && f.variantes_retenues.length > 0) return f.variantes_retenues
+  return f?.variante_retenue != null ? [f.variante_retenue] : []
+}
+
+/** TTC d'une offre selon la base choisie : 'ht' applique la TVA, sinon le montant tel quel. */
+export const ttcOffre = (v, base) => (base === 'ht' ? ttcDepuisHt(v.montant_ttc) : v.montant_ttc)
+
+/**
+ * Cumul de plusieurs offres : `choix` = [{ i, base: 'ttc' | 'ht' }]. Le montant
+ * du devis est la somme des TTC. `montant_ht` n'est renseigné que si toutes les
+ * offres retenues sont lues en HT (somme des HT) ; sinon on n'y touche pas.
+ */
+export function champsCumul(f, choix) {
+  const offres = variantesDe(f)
+  const valides = choix.filter((c) => offres[c.i] && typeof offres[c.i].montant_ttc === 'number')
+  if (valides.length === 0) return null
+  const tri = [...valides].sort((a, b) => a.i - b.i)
+  const total = Math.round(tri.reduce((t, c) => t + ttcOffre(offres[c.i], c.base), 0) * 100) / 100
+  const champs = {
+    variante_retenue: tri[0].i,
+    variantes_retenues: tri.map((c) => c.i),
+    montant_ttc: total,
+    analyse_erreur: null,
+  }
+  if (tri.every((c) => c.base === 'ht')) {
+    champs.montant_ht = tri.reduce((t, c) => t + offres[c.i].montant_ttc, 0)
+  }
+  return champs
 }

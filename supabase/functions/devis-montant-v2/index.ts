@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
 
   const { data: fichier } = await db
     .from('fichiers')
-    .select('id, chemin, nom, taille, type_mime, dossier_id, type_doc, montant_ttc, variante_retenue')
+    .select('id, chemin, nom, taille, type_mime, dossier_id, type_doc, montant_ttc, variante_retenue, variantes')
     .eq('id', fichierId)
     .single()
 
@@ -231,18 +231,22 @@ Un montant faux alimenterait un suivi de chiffre d'affaires : dans le doute, ne 
   // Plusieurs offres exclusives, ou un montant dont la nature (HT/TTC) n'est
   // pas sûre : rien n'est écrit dans montant_ttc, Bruce tranche.
   if ((offres.length >= 2 || incertain) && ttc === null) {
-    // Relire le devis ne doit pas défaire un choix déjà fait : si l'offre
-    // retenue auparavant existe toujours à l'identique, on la garde.
-    const ancien = fichier.montant_ttc !== null && fichier.variante_retenue !== null
-      ? offres.findIndex((o: { montant_ttc: number }) => o.montant_ttc === Number(fichier.montant_ttc))
-      : -1
+    // Relire le devis ne doit pas défaire un choix déjà fait (une offre, ou un
+    // cumul d'offres) : si les offres lues sont identiques à celles déjà
+    // enregistrées, le choix, le montant et le HT restent tels quels.
+    const memesOffres =
+      fichier.montant_ttc !== null &&
+      fichier.variante_retenue !== null &&
+      Array.isArray(fichier.variantes) &&
+      fichier.variantes.length === offres.length &&
+      fichier.variantes.every((o: { montant_ttc: unknown }, k: number) => Number(o.montant_ttc) === offres[k].montant_ttc)
 
     const { error } = await db.from('fichiers').update({
       ...commun,
-      montant_ht: ht,
       variantes: offres.length > 0 ? offres : null,
-      variante_retenue: ancien >= 0 ? ancien : null,
-      ...(ancien >= 0 ? {} : { montant_ttc: null }),
+      ...(memesOffres
+        ? {}
+        : { montant_ht: ht, montant_ttc: null, variante_retenue: null, variantes_retenues: null }),
       a_trancher_raison: incertain
         ? (lu.doute ?? 'Montant HT ou TTC incertain.')
         : null,
@@ -265,6 +269,7 @@ Un montant faux alimenterait un suivi de chiffre d'affaires : dans le doute, ne 
     montant_ht: ht,
     variantes: null,
     variante_retenue: null,
+    variantes_retenues: null,
     a_trancher_raison: null,
     analyse_erreur: ttc === null ? (lu.doute ?? 'Total TTC introuvable dans ce PDF.') : null,
   }).eq('id', fichierId)
