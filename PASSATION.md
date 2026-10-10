@@ -714,3 +714,7 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
 - Tuile et pastilles ⏳ du Board : `estEnAttente` (constants/dossiers.js) = `bloque_par` renseigné et statut hors termine/clos/solde/perdu. Texte libre affiché tel quel, tronqué ; jours = `joursEnAttente`, sinon jours depuis `statut_changed_at`. Aujourd'hui : 3 (Youssef, Fellous, Kahloun).
 - « Plus tard » : n'écarte à nouveau que l'élément concerné ; le contact reste représenté par son élément suivant.
 - Écarts connus avec la carte « Priorité du jour » d'avant la bande (non corrigés, à décider) : plus d'étiquette de type (SAV / Rappel / Tâche…), plus de ligne « En retard de N jours / À traiter aujourd'hui », un tap de plus pour ouvrir le dossier (la bande ouvre la feuille), « Plus tard » désormais dans la feuille seulement.
+
+## Phase 2 — historique des étapes (branche `feat/phase2-historique-etapes`, non fusionnée)
+
+Voir `docs/phase2-historique.md` (état des lieux, définition de « signé », requête de contrôle, retours arrière). Migrations `20261010_historique_etapes.sql` et `20261010_pipeline_snapshots.sql`, déjà appliquées en base. Tests : `e2e/historique.spec.js`.
