@@ -120,8 +120,11 @@ export const groupeDevis = (f) =>
  * Un devis dont le TTC est déjà écrit n'est jamais « à trancher ».
  */
 export function aTrancher(f) {
-  if (!estDevis(f) || decisionDe(f) !== 'a_trancher') return false
-  return f.montant_ttc != null || variantesDe(f).length >= 2 || Boolean(f.a_trancher_raison)
+  if (!estDevis(f)) return false
+  // Devis à offres : « à trancher » tant qu'au moins une offre l'est (état par offre).
+  if (variantesDe(f).length >= 1) return offresDe(f).some((o) => o.etat === 'a_trancher')
+  // Devis sans offres : sa décision, s'il a un montant à décider.
+  return decisionDe(f) === 'a_trancher' && f.montant_ttc != null
 }
 
 /** Plus petit et plus grand montant TTC des offres, ou null s'il n'y en a pas. */
@@ -212,4 +215,173 @@ export function champsCumul(f, choix) {
     champs.montant_ht = tri.reduce((t, c) => t + offres[c.i].montant_ttc, 0)
   }
   return champs
+}
+
+// ── Décision par offre : retenue / à trancher / écartée / reportée ───────────────
+// L'état vit dans chaque offre du jsonb `variantes` (`etat`), avec en option `projet`
+// (étiquette courte), `date_reprise` (offre reportée) et `base` ('ht' | 'ttc'). La
+// mémoire des offres retenues reste dans variantes_retenues / variante_retenue.
+export const ETATS_OFFRE = [
+  ['retenue', 'Retenue'],
+  ['a_trancher', 'À trancher'],
+  ['ecartee', 'Écartée'],
+  ['reportee', 'Reportée'],
+]
+export const ETATS_OFFRE_LIBELLES = Object.fromEntries(ETATS_OFFRE)
+
+/** Offres d'un devis avec leur état (une offre sans état : retenue si elle figure dans variantes_retenues, sinon à trancher). */
+export function offresDe(f) {
+  const retenues = retenuesDe(f)
+  return variantesDe(f).map((v, i) => ({
+    i,
+    libelle: v.libelle,
+    montant: v.montant_ttc,
+    etat: v.etat ?? (retenues.includes(i) ? 'retenue' : 'a_trancher'),
+    projet: v.projet ?? '',
+    base: v.base ?? null,
+    date_reprise: v.date_reprise ?? null,
+  }))
+}
+
+/**
+ * Toutes les « offres » d'un ensemble de fichiers, à plat : une ligne par offre d'un
+ * devis à offres ; un devis sans offres compte pour une offre unique dont l'état suit
+ * sa décision (retenu / à trancher / mis de côté ; remplacé et alternative = écartée).
+ * Même règle que la RPC dashboard_chiffres().
+ */
+export function offresPlat(fichiers) {
+  const sortie = []
+  for (const f of fichiers ?? []) {
+    if (!estDevis(f) || !f.dossier_id) continue
+    if (variantesDe(f).length >= 1) {
+      for (const o of offresDe(f)) sortie.push({ f, fichier_id: f.id, dossier_id: f.dossier_id, ...o })
+    } else if (f.montant_ttc != null) {
+      const etat = { retenu: 'retenue', a_trancher: 'a_trancher', mis_de_cote: 'reportee' }[decisionDe(f)] ?? 'ecartee'
+      sortie.push({ f, fichier_id: f.id, dossier_id: f.dossier_id, i: null, libelle: f.nom, montant: Number(f.montant_ttc), etat, projet: '', base: null, date_reprise: f.date_reprise ?? null })
+    }
+  }
+  return sortie
+}
+
+/** Dossiers « reportés » : au moins un devis mis de côté et aucun retenu, ou une offre reportée et aucune retenue. */
+export function dossiersReportes(fichiers) {
+  const devis = (fichiers ?? []).filter((f) => estDevis(f) && f.dossier_id)
+  const ids = new Set()
+  const parDossier = (liste) => {
+    const m = new Map()
+    for (const x of liste) m.set(x.dossier_id, [...(m.get(x.dossier_id) ?? []), x])
+    return m
+  }
+  for (const [id, l] of parDossier(devis)) {
+    if (l.some((f) => decisionDe(f) === 'mis_de_cote') && !l.some((f) => decisionDe(f) === 'retenu')) ids.add(id)
+  }
+  for (const [id, l] of parDossier(offresPlat(fichiers))) {
+    if (l.some((o) => o.etat === 'reportee') && !l.some((o) => o.etat === 'retenue')) ids.add(id)
+  }
+  return ids
+}
+
+/** Potentiel ouvert (par offre) : mêmes agrégats que la RPC. */
+export function potentiel(fichiers) {
+  const offres = offresPlat(fichiers)
+  const ouvertes = offres.filter((o) => o.etat === 'a_trancher')
+  const parDevis = new Map()
+  for (const o of ouvertes) parDevis.set(o.fichier_id, [...(parDevis.get(o.fichier_id) ?? []), o])
+  const reportees = offres.filter((o) => o.etat === 'reportee')
+  const somme = (l) => l.reduce((t, o) => t + (Number(o.montant) || 0), 0)
+  return {
+    aTrancher: {
+      offres: ouvertes.length,
+      devis: parDevis.size,
+      dossiers: new Set(ouvertes.map((o) => o.dossier_id)).size,
+      montantMin: [...parDevis.values()].reduce((t, l) => t + Math.min(...l.map((o) => Number(o.montant) || 0)), 0),
+    },
+    reportees: {
+      offres: reportees.length,
+      devis: new Set(reportees.map((o) => o.fichier_id)).size,
+      dossiers: new Set(reportees.map((o) => o.dossier_id)).size,
+      montant: somme(reportees),
+    },
+  }
+}
+
+/**
+ * Écriture d'un jeu d'offres : recalcule tout ce qui en découle sur le devis — offres
+ * retenues, montant (somme des TTC retenus : « HT » converti par la TVA), décision du
+ * devis dérivée. Écriture absolue : rejouable sans doublon par la file hors-ligne.
+ * Décision du devis : une offre retenue → retenu ; sinon une offre à trancher → à
+ * trancher ; sinon une offre reportée → mis de côté ; sinon (toutes écartées) → alternative.
+ */
+export function champsApresOffres(variantes) {
+  const retenues = variantes.map((v, i) => [v, i]).filter(([v]) => v.etat === 'retenue')
+  const total = retenues.length
+    ? Math.round(retenues.reduce((t, [v]) => t + ttcOffre({ montant_ttc: v.montant_ttc }, v.base === 'ht' ? 'ht' : 'ttc'), 0) * 100) / 100
+    : null
+  const decision = retenues.length
+    ? 'retenu'
+    : variantes.some((v) => v.etat === 'a_trancher')
+      ? 'a_trancher'
+      : variantes.some((v) => v.etat === 'reportee')
+        ? 'mis_de_cote'
+        : 'alternative'
+  const reprises = variantes.filter((v) => v.etat === 'reportee' && v.date_reprise).map((v) => v.date_reprise).sort()
+  const champs = {
+    variantes,
+    variantes_retenues: retenues.length ? retenues.map(([, i]) => i) : null,
+    variante_retenue: retenues.length ? retenues[0][1] : null,
+    montant_ttc: total,
+    analyse_erreur: null,
+    ...champsDecision(decision, { date_reprise: reprises[0] ?? null }),
+  }
+  if (retenues.length && retenues.every(([v]) => v.base === 'ht')) {
+    champs.montant_ht = retenues.reduce((t, [v]) => t + v.montant_ttc, 0)
+  } else if (retenues.length && retenues.some(([v]) => v.base)) {
+    // Bases HT et TTC mélangées : un « montant HT » unique n'a plus de sens.
+    champs.montant_ht = null
+  }
+  return champs
+}
+
+/** Change l'état d'une offre (et sa base HT/TTC ou sa date de reprise) ; renvoie les champs à écrire. */
+export function champsEtatOffre(f, i, etat, extras = {}) {
+  const variantes = variantesDe(f).map((v, j) => {
+    const courant = offresDe(f)[j]
+    const base = { ...v, etat: courant.etat, ...(courant.projet ? { projet: courant.projet } : {}) }
+    if (j !== i) return base
+    const suivant = { ...base, etat }
+    if (etat === 'retenue' && extras.base) suivant.base = extras.base
+    if (etat === 'reportee') {
+      if (extras.date_reprise) suivant.date_reprise = extras.date_reprise
+      else delete suivant.date_reprise
+    } else delete suivant.date_reprise
+    return suivant
+  })
+  return champsApresOffres(variantes)
+}
+
+/** Étiquette de projet d'une offre (texte court) : ne change ni état ni montant. */
+export function champsProjetOffre(f, i, projet) {
+  const texte = String(projet ?? '').trim().slice(0, 30)
+  const variantes = variantesDe(f).map((v, j) => {
+    if (j !== i) return v
+    const { projet: _ancien, ...reste } = v
+    return texte ? { ...reste, projet: texte } : reste
+  })
+  return { variantes }
+}
+
+/** Sous-totaux par étiquette de projet : retenu (TTC), à trancher, reportée, écartée. Vide sans étiquette. */
+export function sousTotauxProjets(fichiers) {
+  const offres = offresPlat(fichiers).filter((o) => o.i != null)
+  if (!offres.some((o) => o.projet)) return []
+  const groupes = new Map()
+  for (const o of offres) {
+    const cle = o.projet || 'Sans projet'
+    const g = groupes.get(cle) ?? { projet: cle, retenu: 0, a_trancher: 0, reportee: 0, ecartee: 0, offres: 0 }
+    const ttc = o.etat === 'retenue' ? ttcOffre({ montant_ttc: o.montant }, o.base === 'ht' ? 'ht' : 'ttc') : Number(o.montant) || 0
+    g[o.etat === 'retenue' ? 'retenu' : o.etat] += ttc
+    g.offres += 1
+    groupes.set(cle, g)
+  }
+  return [...groupes.values()].sort((a, b) => (a.projet === 'Sans projet') - (b.projet === 'Sans projet') || a.projet.localeCompare(b.projet))
 }

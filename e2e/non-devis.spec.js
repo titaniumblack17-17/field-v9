@@ -37,6 +37,7 @@ test('cdc / plan / autre « a_trancher » : jamais comptés, ni dans la RPC, ni 
   // RPC : à trancher et reportés inchangés ; le montant manuel du dossier n'est pas touché
   const apres = await rpc()
   expect(apres.a_trancher).toEqual(avant.a_trancher)
+  expect(apres.potentiel).toEqual(avant.potentiel) // potentiel ouvert (par offre) inchangé aussi
   expect(apres.reportes).toEqual(avant.reportes)
   expect(apres.signe).toEqual(avant.signe)
   expect(Number((await rest('GET', `dossiers?id=eq.${dossier.id}&select=montant_estime`))[0].montant_estime)).toBe(4242)
@@ -46,15 +47,16 @@ test('cdc / plan / autre « a_trancher » : jamais comptés, ni dans la RPC, ni 
   await expect(page.getByText('Dossiers actifs').first()).toBeVisible()
   const ligne = page.getByRole('button', { name: /Devis à trancher/ })
   const texteBoard = (await ligne.count()) ? await ligne.innerText() : ''
-  if (avant.a_trancher.devis > 0) expect(texteBoard).toContain(`${avant.a_trancher.devis} devis · ${avant.a_trancher.dossiers} dossier`)
+  const pa = avant.potentiel.a_trancher
+  if (pa.devis > 0) expect(texteBoard).toContain(`${pa.devis} devis · ${pa.dossiers} dossier`)
   else expect(texteBoard).toBe('')
 
   // Dashboard : tuile et liste sans le dossier de test
   await page.getByRole('button', { name: 'Dashboard', exact: true }).click()
-  await expect(page.getByRole('button', { name: /^À trancher/ }).first()).toContainText(`${avant.a_trancher.devis} devis · ${avant.a_trancher.dossiers} dossier`)
+  await expect(page.getByRole('button', { name: /^À trancher/ }).first()).toContainText(`${pa.devis} devis · ${pa.dossiers} dossier`)
   await page.getByRole('button', { name: /^À trancher/ }).first().click()
   const feuille = page.getByRole('dialog')
-  await expect(feuille.locator('ul > li')).toHaveCount(avant.a_trancher.dossiers)
+  await expect(feuille.locator('ul > li')).toHaveCount(pa.offres)
   await expect(feuille).not.toContainText('NONDEVIS')
   await page.keyboard.press('Escape')
 

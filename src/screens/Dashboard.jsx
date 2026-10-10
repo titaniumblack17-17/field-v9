@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { lireAvecCache } from '../lib/cacheLecture'
 import { nomClient } from '../lib/client'
 import { aujourdhui as calculerAujourdhui, etatEcheanceTache, etatRappel } from '../lib/rappel'
-import { aTrancher, fourchette, variantesDe } from '../lib/documents'
+import { dossiersReportes, offresPlat } from '../lib/documents'
 import {
   ETAPES_PROJET_LABELS,
   ETAPES_SIGNEES,
@@ -28,6 +28,9 @@ const montantOuAChiffrer = (montant, aChiffrer, nb) => {
   if (montant === 0) return aChiffrer > 0 ? 'à chiffrer' : '—'
   return euros(montant) + (aChiffrer > 0 ? ` · ${aChiffrer} à chiffrer` : '')
 }
+
+// Accord : « 1 offre », « 2 offres ».
+const pl = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`
 
 const R = 50
 const TRAIT = 18
@@ -263,10 +266,12 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
     const nom = (d) => nomClient(d.clients) ?? '—'
     const ligne = (d, motif, cle = d.id) => ({ cle, dossier: d, nom: nom(d), titre: d.titre || TYPE_LABELS[d.type], motif })
 
-    // Dossiers reportés : au moins un devis mis de côté, aucun retenu — hors signé et hors à trancher.
-    const retenus = new Set(fichiers.filter((f) => f.type_doc === 'devis' && f.decision === 'retenu').map((f) => f.dossier_id))
-    const misDeCote = fichiers.filter((f) => f.type_doc === 'devis' && f.decision === 'mis_de_cote')
-    const reportesIds = new Set(misDeCote.map((f) => f.dossier_id).filter((id) => !retenus.has(id)))
+    // Dossiers reportés (offre ou devis mis de côté, rien de retenu) : hors signé.
+    const reportesIds = dossiersReportes(fichiers)
+    const offres = offresPlat(fichiers)
+    const dateFr = (iso) => new Date(iso + 'T00:00:00').toLocaleDateString('fr-FR')
+    const motifOffre = (o, plus = '') =>
+      `${o.libelle} — ${o.montant == null ? 'à chiffrer' : euros(o.montant)}${o.projet ? ` · ${o.projet}` : ''}${plus}`
 
     const signes = projets
       .filter((d) => !reportesIds.has(d.id) && d.statut !== 'perdu' && ETAPES_SIGNEES.includes(d.statut) && exerciceDe(d, annee) === annee)
@@ -274,23 +279,16 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
         ligne(d, `${ETAPES_PROJET_LABELS[d.statut] ?? d.statut} · ${d.montant_estime == null ? 'à chiffrer' : euros(d.montant_estime)}`)
       )
 
-    const devisATrancher = fichiers.filter((f) => aTrancher(f) && !reportesIds.has(f.dossier_id))
-    const dossiersATrancher = [...new Set(devisATrancher.map((f) => f.dossier_id))]
-    const atrancher = dossiersATrancher
-      .map((id) => dossiers.find((d) => d.id === id))
+    // Potentiel ouvert : une ligne par offre, avec son motif.
+    const ligneOffre = (o, plus) => {
+      const d = dossiers.find((x) => x.id === o.dossier_id)
+      return d ? ligne(d, motifOffre(o, plus), `${o.fichier_id}-${o.i ?? 'u'}`) : null
+    }
+    const atrancher = offres.filter((o) => o.etat === 'a_trancher').map((o) => ligneOffre(o, ' · à trancher')).filter(Boolean)
+    const reportees = offres
+      .filter((o) => o.etat === 'reportee')
+      .map((o) => ligneOffre(o, o.date_reprise ? ` · reprise le ${dateFr(o.date_reprise)}` : ' · reportée'))
       .filter(Boolean)
-      .map((d) => {
-        const siens = devisATrancher.filter((f) => f.dossier_id === d.id)
-        const motifs = siens.map((f) => {
-          const r = fourchette(f)
-          const offres = variantesDe(f).length
-          const plage = r ? (r.min === r.max ? euros(r.min) : `${euros(r.min)} – ${euros(r.max)}`) : null
-          return f.a_trancher_raison
-            ? `HT ou TTC à préciser${plage ? ` (${plage})` : ''}`
-            : `${offres} offres à trancher${plage ? ` · ${plage}` : ''}`
-        })
-        return ligne(d, `${siens.length} devis · ${motifs.join(' ; ')}`)
-      })
 
     const apresDevis = ['devis_envoye', 'relance', 'visite_local', 'negociation', 'confirmation', 'financement', 'commande', 'reunion_chantier', 'installation', 'finition']
     const incomplets = projets
@@ -302,15 +300,6 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
         return manques.length ? ligne(d, manques.join(' · ')) : null
       })
       .filter(Boolean)
-
-    const reportes = [...reportesIds]
-      .map((id) => dossiers.find((d) => d.id === id))
-      .filter(Boolean)
-      .map((d) => {
-        const siens = misDeCote.filter((f) => f.dossier_id === d.id)
-        const reprise = siens.map((f) => f.date_reprise).filter(Boolean).sort()[0]
-        return ligne(d, `${siens.length} devis mis de côté${reprise ? ` · reprise le ${new Date(reprise + 'T00:00:00').toLocaleDateString('fr-FR')}` : ''}`)
-      })
 
     const attente = dossiers.filter(estEnAttente).map((d) => ({ ...ligne(d, null), pastille: true }))
 
@@ -334,7 +323,7 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
       if (jours != null && !dusIds.has(d.id)) retard.push(ligne(d, `Devis sans réponse · ${jours} j`, `devis-${d.id}`))
     }
 
-    return { signes, atrancher, nbDevisATrancher: devisATrancher.length, incomplets, attente, retard, reportes }
+    return { signes, atrancher, incomplets, attente, retard, reportees }
   }, [chiffres, dossiers, fichiers, taches])
 
   if (chargement && !chiffres) {
@@ -352,21 +341,25 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
     )
   }
 
-  const { objectif, signe, a_trancher: at, familles, projets_actifs: nbActifs } = chiffres
+  const { objectif, signe, familles, projets_actifs: nbActifs } = chiffres
+  // Potentiel ouvert (par offre) : à trancher et reportées.
+  const at = chiffres.potentiel.a_trancher
+  const rp = chiffres.potentiel.reportees
   const pourcentage = Math.round((Number(signe.montant) / objectif) * 100)
-  const aTrancherMontant = Number(at.montant_min_hors_signes)
-  const reste = Math.max(0, objectif - Number(signe.montant) - aTrancherMontant)
+  const aTrancherMontant = Number(at.montant_min)
+  const reporteMontant = Number(rp.montant)
+  const reste = Math.max(0, objectif - Number(signe.montant) - aTrancherMontant - reporteMontant)
   const serie = chiffres.serie ?? []
 
   const vers = (f) => onPipeline('projet', f.etapes[0], f)
 
   const configListe = {
     signes: { titre: `Signé · ${signe.nb} dossiers`, lignes: listes.signes },
-    trancher: { titre: `À trancher · ${at.devis} devis · ${at.dossiers} dossier${at.dossiers > 1 ? 's' : ''}`, lignes: listes.atrancher },
+    trancher: { titre: `À trancher · ${pl(at.offres, 'offre')} · ${at.devis} devis · ${pl(at.dossiers, 'dossier')}`, lignes: listes.atrancher },
     incomplets: { titre: `Incomplets · ${chiffres.incomplets.dossiers} dossiers`, lignes: listes.incomplets },
     attente: { titre: `En attente · ${chiffres.en_attente.dossiers}`, lignes: listes.attente },
     retard: { titre: `En retard · ${chiffres.en_retard.total}`, lignes: listes.retard },
-    reportes: { titre: `Reportés · ${chiffres.reportes?.devis ?? 0} devis · ${chiffres.reportes?.dossiers ?? 0} dossier${(chiffres.reportes?.dossiers ?? 0) > 1 ? 's' : ''}`, lignes: listes.reportes },
+    reportees: { titre: `Reportées · ${pl(rp.offres, 'offre')} · ${rp.devis} devis · ${pl(rp.dossiers, 'dossier')}`, lignes: listes.reportees },
   }
   const liste = feuille ? configListe[feuille] : null
 
@@ -388,7 +381,7 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
           <Tuile
             titre="À trancher"
             valeur={`${at.devis} devis · ${at.dossiers} dossier${at.dossiers > 1 ? 's' : ''}`}
-            detail="offres ou HT/TTC à décider"
+            detail={`${pl(at.offres, 'offre')} à décider`}
             petit
             urgent={at.devis > 0}
             onClick={() => setFeuille('trancher')}
@@ -414,17 +407,23 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
           />
         </div>
 
-        {(chiffres.reportes?.dossiers ?? 0) > 0 && (
-          <button
-            onClick={() => setFeuille('reportes')}
-            className="mt-3 w-full min-h-11 bg-carte rounded-xl px-4 flex items-center justify-between gap-3 text-left"
-          >
-            <span className="text-sm text-texte">Reportés</span>
-            <span className="text-sm text-texte-doux tabular-nums">
-              {chiffres.reportes.devis} devis · {chiffres.reportes.dossiers} dossier{chiffres.reportes.dossiers > 1 ? 's' : ''} ›
-            </span>
-          </button>
-        )}
+        <section className="mt-3 bg-carte rounded-xl px-4 pt-3 pb-1" aria-label="Potentiel ouvert">
+          <h2 className="text-xs text-texte-faible uppercase tracking-wider">Potentiel ouvert</h2>
+          <LigneLegende
+            couleur={COULEURS_OBJECTIF.aTrancher}
+            titre="À trancher"
+            valeur={aTrancherMontant > 0 ? `≥ ${euros(aTrancherMontant)}` : '—'}
+            detail={`${pl(at.offres, 'offre')} · ${at.devis} devis · ${pl(at.dossiers, 'dossier')}`}
+            onClick={() => setFeuille('trancher')}
+          />
+          <LigneLegende
+            couleur={COULEURS_OBJECTIF.reporte}
+            titre="Reportées"
+            valeur={rp.offres > 0 ? euros(reporteMontant) : '—'}
+            detail={`${pl(rp.offres, 'offre')} · ${rp.devis} devis · ${pl(rp.dossiers, 'dossier')}`}
+            onClick={() => setFeuille('reportees')}
+          />
+        </section>
 
         <section className="mt-4 bg-carte rounded-xl p-4" aria-label="Objectif">
           <h2 className="text-xs text-texte-faible uppercase tracking-wider mb-3">Objectif {chiffres.annee}</h2>
@@ -434,6 +433,7 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
               segments={[
                 { cle: 'signe', valeur: Number(signe.montant), couleur: COULEURS_OBJECTIF.signe, label: 'Signé : voir les dossiers', onClick: () => setFeuille('signes') },
                 { cle: 'a-trancher', valeur: aTrancherMontant, couleur: COULEURS_OBJECTIF.aTrancher, label: 'À trancher : voir les devis', onClick: () => setFeuille('trancher') },
+                { cle: 'reporte', valeur: reporteMontant, couleur: COULEURS_OBJECTIF.reporte, label: 'Reporté : voir les offres', onClick: () => setFeuille('reportees') },
                 { cle: 'reste', valeur: reste, couleur: COULEURS_OBJECTIF.reste, label: 'Reste à faire' },
               ]}
               centre={
@@ -455,8 +455,13 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
                 couleur={COULEURS_OBJECTIF.aTrancher}
                 titre="À trancher"
                 valeur={aTrancherMontant > 0 ? `≥ ${euros(aTrancherMontant)}` : '—'}
-                detail={`${at.devis} devis · ${at.dossiers} dossier${at.dossiers > 1 ? 's' : ''}`}
                 onClick={() => setFeuille('trancher')}
+              />
+              <LigneLegende
+                couleur={COULEURS_OBJECTIF.reporte}
+                titre="Reporté"
+                valeur={rp.offres > 0 ? euros(reporteMontant) : '—'}
+                onClick={() => setFeuille('reportees')}
               />
               <LigneLegende couleur={COULEURS_OBJECTIF.reste} titre="Reste à faire" valeur={euros(reste)} />
             </div>

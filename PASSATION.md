@@ -742,3 +742,11 @@ Voir `docs/phase2-historique.md` (état des lieux, définition de « signé », 
 - Numéro de devis : `parserReference` (racine = NOM_PRODUIT, numéro = 9 chiffres + lettre de révision). Proposition seulement quand la racine est identique et le rang plus élevé.
 - « Reportés » : dossier avec un devis mis de côté et aucun retenu ; hors signé et hors à trancher dans la RPC `dashboard_chiffres()` (clé `reportes`).
 - L'analyse (`devis-montant-v2`, v4) ne décide jamais : un devis analysé reste « à trancher » jusqu'à un tap (ou une saisie manuelle du montant, qui le retient).
+
+## Décision par offre et « Potentiel ouvert » (branche `feat/decision-offres`, depuis `main`, non fusionnée)
+
+- État par offre dans le jsonb `fichiers.variantes` : `etat` (retenue | a_trancher | ecartee | reportee), `projet` (étiquette ≤ 30 car.), `date_reprise`, `base` (ht | ttc). Aucune colonne ajoutée ; `variantes_retenues` / `variante_retenue` restent la mémoire des offres retenues. Migration `20261013_offres_etat.sql` (+ rollback) : offres déjà retenues → retenue, les autres → a_trancher ; aucun montant touché.
+- Montant : `montant_ttc` du devis = somme des offres retenues (HT converti par la TVA), la décision du devis en découle (une offre retenue → retenu ; sinon à trancher ; sinon mis de côté ; sinon alternative) ; le déclencheur existant additionne les devis retenus. Un devis sans offres compte pour une offre dont l'état suit sa décision.
+- RPC `dashboard_chiffres()` : nouvelle clé `potentiel` (a_trancher : offres · devis · dossiers · montant_min ; reportees : offres · devis · dossiers · montant). Les clés historiques (a_trancher par devis, reportes) sont conservées : le site déjà en production lit les mêmes chiffres. Segment « À trancher » de l'anneau = plancher (offre la plus basse par devis) ; « Reporté » = somme des offres reportées.
+- Analyse (`devis-montant-v2`, v5) : relire un devis dont les offres n'ont pas changé ne touche plus aux états, étiquettes, dates ni au montant.
+- Le cumul par case à cocher et la retenue « en un tap » d'une offre sont remplacés par le choix d'état par offre (même résultat : plusieurs offres retenues = cumul).

@@ -12,5 +12,5 @@ export const FAMILLES = [
   { cle: 'finition', libelle: 'Finition', couleur: '#FF7A7A', etapes: ['finition', 'sav'] },
 ]
 
-export const COULEURS_OBJECTIF = { signe: '#8B92FF', aTrancher: '#F5B94A', reste: '#2A2C33' }
+export const COULEURS_OBJECTIF = { signe: '#8B92FF', aTrancher: '#F5B94A', reporte: '#8B8B93', reste: '#2A2C33' }
 export const COULEUR_PIPELINE = '#22D3EE'

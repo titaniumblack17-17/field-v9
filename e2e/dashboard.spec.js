@@ -10,6 +10,7 @@ const CLE = process.env.VITE_SUPABASE_ANON_KEY
 const entetes = { apikey: CLE, Authorization: `Bearer ${CLE}`, 'content-type': 'application/json' }
 const lire = async (chemin) => (await fetch(`${URL_DB}/rest/v1/${chemin}`, { headers: entetes })).json()
 const rpc = async () => (await fetch(`${URL_DB}/rest/v1/rpc/dashboard_chiffres`, { method: 'POST', headers: entetes, body: '{}' })).json()
+const pl = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`
 const nombre = (t) => Number(String(t).replace(/[^\d]/g, ''))
 
 const surveiller = (page) => {
@@ -43,27 +44,50 @@ const recalcul = async () => {
     const l = actifs.filter((d) => f.etapes.includes(d.statut))
     return { cle: f.cle, nb: l.length, montant: l.reduce((t, d) => t + (Number(d.montant_estime) || 0), 0), sans: l.filter((d) => d.montant_estime == null).length }
   })
-  // Dossiers reportés : un devis mis de côté, aucun retenu — hors signé et hors à trancher
-  const retenus = new Set(fichiers.filter((f) => f.type_doc === 'devis' && f.decision === 'retenu').map((f) => f.dossier_id))
-  const reportes = new Set(fichiers.filter((f) => f.type_doc === 'devis' && f.decision === 'mis_de_cote' && !retenus.has(f.dossier_id)).map((f) => f.dossier_id))
+  const devisF = fichiers.filter((f) => f.type_doc === 'devis')
+  // Offres à plat, recalculées ici à partir des lignes brutes (indépendamment de l'application)
+  const offres = devisF.flatMap((f) => {
+    const v = Array.isArray(f.variantes) ? f.variantes : []
+    if (v.length >= 1) {
+      return v.map((o) => ({ fichier: f.id, dossier: f.dossier_id, etat: ['retenue', 'a_trancher', 'ecartee', 'reportee'].includes(o.etat) ? o.etat : 'a_trancher', montant: Number(o.montant_ttc) }))
+    }
+    if (f.montant_ttc == null) return []
+    return [{ fichier: f.id, dossier: f.dossier_id, etat: { retenu: 'retenue', a_trancher: 'a_trancher', mis_de_cote: 'reportee' }[f.decision] ?? 'ecartee', montant: Number(f.montant_ttc) }]
+  })
+  const parDossier = (l) => l.reduce((m, o) => m.set(o.dossier, [...(m.get(o.dossier) ?? []), o]), new Map())
+  // Dossiers reportés : (devis mis de côté, aucun devis retenu) ou (offre reportée, aucune offre retenue)
+  const reportes = new Set()
+  for (const [id, l] of parDossier(devisF.map((f) => ({ dossier: f.dossier_id, decision: f.decision })))) {
+    if (l.some((x) => x.decision === 'mis_de_cote') && !l.some((x) => x.decision === 'retenu')) reportes.add(id)
+  }
+  for (const [id, l] of parDossier(offres)) if (l.some((o) => o.etat === 'reportee') && !l.some((o) => o.etat === 'retenue')) reportes.add(id)
   const signes = projets.filter((d) => !reportes.has(d.id) && d.statut !== 'perdu' && ETAPES_SIGNEES.includes(d.statut) && exerciceDe(d, annee) === annee)
-  const devis = fichiers.filter((f) => aTrancher(f) && !reportes.has(f.dossier_id))
-  // « À trancher » = décision a_trancher uniquement ; montant potentiel = offre la plus basse
-  // (ou le montant du devis), seulement pour les dossiers pas encore signés.
-  const idsSignes = new Set(signes.map((d) => d.id))
-  const montantMin = devis
-    .filter((f) => !idsSignes.has(f.dossier_id))
-    .reduce((t, f) => {
-      const offres = (f.variantes ?? []).map((v) => v.montant_ttc).filter((m) => typeof m === 'number')
-      return t + (offres.length ? Math.min(...offres) : Number(f.montant_ttc) || 0)
-    }, 0)
-  const misDeCoteDevis = fichiers.filter((f) => f.type_doc === 'devis' && f.decision === 'mis_de_cote' && reportes.has(f.dossier_id))
+  // Potentiel ouvert : à trancher = offres à trancher (plancher = offre la plus basse par devis) ; reportées = somme
+  const ouvertes = offres.filter((o) => o.etat === 'a_trancher')
+  const parFichier = [...ouvertes.reduce((m, o) => m.set(o.fichier, [...(m.get(o.fichier) ?? []), o]), new Map()).values()]
+  const rep = offres.filter((o) => o.etat === 'reportee')
+  const potentiel = {
+    a_trancher: {
+      offres: ouvertes.length,
+      devis: parFichier.length,
+      dossiers: new Set(ouvertes.map((o) => o.dossier)).size,
+      montant_min: parFichier.reduce((t, l) => t + Math.min(...l.map((o) => o.montant)), 0),
+    },
+    reportees: {
+      offres: rep.length,
+      devis: new Set(rep.map((o) => o.fichier)).size,
+      dossiers: new Set(rep.map((o) => o.dossier)).size,
+      montant: rep.reduce((t, o) => t + o.montant, 0),
+    },
+  }
+  // Clés historiques (par devis) conservées pour le site déjà en production
+  const devisLegacy = fichiers.filter((f) => f.type_doc === 'devis' && f.decision === 'a_trancher' && !reportes.has(f.dossier_id) &&
+    (f.montant_ttc != null || (f.variantes ?? []).length >= 2 || f.a_trancher_raison))
   return {
-    montantMin,
-    reportes: { dossiers: reportes.size, devis: misDeCoteDevis.length, montant: misDeCoteDevis.reduce((t, f) => t + (Number(f.montant_ttc) || 0), 0) },
+    potentiel,
+    legacy: { devis: devisLegacy.length, dossiers: new Set(devisLegacy.map((f) => f.dossier_id)).size },
     annee, actifs: actifs.length, familles, signes,
     signeMontant: signes.reduce((t, d) => t + (Number(d.montant_estime) || 0), 0),
-    devis: devis.length, dossiersATrancher: new Set(devis.map((f) => f.dossier_id)).size,
     attente: dossiers.filter(estEnAttente).length,
   }
 }
@@ -85,12 +109,12 @@ for (const [nom, largeur, hauteur] of [['iPhone 390', 390, 844], ['ordinateur 12
         if (f.cle === 'qualification') expect(x.a_chiffrer).toBe(0)
       }
       expect([c.signe.nb, Number(c.signe.montant)]).toEqual([r.signes.length, r.signeMontant])
-      expect([c.a_trancher.devis, c.a_trancher.dossiers]).toEqual([r.devis, r.dossiersATrancher])
       expect(c.en_attente.dossiers).toBe(r.attente)
-      // « À trancher » : décision a_trancher uniquement, montant potentiel cohérent
-      expect(Number(c.a_trancher.montant_min_hors_signes)).toBe(r.montantMin)
-      // « Reportés » : nombre et montant des devis mis de côté (dossiers sans devis retenu)
-      expect({ dossiers: c.reportes.dossiers, devis: c.reportes.devis, montant: Number(c.reportes.montant) }).toEqual(r.reportes)
+      // Potentiel ouvert par offre : à trancher (offres · devis · dossiers · plancher) et reportées
+      expect({ ...c.potentiel.a_trancher, montant_min: Number(c.potentiel.a_trancher.montant_min) }).toEqual(r.potentiel.a_trancher)
+      expect({ ...c.potentiel.reportees, montant: Number(c.potentiel.reportees.montant) }).toEqual(r.potentiel.reportees)
+      // Clés historiques (par devis) inchangées
+      expect([c.a_trancher.devis, c.a_trancher.dossiers]).toEqual([r.legacy.devis, r.legacy.dossiers])
       // Aucune donnée nominative dans la RPC
       expect(JSON.stringify(c)).not.toMatch(/nom_praticien|prenom|@|titre/)
 
@@ -105,7 +129,7 @@ for (const [nom, largeur, hauteur] of [['iPhone 390', 390, 844], ['ordinateur 12
       const objectif = page.getByLabel('Objectif', { exact: true })
       await expect(objectif).toContainText(`${Math.round((r.signeMontant / 5_000_000) * 100)} %`)
       await expect(objectif).toContainText(`${r.signes.length} dossiers`)
-      await expect(page.getByText(`${r.devis} devis · ${r.dossiersATrancher} dossier`).first()).toBeVisible()
+      await expect(page.getByText(`${pl(r.potentiel.a_trancher.offres, 'offre')} · ${r.potentiel.a_trancher.devis} devis · ${pl(r.potentiel.a_trancher.dossiers, 'dossier')}`).first()).toBeVisible()
       await expect(page.getByRole('button', { name: /^En attente\s*\d+/ })).toContainText(String(r.attente))
       // Jamais 0 € pour un montant vide
       expect(await page.locator('main').innerText()).not.toMatch(/(^|\s)0 €/)
@@ -137,6 +161,7 @@ for (const [nom, largeur, hauteur] of [['iPhone 390', 390, 844], ['ordinateur 12
 
         // 2) segment de l'anneau : un vrai clic sur l'arc
         const cercle = page.locator(`[data-segment="${f.cle}"]`)
+        await page.locator('svg[role=img]').nth(1).scrollIntoViewIfNeeded()
         const boite = await page.locator('svg[role=img]').nth(1).boundingBox()
         const total = c.familles.reduce((t, x) => t + x.nb, 0)
         const avant = c.familles.slice(0, c.familles.findIndex((x) => x.cle === f.cle)).reduce((t, x) => t + x.nb, 0)
@@ -161,13 +186,14 @@ for (const [nom, largeur, hauteur] of [['iPhone 390', 390, 844], ['ordinateur 12
       await ouvrirDashboard(page)
 
       const cas = [
-        { ouvrir: () => page.getByRole('button', { name: /^À trancher/ }).first().click(), titre: new RegExp(`À trancher · ${c.a_trancher.devis} devis · ${c.a_trancher.dossiers} dossier`), lignes: c.a_trancher.dossiers },
+        { ouvrir: () => page.getByRole('button', { name: /^À trancher/ }).first().click(), titre: new RegExp(`À trancher · ${pl(c.potentiel.a_trancher.offres, 'offre')} · ${c.potentiel.a_trancher.devis} devis · ${pl(c.potentiel.a_trancher.dossiers, 'dossier')}`), lignes: c.potentiel.a_trancher.offres },
         { ouvrir: () => page.getByRole('button', { name: /^Incomplets/ }).click(), titre: new RegExp(`Incomplets · ${c.incomplets.dossiers} dossiers`), lignes: c.incomplets.dossiers },
         { ouvrir: () => page.getByRole('button', { name: /^En attente/ }).click(), titre: new RegExp(`En attente · ${c.en_attente.dossiers}`), lignes: c.en_attente.dossiers },
         { ouvrir: () => page.getByRole('button', { name: /^En retard/ }).click(), titre: new RegExp(`En retard · ${c.en_retard.total}`), lignes: c.en_retard.total },
         { ouvrir: () => page.getByLabel('Objectif', { exact: true }).locator('button', { hasText: /^Signé/ }).click(), titre: new RegExp(`Signé · ${r.signes.length} dossiers`), lignes: r.signes.length },
         { ouvrir: () => page.locator('[data-segment="signe"]').dispatchEvent('click'), titre: new RegExp(`Signé · ${r.signes.length} dossiers`), lignes: r.signes.length },
-        { ouvrir: () => page.locator('[data-segment="a-trancher"]').dispatchEvent('click'), titre: /À trancher · /, lignes: c.a_trancher.dossiers },
+        { ouvrir: () => page.locator('[data-segment="a-trancher"]').dispatchEvent('click'), titre: /À trancher · /, lignes: c.potentiel.a_trancher.offres },
+        ...(c.potentiel.reportees.offres > 0 ? [{ ouvrir: () => page.locator('[data-segment="reporte"]').dispatchEvent('click'), titre: /Reportées · /, lignes: c.potentiel.reportees.offres }] : []),
       ]
       for (const cible of cas) {
         await cible.ouvrir()

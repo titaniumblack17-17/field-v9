@@ -231,22 +231,27 @@ Un montant faux alimenterait un suivi de chiffre d'affaires : dans le doute, ne 
   // Plusieurs offres exclusives, ou un montant dont la nature (HT/TTC) n'est
   // pas sûre : rien n'est écrit dans montant_ttc, Bruce tranche.
   if ((offres.length >= 2 || incertain) && ttc === null) {
-    // Relire le devis ne doit pas défaire un choix déjà fait (une offre, ou un
-    // cumul d'offres) : si les offres lues sont identiques à celles déjà
-    // enregistrées, le choix, le montant et le HT restent tels quels.
+    // Relire un devis dont les offres n'ont pas changé ne doit RIEN défaire : états
+    // par offre (retenue / écartée / reportée), étiquettes de projet, dates de
+    // reprise, offres retenues et montant restent tels quels. Seules des offres
+    // différentes (montants ou nombre) repartent de zéro, toutes « à trancher ».
     const memesOffres =
-      fichier.montant_ttc !== null &&
-      fichier.variante_retenue !== null &&
       Array.isArray(fichier.variantes) &&
       fichier.variantes.length === offres.length &&
       fichier.variantes.every((o: { montant_ttc: unknown }, k: number) => Number(o.montant_ttc) === offres[k].montant_ttc)
 
     const { error } = await db.from('fichiers').update({
       ...commun,
-      variantes: offres.length > 0 ? offres : null,
       ...(memesOffres
         ? {}
-        : { montant_ht: ht, montant_ttc: null, variante_retenue: null, variantes_retenues: null }),
+        : {
+            variantes: offres.length > 0 ? offres.map((o: { libelle: string; montant_ttc: number }) => ({ ...o, etat: 'a_trancher' })) : null,
+            montant_ht: ht,
+            montant_ttc: null,
+            variante_retenue: null,
+            variantes_retenues: null,
+            decision: 'a_trancher',
+          }),
       a_trancher_raison: incertain
         ? (lu.doute ?? 'Montant HT ou TTC incertain.')
         : null,
