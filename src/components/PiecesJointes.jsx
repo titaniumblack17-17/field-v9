@@ -12,6 +12,7 @@ import {
   aTrancher,
   cdcEnVigueur,
   champsDecision,
+  champsEcarterAutres,
   champsEtatOffre,
   champsProjetOffre,
   decisionDe,
@@ -254,6 +255,14 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
       }
     }
   }
+
+  // Proposition en un tap, annulable : écarte les offres restées « à trancher » d'un devis
+  // dont une offre est retenue. N'écrit que les états : aucun montant ne change.
+  const ecarterAutres = (f) =>
+    appliquerDecisions(
+      [{ f, champs: champsEcarterAutres(f) }],
+      `Autres offres de « ${f.nom} » : écartées`
+    )
 
   const changerProjet = (f, i, texte) => ecrire(f, champsProjetOffre(f, i, texte))
 
@@ -803,7 +812,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
               )}
 
               {variantesDe(f).length >= 1 && (
-                <OffresDevis f={f} onEtat={changerOffre} onProjet={changerProjet} />
+                <OffresDevis f={f} onEtat={changerOffre} onProjet={changerProjet} onEcarterAutres={ecarterAutres} />
               )}
 
             </li>

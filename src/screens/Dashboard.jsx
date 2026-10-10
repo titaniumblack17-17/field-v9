@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabaseClient'
 import { lireAvecCache } from '../lib/cacheLecture'
 import { nomClient } from '../lib/client'
 import { aujourdhui as calculerAujourdhui, etatEcheanceTache, etatRappel } from '../lib/rappel'
-import { dossiersReportes, offresPlat } from '../lib/documents'
+import { champsEcarterAutres, decisionsRequises, devisANettoyer, dossiersReportes, offresPlat, potentiel } from '../lib/documents'
+import { mettreEnFile } from '../lib/fileAttente'
 import {
   ETAPES_PROJET_LABELS,
   ETAPES_SIGNEES,
@@ -192,7 +193,14 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
   const [erreur, setErreur] = useState(null)
   const [tentative, setTentative] = useState(0)
   const [feuille, setFeuille] = useState(null)
-  const fermer = useCallback(() => setFeuille(null), [])
+  const fermer = useCallback(() => {
+    setFeuille(null)
+    setConfirmationGlobale(false)
+  }, [])
+  // Nettoyage : confirmation du « tout écarter » en cours, et dernière action annulable (8 s).
+  const [confirmationGlobale, setConfirmationGlobale] = useState(false)
+  const [annulable, setAnnulable] = useState(null)
+  const minuteurAnnulation = useRef(null)
 
   const charger = useCallback(async () => {
     try {
@@ -326,6 +334,31 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
     return { signes, atrancher, incomplets, attente, retard, reportees }
   }, [chiffres, dossiers, fichiers, taches])
 
+  // Nettoyage du potentiel ouvert : devis déjà retenus dont d'autres offres traînent « à trancher ».
+  // Rien n'est appliqué sans geste ; « décision requise » n'est qu'un signalement.
+  const nettoyage = useMemo(() => {
+    const cibles = devisANettoyer(fichiers)
+    const requis = decisionsRequises(fichiers)
+    const nomDe = (id) => {
+      const d = dossiers.find((x) => x.id === id)
+      return d ? { dossier: d, nom: nomClient(d.clients) ?? '—', titre: d.titre || TYPE_LABELS[d.type] } : null
+    }
+    const lignes = cibles
+      .map((x) => ({ ...x, ...nomDe(x.f.dossier_id) }))
+      .filter((x) => x.dossier)
+    const apres = fichiers.map((f) => (cibles.some((x) => x.f.id === f.id) ? { ...f, ...champsEcarterAutres(f) } : f))
+    const avantP = potentiel(fichiers).aTrancher
+    const apresP = potentiel(apres).aTrancher
+    return {
+      lignes,
+      requis: requis.map((f) => ({ f, ...nomDe(f.dossier_id) })).filter((x) => x.dossier),
+      nbOffres: lignes.reduce((t, x) => t + x.ouvertes.length, 0),
+      retire: avantP.montantMin - apresP.montantMin,
+      offresAvant: avantP.offres,
+      offresApres: apresP.offres,
+    }
+  }, [fichiers, dossiers])
+
   if (chargement && !chiffres) {
     return (
       <div className="min-h-screen bg-fond px-4 pt-6">
@@ -361,7 +394,34 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
     retard: { titre: `En retard · ${chiffres.en_retard.total}`, lignes: listes.retard },
     reportees: { titre: `Reportées · ${pl(rp.offres, 'offre')} · ${rp.devis} devis · ${pl(rp.dossiers, 'dossier')}`, lignes: listes.reportees },
   }
-  const liste = feuille ? configListe[feuille] : null
+  const liste = feuille && feuille !== 'nettoyer' ? configListe[feuille] : null
+
+  // Écrit les états d'offres de plusieurs devis (variantes seulement : aucun montant ne bouge),
+  // erreur Supabase vérifiée, file hors-ligne en cas d'échec, annulation 8 s.
+  const ecarterAutres = async (cibles, libelle) => {
+    const avant = cibles.map(({ f }) => ({ id: f.id, variantes: f.variantes }))
+    for (const { f } of cibles) {
+      const champs = champsEcarterAutres(f)
+      const { error } = await supabase.from('fichiers').update(champs).eq('id', f.id)
+      if (error) mettreEnFile({ type: 'update', table: 'fichiers', rowId: f.id, champs })
+    }
+    clearTimeout(minuteurAnnulation.current)
+    setAnnulable({ libelle, avant })
+    minuteurAnnulation.current = setTimeout(() => setAnnulable(null), 8000)
+    setConfirmationGlobale(false)
+    charger()
+  }
+  const annulerNettoyage = async () => {
+    if (!annulable) return
+    const { avant } = annulable
+    clearTimeout(minuteurAnnulation.current)
+    setAnnulable(null)
+    for (const { id, variantes } of avant) {
+      const { error } = await supabase.from('fichiers').update({ variantes }).eq('id', id)
+      if (error) mettreEnFile({ type: 'update', table: 'fichiers', rowId: id, champs: { variantes } })
+    }
+    charger()
+  }
 
   return (
     <div className="min-h-screen bg-fond">
@@ -408,7 +468,17 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
         </div>
 
         <section className="mt-3 bg-carte rounded-xl px-4 pt-3 pb-1" aria-label="Potentiel ouvert">
-          <h2 className="text-xs text-texte-faible uppercase tracking-wider">Potentiel ouvert</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs text-texte-faible uppercase tracking-wider">Potentiel ouvert</h2>
+            {(nettoyage.lignes.length > 0 || nettoyage.requis.length > 0) && (
+              <button
+                onClick={() => setFeuille('nettoyer')}
+                className="min-h-11 px-2 -mr-2 text-sm font-medium text-accent-vif"
+              >
+                Nettoyer
+              </button>
+            )}
+          </div>
           <LigneLegende
             couleur={COULEURS_OBJECTIF.aTrancher}
             titre="À trancher"
@@ -510,6 +580,106 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline }) {
           <Evolution serie={serie} />
         </section>
       </main>
+
+      {feuille === 'nettoyer' && (
+        <FeuilleBasse titre={`Nettoyer le potentiel · ${nettoyage.nbOffres} offre${nettoyage.nbOffres > 1 ? 's' : ''}`} onFermer={fermer}>
+          {nettoyage.requis.length > 0 && (
+            <section className="mt-1 mb-3 rounded-imbrique border border-alerte/40 bg-alerte/10 px-3 py-3" aria-label="Décision requise">
+              <p className="text-xs font-semibold uppercase tracking-wide text-alerte">Décision requise</p>
+              <ul className="mt-1 space-y-2">
+                {nettoyage.requis.map((x) => (
+                  <li key={x.f.id}>
+                    <button
+                      onClick={() => {
+                        fermer()
+                        onOpenDossier(x.dossier)
+                      }}
+                      className="w-full min-h-11 text-left"
+                    >
+                      <span className="block text-[15px] font-bold text-texte truncate">{x.nom}</span>
+                      <span className="block text-xs text-texte-doux">
+                        {x.f.nom?.replace(/\.[^.]+$/, '')} — montant retenu {euros(Number(x.f.montant_ttc))}, mais aucune offre n'est marquée retenue
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {nettoyage.lignes.length === 0 ? (
+            <p className="text-texte-faible text-sm py-3">Aucun devis à nettoyer.</p>
+          ) : (
+            <>
+              <ul className="divide-y divide-separateur">
+                {nettoyage.lignes.map((x) => {
+                  const somme = (l) => l.reduce((t, o) => t + (Number(o.montant) || 0), 0)
+                  return (
+                    <li key={x.f.id} className="py-2">
+                      <button
+                        onClick={() => {
+                          fermer()
+                          onOpenDossier(x.dossier)
+                        }}
+                        className="w-full min-h-11 text-left"
+                      >
+                        <span className="block text-[15px] font-bold text-texte truncate">{x.nom}</span>
+                        <span className="block text-xs text-texte-doux truncate">{x.f.nom?.replace(/\.[^.]+$/, '')}</span>
+                        <span className="block text-xs text-alerte mt-0.5">
+                          {x.retenues.length} retenue{x.retenues.length > 1 ? 's' : ''} ({euros(somme(x.retenues))}) · {x.ouvertes.length} autre{x.ouvertes.length > 1 ? 's' : ''} à trancher ({euros(somme(x.ouvertes))})
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => ecarterAutres([x], `Autres offres de « ${x.f.nom} » : écartées`)}
+                        className="mt-1 min-h-11 px-4 rounded-full text-sm bg-fond text-texte border border-separateur"
+                      >
+                        Écarter les autres
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+              {confirmationGlobale ? (
+                <div className="mt-3 rounded-imbrique border border-alerte/40 bg-alerte/10 px-3 py-3" role="alertdialog" aria-label="Confirmer le nettoyage">
+                  <p className="text-sm text-texte">
+                    Écarter {nettoyage.nbOffres} offre{nettoyage.nbOffres > 1 ? 's' : ''} sur {nettoyage.lignes.length} devis ?
+                  </p>
+                  <p className="text-xs text-texte-doux mt-1 tabular-nums">
+                    Retiré du potentiel à trancher : {euros(nettoyage.retire)} (plancher) · offres à trancher : {nettoyage.offresAvant} → {nettoyage.offresApres}. Aucun montant de dossier ne change.
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => ecarterAutres(nettoyage.lignes, `${nettoyage.nbOffres} offres écartées sur ${nettoyage.lignes.length} devis`)}
+                      className="min-h-11 px-4 rounded-full text-sm bg-accent text-white"
+                    >
+                      Confirmer
+                    </button>
+                    <button onClick={() => setConfirmationGlobale(false)} className="min-h-11 px-3 text-sm text-texte-doux">
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmationGlobale(true)}
+                  className="mt-3 w-full min-h-11 px-4 rounded-imbrique bg-fond text-sm text-texte border border-separateur"
+                >
+                  Tout écarter ({nettoyage.nbOffres} offre{nettoyage.nbOffres > 1 ? 's' : ''})
+                </button>
+              )}
+            </>
+          )}
+        </FeuilleBasse>
+      )}
+
+      {annulable && (
+        <div role="status" className="fixed bottom-4 left-4 right-4 z-[60] max-w-md mx-auto bg-carte-douce rounded-xl shadow-lg pl-4 pr-1 flex items-center justify-between gap-2">
+          <span className="text-sm text-texte truncate py-2">{annulable.libelle}</span>
+          <button onClick={annulerNettoyage} className="flex-shrink-0 min-h-11 px-3 text-sm font-semibold text-accent-vif">
+            Annuler
+          </button>
+        </div>
+      )}
 
       {liste && (
         <FeuilleBasse titre={liste.titre} onFermer={fermer}>

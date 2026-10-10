@@ -750,3 +750,10 @@ Voir `docs/phase2-historique.md` (état des lieux, définition de « signé », 
 - RPC `dashboard_chiffres()` : nouvelle clé `potentiel` (a_trancher : offres · devis · dossiers · montant_min ; reportees : offres · devis · dossiers · montant). Les clés historiques (a_trancher par devis, reportes) sont conservées : le site déjà en production lit les mêmes chiffres. Segment « À trancher » de l'anneau = plancher (offre la plus basse par devis) ; « Reporté » = somme des offres reportées.
 - Analyse (`devis-montant-v2`, v5) : relire un devis dont les offres n'ont pas changé ne touche plus aux états, étiquettes, dates ni au montant.
 - Le cumul par case à cocher et la retenue « en un tap » d'une offre sont remplacés par le choix d'état par offre (même résultat : plusieurs offres retenues = cumul).
+
+## Nettoyage du potentiel : « Écarter les autres »
+
+- Fiche : quand une offre est « retenue » et que d'autres du même devis restent « à trancher », un bouton « Écarter les autres offres de ce devis (n) » apparaît. Jamais automatique, annulable 8 s. Seul `variantes[].etat` change : aucun montant, aucune décision de devis.
+- Dashboard › Potentiel ouvert › « Nettoyer » : liste les devis concernés, bouton « Écarter les autres » par devis, bouton global avec confirmation (nombre d'offres, devis, montant retiré du plancher « À trancher »). Rien n'est écrit avant confirmation.
+- « Décision requise » en tête (devis à montant retenu mais aucune offre retenue — cas Ponsart) : signalement seul, aucune action, aucune écriture.
+- Helpers : `devisANettoyer`, `champsEcarterAutres`, `decisionsRequises` (`src/lib/documents.js`). Test : `e2e/nettoyage.spec.js` (fixtures ZZTEST-NET).

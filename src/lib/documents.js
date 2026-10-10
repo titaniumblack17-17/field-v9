@@ -385,3 +385,41 @@ export function sousTotauxProjets(fichiers) {
   }
   return [...groupes.values()].sort((a, b) => (a.projet === 'Sans projet') - (b.projet === 'Sans projet') || a.projet.localeCompare(b.projet))
 }
+
+// ── Nettoyage : écarter les offres restées « à trancher » d'un devis déjà retenu ──────────
+
+/**
+ * Devis dont au moins une offre est retenue et d'autres encore à trancher : le choix est
+ * fait, les autres offres traînent dans le potentiel ouvert. Jamais appliqué sans geste.
+ */
+export function devisANettoyer(fichiers) {
+  return (fichiers ?? [])
+    .filter((f) => estDevis(f) && f.dossier_id && variantesDe(f).length >= 2)
+    .map((f) => {
+      const offres = offresDe(f)
+      return { f, retenues: offres.filter((o) => o.etat === 'retenue'), ouvertes: offres.filter((o) => o.etat === 'a_trancher') }
+    })
+    .filter((x) => x.retenues.length > 0 && x.ouvertes.length > 0)
+}
+
+/** Champs à écrire pour écarter les autres offres : seulement `variantes` — aucun montant ni décision ne bouge. */
+export function champsEcarterAutres(f) {
+  return {
+    variantes: variantesDe(f).map((v, i) => {
+      const o = offresDe(f)[i]
+      return o.etat === 'a_trancher' ? { ...v, etat: 'ecartee' } : { ...v, etat: o.etat }
+    }),
+  }
+}
+
+/**
+ * « Décision requise » : un devis à offres dont le montant est retenu au niveau du devis
+ * (décision « retenu », montant renseigné) alors qu'aucune de ses offres n'est marquée
+ * retenue — le montant et les offres se contredisent, c'est à Bruce de trancher.
+ */
+export function decisionsRequises(fichiers) {
+  return (fichiers ?? []).filter(
+    (f) => estDevis(f) && f.dossier_id && variantesDe(f).length >= 1 && decisionDe(f) === 'retenu' && f.montant_ttc != null &&
+      !offresDe(f).some((o) => o.etat === 'retenue')
+  )
+}

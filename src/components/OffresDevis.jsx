@@ -17,13 +17,15 @@ const STYLE_ETAT = {
  * retenir une offre pose d'abord la question, avec le calcul de TVA avant confirmation.
  * Les écritures passent par `onEtat` / `onProjet` (annulation 8 s, file hors-ligne).
  */
-export default function OffresDevis({ f, onEtat, onProjet }) {
+export default function OffresDevis({ f, onEtat, onProjet, onEcarterAutres }) {
   const offres = offresDe(f)
   // { i, etape: 'question' | 'calcul' } : question HT/TTC en cours pour l'offre i.
   const [question, setQuestion] = useState(null)
   // { i, date } : saisie de la date de reprise pour l'offre i.
   const [report, setReport] = useState(null)
   const doute = Boolean(f.a_trancher_raison)
+  const ouvertes = offres.filter((o) => o.etat === 'a_trancher').length
+  const aUneRetenue = offres.some((o) => o.etat === 'retenue')
 
   const toucher = (o, etat) => {
     setQuestion(null)
@@ -151,6 +153,15 @@ export default function OffresDevis({ f, onEtat, onProjet }) {
           </li>
         ))}
       </ul>
+      {/* Proposition, jamais automatique : une offre est retenue, d'autres traînent « à trancher ». */}
+      {onEcarterAutres && aUneRetenue && ouvertes > 0 && (
+        <button
+          onClick={() => onEcarterAutres(f)}
+          className="mt-2 w-full min-h-11 px-4 rounded-imbrique border border-separateur bg-fond text-sm text-texte"
+        >
+          Écarter les autres offres de ce devis ({ouvertes})
+        </button>
+      )}
     </div>
   )
 }
