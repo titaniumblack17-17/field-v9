@@ -8,6 +8,7 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 60_000,
   workers: 1,
+  globalSetup: './e2e/verrou-global.js',
   reporter: [['list']],
   use: {
     baseURL: 'http://localhost:5173',

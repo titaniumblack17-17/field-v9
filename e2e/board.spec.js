@@ -184,15 +184,12 @@ test('Pipeline : pastille « réponse client » restaurée sur les devis, pastil
   await accueil(page)
   // Vue Projet : « ⏳ réponse client — N j » sur Devis envoyé / Relance, comme avant
   await page.getByRole('button', { name: 'Pipeline', exact: true }).click()
-  await page.waitForTimeout(800)
   await expect(page.getByText(/⏳ réponse client — \d+ j/).first()).toBeVisible()
-  expect(await page.getByText(/⏳ réponse client — \d+ j/).count()).toBe(
-    (await lire('dossiers?type=eq.projet&statut=in.(devis_envoye,relance)&select=id')).length
-  )
+  const attendusReponse = (await lire('dossiers?type=eq.projet&statut=in.(devis_envoye,relance)&select=id')).length
+  await expect(page.getByText(/⏳ réponse client — \d+ j/)).toHaveCount(attendusReponse)
   await page.goBack()
   // Vue SAV : une pastille par dossier dont bloque_par est renseigné (Kahloun compris)
   await page.getByRole('button', { name: /^SAV ouverts/ }).first().click()
-  await page.waitForTimeout(800)
   await expect(page.getByText(/⏳ .+ · \d+ j/)).toHaveCount(attendus.length)
   await pasDeDebordement(page)
   expect(problemes).toEqual([])

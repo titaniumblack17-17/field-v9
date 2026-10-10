@@ -31,6 +31,10 @@ export const mettreEnFile = (action) => {
 
 export const tailleFile = () => lireFile().length
 
+// Une écriture sur cette ligne attend-elle encore dans la file (hors-ligne) ? Tant que oui, la
+// base ne reflète pas ce que l'écran montre : ce qui revient du temps réel n'est pas à croire.
+export const ligneEnFile = (table, rowId) => lireFile().some((a) => a.table === table && a.rowId === rowId)
+
 // Pour l'indicateur d'UI (Tâche 6) : notifie à chaque changement de taille,
 // retourne la fonction de désabonnement.
 export const ecouterTailleFile = (callback) => {

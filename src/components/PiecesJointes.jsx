@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { mettreEnFile } from '../lib/fileAttente'
+import { mettreEnFile, ligneEnFile, ecouterTailleFile } from '../lib/fileAttente'
 import { envoyerFichier, fichierColle } from '../lib/fichiers'
 import TexteModifiable from './TexteModifiable'
 import useConfirm from '../hooks/useConfirm'
@@ -59,10 +59,6 @@ const suitLaNomenclature = (nom) => /_\d{9}[A-Za-z]?\.[a-z0-9]+$/i.test(nom ?? '
  * jamais d'URL publique, on demande un lien signé au moment de l'ouverture.
  * Passer exactement un des deux : clientId ou dossierId.
  */
-// Au-delà, un écho attendu qui n'est pas venu (hors-ligne, écriture mise en file) est oublié :
-// les mises à jour extérieures reprennent la main.
-const DELAI_ECHO_MS = 5000
-
 const normaliser = (v) => JSON.parse(JSON.stringify(v ?? null))
 // Égalité profonde indifférente à l'ordre des clés (jsonb ne le conserve pas) ; null = absent.
 function memeValeur(a, b) {
@@ -76,18 +72,16 @@ function memeValeur(a, b) {
 }
 
 /**
- * Un UPDATE temps réel d'un fichier que l'on est en train d'écrire est-il un écho dépassé ?
- * Oui tant qu'une écriture est en vol, ou après coup s'il ne contient pas encore toutes les
- * valeurs écrites ; le premier écho complet (ou le délai) rend la main aux mises à jour extérieures.
+ * Un UPDATE temps réel d'un fichier que l'on écrit est-il un écho dépassé ?
+ * Oui tant qu'une écriture est en vol, tant qu'une écriture de ce fichier attend dans la file
+ * hors-ligne, et tant que l'écho ne contient pas toutes les valeurs écrites. Aucun délai : le
+ * fichier est rendu aux mises à jour extérieures par `reconcilier` (voir PiecesJointes), une fois
+ * ses écritures parties et sa file vide — pas avant.
  */
-export function echoPerime(suivis, ligne, maintenant = Date.now()) {
+export function echoPerime(suivis, ligne, enFile = (id) => ligneEnFile('fichiers', id)) {
   const suivi = suivis.get(ligne.id)
   if (!suivi) return false
-  if (suivi.enCours > 0) return true
-  if (maintenant > suivi.expire) {
-    suivis.delete(ligne.id)
-    return false
-  }
+  if (suivi.enCours > 0 || enFile(ligne.id)) return true
   const attendu = normaliser(suivi.attendu)
   if (Object.keys(attendu).every((k) => memeValeur(attendu[k], normaliser(ligne[k])))) {
     suivis.delete(ligne.id)
@@ -234,9 +228,31 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   // Idem côté retour : tant qu'une écriture locale d'un fichier est en vol, ou que son écho
   // n'est pas revenu, les mises à jour temps réel de ce fichier qui ne reflètent pas encore
   // tout ce qu'on a écrit sont ignorées (voir echoPerime).
+  // Rend un fichier aux mises à jour extérieures, sans délai : quand plus aucune écriture n'est en
+  // vol et que sa file hors-ligne est vide, la base est la vérité — on la relit une fois et on
+  // remplace la ligne locale. Une écriture qui repart pendant la relecture l'annule.
+  const reconcilier = async (id) => {
+    const libre = () => {
+      const s = ecritures.current.get(id)
+      return !s || (s.enCours === 0 && !ligneEnFile('fichiers', id))
+    }
+    if (!ecritures.current.has(id) || !libre()) return
+    const { data, error } = await supabase.from('fichiers').select('*').eq('id', id).maybeSingle()
+    if (error || !data || !ecritures.current.has(id) || !libre()) return
+    ecritures.current.delete(id)
+    setListe((cur) => cur.map((x) => (x.id === id ? data : x)))
+  }
+
+  // Le rejeu hors-ligne vide la file ligne par ligne : à chaque changement, les fichiers qui n'ont
+  // plus rien à attendre sont relus.
+  useEffect(
+    () => ecouterTailleFile(() => [...ecritures.current.keys()].forEach((id) => reconcilier(id))),
+    []
+  )
+
   const ecrire = async (f, champs) => {
     setListe((cur) => cur.map((x) => (x.id === f.id ? { ...x, ...champs } : x)))
-    const suivi = ecritures.current.get(f.id) ?? { enCours: 0, attendu: {}, expire: 0 }
+    const suivi = ecritures.current.get(f.id) ?? { enCours: 0, attendu: {} }
     suivi.enCours += 1
     suivi.attendu = { ...suivi.attendu, ...champs }
     ecritures.current.set(f.id, suivi)
@@ -247,7 +263,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
         if (error) mettreEnFile({ type: 'update', table: 'fichiers', rowId: f.id, champs })
       } finally {
         suivi.enCours -= 1
-        suivi.expire = Date.now() + DELAI_ECHO_MS
+        reconcilier(f.id)
       }
     })
     chaines.current.set(f.id, envoi.catch(() => {}))

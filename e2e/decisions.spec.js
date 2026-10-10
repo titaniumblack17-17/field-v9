@@ -1,4 +1,9 @@
 import { test, expect } from '@playwright/test'
+import { ouvrirDocuments } from './aides.js'
+import { journaliser, noter } from './diag.js'
+
+// Fixtures propres à ce passage : jamais de doublon avec une autre session ou un reste d'un passage interrompu.
+const NOM = `ZZTEST-DEC-${Math.random().toString(36).slice(2, 8)}`
 
 // Décision par devis. Dossier jetable ZZTEST-DEC uniquement (jamais un vrai dossier),
 // supprimé à la fin avec ses rappels et ses notes. Les appels Todoist sont coupés :
@@ -9,6 +14,7 @@ const entetes = { apikey: CLE, Authorization: `Bearer ${CLE}`, 'content-type': '
 const rest = async (methode, chemin, corps) => {
   const r = await fetch(`${URL_DB}/rest/v1/${chemin}`, { method: methode, headers: entetes, body: corps ? JSON.stringify(corps) : undefined })
   const texte = await r.text()
+  noter(`TEST ${methode} ${chemin.slice(0, 90)} ${corps ? JSON.stringify(corps).slice(0, 160) : ''} → ${r.status} ${texte.slice(0, 220)}`)
   if (!r.ok) throw new Error(`${methode} ${chemin} → ${r.status} ${texte}`)
   return texte ? JSON.parse(texte) : null
 }
@@ -28,8 +34,8 @@ const reinit = async () => {
 }
 
 test.beforeAll(async () => {
-  ;[client] = await rest('POST', 'clients', { nom_praticien: 'ZZTEST-DEC', prenom_praticien: 'Essai' })
-  ;[dossier] = await rest('POST', 'dossiers', { client_id: client.id, type: 'projet', statut: 'devis_envoye', titre: 'ZZTEST-DEC dossier' })
+  ;[client] = await rest('POST', 'clients', { nom_praticien: NOM, prenom_praticien: 'Essai' })
+  ;[dossier] = await rest('POST', 'dossiers', { client_id: client.id, type: 'projet', statut: 'devis_envoye', titre: `${NOM} dossier` })
   const base = { dossier_id: dossier.id, chemin: 'zztest/aucun.pdf', taille: 1000, type_mime: 'application/pdf', type_doc: 'devis' }
   ;[A] = await rest('POST', 'fichiers', { ...base, nom: 'ZZTEST_PROD_202699101.pdf', montant_ttc: 10000, date_devis: '2026-10-01' })
   ;[B] = await rest('POST', 'fichiers', { ...base, nom: 'ZZTEST_PROD_202699102.pdf', montant_ttc: 12000, date_devis: '2026-10-05' })
@@ -44,8 +50,8 @@ test.afterAll(async () => {
   await rest('DELETE', `rappels?dossier_id=eq.${dossier.id}`)
   await rest('DELETE', `dossier_notes?dossier_id=eq.${dossier.id}`)
   await rest('DELETE', `fichiers?dossier_id=eq.${dossier.id}&chemin=eq.zztest/aucun.pdf`)
-  await rest('DELETE', `dossiers?id=eq.${dossier.id}&titre=eq.ZZTEST-DEC dossier`)
-  await rest('DELETE', `clients?id=eq.${client.id}&nom_praticien=eq.ZZTEST-DEC`)
+  await rest('DELETE', `dossiers?id=eq.${dossier.id}&titre=eq.${NOM} dossier`)
+  await rest('DELETE', `clients?id=eq.${client.id}&nom_praticien=eq.${NOM}`)
 })
 
 const surveiller = (page) => {
@@ -59,23 +65,20 @@ const surveiller = (page) => {
 const ouvrir = async (page) => {
   await page.route(/todoist-rappel|todoist-tache/, (route) => route.abort())
   await page.goto('/')
-  await page.locator('input[type=search]').fill('ZZTEST-DEC')
-  await page.getByText('ZZTEST-DEC Essai').click()
-  await page.getByText('ZZTEST-DEC dossier').click()
-  const jalons = page.getByLabel('Jalons du dossier')
-  await page.getByText(/^Documents déposés/).waitFor()
-  await page.waitForTimeout(1200) // la rubrique s'ouvre seule dès qu'un devis est à trancher
-  if (!(await jalons.isVisible())) await page.getByText(/^Documents déposés/).click()
-  await expect(jalons).toBeVisible()
+  await page.locator('input[type=search]').fill(NOM)
+  await page.getByText(`${NOM} Essai`).click()
+  await page.getByText(`${NOM} dossier`).click()
+  await ouvrirDocuments(page)
 }
 const carte = (page, nom) => page.locator('li', { hasText: nom }).filter({ has: page.getByRole('group', { name: new RegExp(`Décision pour ${nom}`) }) }).first()
 const bouton = (page, nom, libelle) => page.getByRole('group', { name: new RegExp(`Décision pour ${nom}`) }).getByRole('button', { name: libelle, exact: true })
 
+test.beforeEach(async ({ page }, testInfo) => { journaliser(page, testInfo) })
 test.beforeEach(async () => { await reinit() })
 
 test('défaut « à trancher » : aucun devis ne compte, montant NULL « À chiffrer », ligne de temps', async ({ page }) => {
   const problemes = surveiller(page)
-  expect(await montant()).toBeNull()
+  await expect.poll(async () => await montant()).toBeNull()
   await ouvrir(page)
   const temps = page.getByLabel('Ligne de temps des devis')
   await expect(temps).toBeVisible()
@@ -139,7 +142,7 @@ test('proposition de remplacement par numéro : Oui / Non alternative / Non cumu
   await expect(prop).toBeVisible()
   await expect(prop).toContainText('Ce devis remplace-t-il le précédent')
   await expect(carte(page, 'ZZTEST_AUTRE_202699103').getByRole('group', { name: 'Remplacement ?' })).toHaveCount(0)
-  expect((await ligne(B.id)).decision).toBe('a_trancher') // rien décidé sans réponse
+  await expect.poll(async () => (await ligne(B.id)).decision).toBe('a_trancher') // rien décidé sans réponse
 
   // Oui : B retenu, A remplacé par B ; Annuler remet tout
   await prop.getByRole('button', { name: 'Oui', exact: true }).click()
@@ -155,7 +158,7 @@ test('proposition de remplacement par numéro : Oui / Non alternative / Non cumu
   // Non, alternative : B alternative, A reste retenu
   await carte(page, NB).getByRole('group', { name: 'Remplacement ?' }).getByRole('button', { name: 'Non, alternative' }).click()
   await expect.poll(async () => (await ligne(B.id)).decision).toBe('alternative')
-  expect((await ligne(A.id)).decision).toBe('retenu')
+  await expect.poll(async () => (await ligne(A.id)).decision).toBe('retenu')
   await expect.poll(async () => num(await montant())).toBe(10000)
 
   // Non, cumul : les deux comptent
@@ -193,7 +196,7 @@ test('mis de côté : date de reprise → rappel, groupe « Reportés », expos�
   await bouton(page, 'ZZTEST_PROD_202699101', 'Mis de côté').click()
   await page.getByRole('button', { name: 'Mettre de côté' }).click()
   await expect.poll(async () => (await ligne(A.id)).decision).toBe('mis_de_cote')
-  expect((await rest('GET', `rappels?dossier_id=eq.${dossier.id}&select=id`)).length).toBe(1)
+  await expect.poll(async () => (await rest('GET', `rappels?dossier_id=eq.${dossier.id}&select=id`)).length).toBe(1)
 })
 
 test('cumul entre offres d\'un même devis + autre devis retenu ; hors-ligne rejoué sans doublon', async ({ page, context }) => {
@@ -214,7 +217,7 @@ test('cumul entre offres d\'un même devis + autre devis retenu ; hors-ligne rej
   await context.setOffline(true)
   await bouton(page, NA, 'Alternative').click()
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('fv9:file-attente') ?? '[]').length)).toBeGreaterThan(0)
-  expect((await ligne(A.id)).decision).toBe('retenu') // rien n'est parti
+  await expect.poll(async () => (await ligne(A.id)).decision).toBe('retenu') // rien n'est parti
   await page.evaluate(() => {
     const file = JSON.parse(localStorage.getItem('fv9:file-attente'))
     file.push({ ...file[0], id: crypto.randomUUID() })
@@ -225,5 +228,5 @@ test('cumul entre offres d\'un même devis + autre devis retenu ; hors-ligne rej
   await expect.poll(async () => (await ligne(A.id)).decision, { timeout: 30_000 }).toBe('alternative')
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('fv9:file-attente') ?? '[]').length), { timeout: 30_000 }).toBe(0)
   await expect.poll(async () => num(await montant())).toBe(3000)
-  expect((await rest('GET', `rappels?dossier_id=eq.${dossier.id}&select=id`)).length).toBe(0)
+  await expect.poll(async () => (await rest('GET', `rappels?dossier_id=eq.${dossier.id}&select=id`)).length).toBe(0)
 })
