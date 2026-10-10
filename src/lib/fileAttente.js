@@ -89,3 +89,21 @@ export async function viderFile(executer) {
     enCours = false
   }
 }
+
+let minuteurRepli = null
+
+/**
+ * Vide la file et, si des actions restent (le réseau n'était pas encore réellement prêt au moment
+ * de l'événement « online », ou une écriture a échoué), retente seule avec un délai croissant
+ * (4 s, 8 s… 30 s) tant que la file n'est pas vide. Sans cela, un rejeu raté au retour du réseau
+ * attendait le prochain retour au premier plan, parfois des heures.
+ */
+export async function viderFileAvecRepli(executer, essai = 0) {
+  const resultat = await viderFile(executer)
+  clearTimeout(minuteurRepli)
+  if (resultat.restantes > 0) {
+    const delai = Math.min(4000 * 2 ** essai, 30_000)
+    minuteurRepli = setTimeout(() => viderFileAvecRepli(executer, essai + 1), delai)
+  }
+  return resultat
+}

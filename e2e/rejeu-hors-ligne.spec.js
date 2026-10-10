@@ -120,3 +120,35 @@ for (const [titre, gestes] of ordres) {
     await expect(page.getByText(/ZZTEST_REJEU_RENOMME/).first()).toBeVisible()
   })
 }
+
+test('premier rejeu raté (réseau pas encore prêt) : la file se revide seule, sans nouveau déclencheur', async ({ page }) => {
+  let coupe = true
+  let tentatives = 0
+  await page.route(/\/rest\/v1\/fichiers/, (route) => {
+    if (route.request().method() === 'PATCH' && coupe) {
+      tentatives += 1
+      return route.abort()
+    }
+    return route.continue()
+  })
+  await page.route(/todoist-rappel|todoist-tache/, (route) => route.abort())
+  await page.goto('/')
+  await page.locator('input[type=search]').fill(NOM)
+  await page.getByText(`${NOM} Essai`).click()
+  await page.getByText(`${NOM} dossier`).click()
+  await ouvrirDocuments(page)
+
+  await geste(page, 'Local', 'Écartée').click()
+  await expect.poll(() => longueurFile(page)).toBe(1)
+  const avant = tentatives // l'écriture d'origine
+
+  // « Retour du réseau » : un rejeu part, mais le réseau n'est pas prêt — il échoue
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await expect.poll(() => tentatives, { timeout: 15_000 }).toBeGreaterThan(avant)
+  expect(await longueurFile(page)).toBe(1)
+
+  // Le réseau devient réellement disponible, SANS nouvel événement : la file doit se vider seule
+  coupe = false
+  await expect.poll(() => longueurFile(page), { timeout: 60_000 }).toBe(0)
+  await expect.poll(etats, { timeout: 30_000 }).toEqual(['a_trancher', 'ecartee', 'a_trancher'])
+})

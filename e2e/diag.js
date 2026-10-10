@@ -69,11 +69,14 @@ export function journaliser(page, testInfo) {
         noter(`WS   ⇐ ${m?.[1] ?? '?'} dossiers statut=${t.match(/"statut":"(\w+)"/)?.[1] ?? '-'}`)
       }
       if (t.includes('"table":"fichiers"') && t.includes('postgres_changes')) {
-        const m = t.match(/"type":"(INSERT|UPDATE|DELETE)"/)
-        const etats = [...t.matchAll(/\\?"etat\\?":\\?"(\w+)/g)].map((x) => x[1]).join(',')
-        const projets = [...t.matchAll(/\\?"projet\\?":\\?"([^"\\]*)/g)].map((x) => x[1]).join(',')
-        const dec = t.match(/"decision":"(\w+)"/)
-        noter(`WS   ⇐ ${m?.[1] ?? '?'} fichiers decision=${dec?.[1] ?? '-'} etats=[${etats}] projets=[${projets}]`)
+        try {
+          const d = JSON.parse(t)[4].data
+          const r = d.record ?? {}
+          const etats = Array.isArray(r.variantes) ? r.variantes.map((o) => `${o.etat ?? '-'}${o.projet ? ':' + o.projet : ''}`).join(',') : '-'
+          noter(`WS   ⇐ ${d.type} fichiers nom=${r.nom} taille=${r.taille} decision=${r.decision} decision_le=${r.decision_le} montant=${r.montant_ttc} etats=[${etats}]`)
+        } catch {
+          noter('WS   ⇐ fichiers (illisible)')
+        }
       }
     })
   })
