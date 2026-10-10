@@ -41,7 +41,10 @@ test.afterAll(async () => {
   await rest('DELETE', `dossiers?id=eq.${dossier.id}&titre=eq.${NOM} dossier`)
   await rest('DELETE', `clients?id=eq.${client.id}&nom_praticien=eq.${NOM}`)
 })
-test.beforeEach(async ({ page }, testInfo) => { journaliser(page, testInfo) })
+test.beforeEach(async ({ page }, testInfo) => {
+  journaliser(page, testInfo)
+  await rest('PATCH', `fichiers?id=eq.${X.id}`, { variantes: OFFRES() }) // chaque test repart des mêmes offres
+})
 
 test('trois étiquettes de projet posées à la suite : un écho temps réel tardif n\'en défait aucune', async ({ page }) => {
   // Échos temps réel de `fichiers` retenus, libérés un par un par le test.
@@ -92,4 +95,56 @@ test('trois étiquettes de projet posées à la suite : un écho temps réel tar
   await poser('Option', 'Projet C')
   await expect.poll(projets).toEqual(['Projet A', 'Projet B', 'Projet C'])
   page.__liberer(retenus.length)
+})
+
+test('échos livrés dans le désordre (le plus récent d\'abord) : l\'écran garde le dernier état et le geste suivant n\'en défait aucun', async ({ page }) => {
+  // Constaté en suite complète : trois échos arrivés dans l'ordre 1, 3, 2. Ici l'ordre est inversé à la main.
+  const retenus = []
+  let abonne = false
+  await page.routeWebSocket(/realtime\/v1\/websocket/, (ws) => {
+    const serveur = ws.connectToServer()
+    ws.onMessage((m) => serveur.send(m))
+    serveur.onMessage((m) => {
+      const texte = typeof m === 'string' ? m : ''
+      if (texte.includes(`fichiers-dossier_id-${dossier.id}`) && texte.includes('phx_reply') && texte.includes('"status":"ok"')) abonne = true
+      if (texte.includes('"table":"fichiers"') && texte.includes('"type":"UPDATE"')) retenus.push(m)
+      else ws.send(m)
+    })
+    page.__liberer = (ordre) => ordre.forEach((i) => ws.send(retenus[i]))
+  })
+  await page.route(/todoist-rappel|todoist-tache/, (route) => route.abort())
+  await page.goto('/')
+  await page.locator('input[type=search]').fill(NOM)
+  await page.getByText(`${NOM} Essai`).click()
+  await page.getByText(`${NOM} dossier`).click()
+  await ouvrirDocuments(page)
+  await expect.poll(() => abonne, { timeout: 30_000 }).toBe(true)
+
+  const poser = async (libelle, projet) => {
+    const champ = page.getByLabel(new RegExp(`Projet de l'offre ${libelle}`))
+    await champ.fill(projet)
+    await champ.blur()
+  }
+  const projets = async () => (await variantes()).map((o) => o.projet)
+  await poser('Fauteuils', 'Projet A')
+  await expect.poll(projets).toEqual(['Projet A', undefined, undefined])
+  await expect.poll(() => retenus.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(1)
+  const n1 = retenus.length
+  await poser('Local', 'Projet B')
+  await expect.poll(projets).toEqual(['Projet A', 'Projet B', undefined])
+  await expect.poll(() => retenus.length, { timeout: 30_000 }).toBeGreaterThan(n1)
+  const n2 = retenus.length
+  await poser('Option', 'Projet C')
+  await expect.poll(projets).toEqual(['Projet A', 'Projet B', 'Projet C'])
+  await expect.poll(() => retenus.length, { timeout: 30_000 }).toBeGreaterThan(n2)
+
+  // Livraison inversée : le plus récent d'abord, puis les plus anciens
+  page.__liberer([...retenus.keys()].reverse())
+  await rendu(page)
+  await expect(page.getByLabel(/Projet de l'offre Fauteuils/)).toHaveValue('Projet A')
+  await expect(page.getByLabel(/Projet de l'offre Local/)).toHaveValue('Projet B')
+  await expect(page.getByLabel(/Projet de l'offre Option/)).toHaveValue('Projet C')
+
+  await poser('Fauteuils', 'Projet D')
+  await expect.poll(projets).toEqual(['Projet D', 'Projet B', 'Projet C'])
 })

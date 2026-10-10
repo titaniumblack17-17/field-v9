@@ -121,6 +121,8 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   // Files d'écriture et écritures non encore échoées, par fichier (voir ecrire).
   const chaines = useRef(new Map())
   const ecritures = useRef(new Map())
+  // Dernier instant de validation en base vu par fichier (voir le gestionnaire temps réel).
+  const commits = useRef(new Map())
 
   // Relit un fichier suivi dont plus rien n'est en vol ni en file hors-ligne, et le rend aux mises à jour
   // extérieures. Une écriture qui repart pendant la relecture l'annule.
@@ -158,6 +160,13 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
           // Écho d'une écriture locale déjà dépassée par une plus récente : l'appliquer
           // ferait reculer l'écran, et le geste suivant partirait d'un état périmé.
           // Décidé ici, hors de l'updater, qui doit rester pur.
+          // Les échos n'arrivent pas toujours dans l'ordre des écritures : seul l'ordre de validation en base
+          // (commit_timestamp) fait foi. Un écho plus ancien que le dernier vu pour ce fichier est ignoré.
+          if (p.eventType === 'UPDATE') {
+            const instant = Date.parse(p.commit_timestamp)
+            if (instant && instant < (commits.current.get(p.new.id) ?? 0)) return
+            if (instant) commits.current.set(p.new.id, instant)
+          }
           const perime = p.eventType === 'UPDATE' && echoPerime(ecritures.current, p.new)
           setListe((cur) => {
             if (p.eventType === 'INSERT') {

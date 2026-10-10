@@ -157,12 +157,13 @@ for (const [nom, largeur, hauteur] of [['iPhone 390', 390, 844], ['ordinateur 12
     })
 
     test('chaque segment et chaque ligne du pipeline mènent à la famille filtrée', async ({ page }) => {
+      test.setTimeout(180_000)
       const problemes = surveiller(page)
       await ouvrirDashboard(page)
       for (const f of FAMILLES) {
         // 1) ligne de légende
         await page.getByLabel('Pipeline', { exact: true }).first().locator('button', { hasText: new RegExp(`^${f.libelle}`) }).first().click()
-        await expect(page.getByText(`Famille : ${f.libelle}`)).toBeVisible()
+        await expect(page.getByText(`Famille : ${f.libelle}`)).toBeVisible({ timeout: 45_000 }) // le Pipeline charge ses données avant d'afficher la famille (le serveur ralentit parfois)
         // La RPC et le décompte brut sont relus ensemble : les données de Bruce bougent en direct.
         let nb
         await expect(async () => {
@@ -193,7 +194,7 @@ for (const [nom, largeur, hauteur] of [['iPhone 390', 390, 844], ['ordinateur 12
           const cx = boite.x + boite.width / 2
           const cy = boite.y + boite.height / 2
           await page.mouse.click(cx + 50 * Math.cos(angle), cy + 50 * Math.sin(angle))
-          await expect(page.getByText(`Famille : ${f.libelle}`)).toBeVisible()
+          await expect(page.getByText(`Famille : ${f.libelle}`)).toBeVisible({ timeout: 45_000 }) // le Pipeline charge ses données avant d'afficher la famille (le serveur ralentit parfois)
           await page.goBack()
           await dashboardVisible(page)
         } else {

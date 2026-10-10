@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { ouvrirDocuments, versDashboard } from './aides.js'
+import { journaliser } from './diag.js'
 import { potentiel } from '../src/lib/documents.js'
 
 // Fixtures propres à ce passage : jamais de doublon avec une autre session ou un reste d'un passage interrompu.
@@ -66,7 +67,7 @@ test.afterAll(async () => {
   await rest('DELETE', `clients?id=eq.${client.id}&nom_praticien=eq.${NOM}`)
 })
 
-test.beforeEach(async () => { await reinit() })
+test.beforeEach(async ({ page }, testInfo) => { journaliser(page, testInfo); await reinit() })
 
 const surveiller = (page) => {
   const p = []
@@ -150,10 +151,13 @@ test('Dashboard « Nettoyer » : décision requise en tête, unitaire, global av
   await pasDeDebordement(page)
 
   // Unitaire (Q) puis annulation
-  await feuille.locator('li', { hasText: 'ZZTEST_NETQ_202699302' }).getByRole('button', { name: 'Écarter les autres' }).click()
+  const ligneQ = feuille.locator('li', { hasText: 'ZZTEST_NETQ_202699302' })
+  await ligneQ.getByRole('button', { name: 'Écarter les autres' }).click()
   await expect.poll(async () => (await etats(Q)).join(',')).toBe('retenue,ecartee')
+  await expect(ligneQ).toHaveCount(0) // le Dashboard a relu la base : plus rien à nettoyer sur ce devis
   await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click()
   await expect.poll(async () => (await etats(Q)).join(',')).toBe('retenue,a_trancher')
+  await expect(ligneQ).toHaveCount(1) // …et il a relu l'annulation : l'état affiché suit la base avant le geste global
 
   // Global : la confirmation affiche le nombre d'offres et le montant retiré, rien n'est écrit avant
   await feuille.getByRole('button', { name: /^Tout écarter \(3 offres\)/ }).click()

@@ -42,6 +42,12 @@ export function journaliser(page, testInfo) {
   page.on('request', (r) => {
     if (base(r.url()) && r.method() !== 'GET') noter(`APP  → ${r.method()} ${court(r.url())} ${(r.postData() ?? '').slice(0, 400)}`)
   })
+  page.on('requestfinished', async (r) => {
+    if (!/supabase\.co/.test(r.url())) return
+    const t = r.timing()
+    const duree = t.responseEnd - t.startTime
+    if (duree > 2000) noter(`APP  ⏱ LENT ${Math.round(duree)} ms ${r.method()} ${court(r.url())}`)
+  })
   page.on('requestfailed', (r) => {
     if (/supabase\.co/.test(r.url())) noter(`APP  ✗ ÉCHEC RÉSEAU ${r.method()} ${court(r.url())} ${r.failure()?.errorText ?? ''}`)
   })
