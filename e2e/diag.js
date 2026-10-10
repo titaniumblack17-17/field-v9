@@ -7,6 +7,7 @@ import { execSync } from 'node:child_process'
 const actif = process.env.DIAG === '1'
 const dossier = process.env.DIAG_DIR ?? '/tmp/diag'
 let fichier = null
+const enVol = new Map() // requêtes Supabase parties et pas encore revenues
 
 export const noter = (message) => {
   if (!actif || !fichier) return
@@ -31,8 +32,14 @@ export const autresSuites = () => {
   }
 }
 
+export const noterEnVol = () => {
+  const maintenant = Date.now()
+  noter(`EN VOL À LA FIN DU TEST : ${enVol.size} ${[...enVol.values()].map((v) => `${v.methode} ${v.chemin} (${maintenant - v.debut} ms)`).join(' | ')}`)
+}
+
 export function journaliser(page, testInfo) {
   if (!actif) return
+  enVol.clear()
   mkdirSync(dossier, { recursive: true })
   const nom = testInfo.title.replace(/[^\p{L}\p{N}]+/gu, '_').slice(0, 60)
   fichier = `${dossier}/${process.env.DIAG_RUN ?? 'x'}__${testInfo.file.split('/').pop()}__${nom}.log`
@@ -42,13 +49,18 @@ export function journaliser(page, testInfo) {
   page.on('request', (r) => {
     if (base(r.url()) && r.method() !== 'GET') noter(`APP  → ${r.method()} ${court(r.url())} ${(r.postData() ?? '').slice(0, 400)}`)
   })
+  page.on('request', (r) => {
+    if (/supabase\.co/.test(r.url())) enVol.set(r, { methode: r.method(), chemin: court(r.url()), debut: Date.now() })
+  })
   page.on('requestfinished', async (r) => {
+    enVol.delete(r)
     if (!/supabase\.co/.test(r.url())) return
     const t = r.timing()
     const duree = t.responseEnd - t.startTime
     if (duree > 2000) noter(`APP  ⏱ LENT ${Math.round(duree)} ms ${r.method()} ${court(r.url())}`)
   })
   page.on('requestfailed', (r) => {
+    enVol.delete(r)
     if (/supabase\.co/.test(r.url())) noter(`APP  ✗ ÉCHEC RÉSEAU ${r.method()} ${court(r.url())} ${r.failure()?.errorText ?? ''}`)
   })
   page.on('response', (r) => {
@@ -56,16 +68,6 @@ export function journaliser(page, testInfo) {
   })
   page.on('request', (r) => {
     if (/dashboard_chiffres/.test(r.url())) noter('APP  → RPC dashboard_chiffres (demande)')
-  })
-  page.on('response', async (r) => {
-    if (!/dashboard_chiffres/.test(r.url())) return
-    try {
-      const c = await r.json()
-      const f = (cle) => c.familles.find((x) => x.cle === cle)?.nb
-      noter(`APP  ← RPC dashboard_chiffres qualification=${f('qualification')} devis=${f('devis')} actifs=${c.projets_actifs}`)
-    } catch {
-      noter('APP  ← RPC dashboard_chiffres (corps illisible)')
-    }
   })
   page.on('websocket', (ws) => {
     ws.on('framereceived', (f) => {

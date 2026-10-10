@@ -3,6 +3,7 @@
 # Lance la suite complète jusqu'à obtenir N passages VALIDES (serveur de dev dédié, journal DIAG dans /tmp/diag).
 # Un passage est invalide si une AUTRE suite Playwright (autre session, autre dossier) a tourné pendant ce temps :
 # toutes les sessions partagent la même base, leurs fixtures et leurs totaux se mélangent.
+# DIAG=1 pour journaliser (le journal lui-même perturbe parfois les chargements : arrêt par défaut).
 # Résumé : /tmp/diag/<étiquette>-resume.txt
 N=${1:-10}; LARGEUR=${2:-390}; ETQ=${3:-w$LARGEUR}
 mkdir -p /tmp/diag; : > /tmp/diag/$ETQ-resume.txt
@@ -15,7 +16,7 @@ while [ $valides -lt $N ] && [ $essai -lt $((N*3)) ]; do
   : > /tmp/diag/$ETQ-etrangeres.tmp
   ( while true; do etrangeres >> /tmp/diag/$ETQ-etrangeres.tmp; sleep 3; done ) &
   ECH=$!
-  DIAG=1 DIAG_RUN=$ETQ-$essai LARGEUR=$LARGEUR npx playwright test -c playwright.repete.config.js --timeout=60000 > /tmp/diag/$ETQ-$essai.txt 2>&1
+  DIAG=${DIAG:-0} DIAG_RUN=$ETQ-$essai LARGEUR=$LARGEUR npx playwright test -c playwright.repete.config.js --timeout=60000 > /tmp/diag/$ETQ-$essai.txt 2>&1
   kill $ECH 2>/dev/null; wait $ECH 2>/dev/null
   resume="$(grep -E '^  [0-9]+ (passed|failed)' /tmp/diag/$ETQ-$essai.txt | tr '\n' ' ')"
   if [ -s /tmp/diag/$ETQ-etrangeres.tmp ]; then

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { FAMILLES } from '../src/constants/dashboard.js'
 import { ETAPES_PROJET_LABELS, ETAPES_SIGNEES, estEnAttente, exerciceDe } from '../src/constants/dossiers.js'
 import { aTrancher } from '../src/lib/documents.js'
-import { journaliser, noter } from './diag.js'
+import { journaliser, noter, noterEnVol } from './diag.js'
 import { versDashboard } from './aides.js'
 
 // Fixtures propres à ce passage : jamais de doublon avec une autre session ou un reste d'un passage interrompu.
@@ -22,6 +22,7 @@ const instantane = async (etiquette) => {
   noter(`${etiquette} dossiers ZZTEST=${d.length} [${d.map((x) => x.titre).join('|')}] rpc actifs=${c.projets_actifs} signe=${c.signe.montant} a_trancher=${JSON.stringify(c.potentiel.a_trancher)}`)
 }
 test.beforeEach(async ({ page }, testInfo) => { journaliser(page, testInfo) })
+test.afterEach(() => noterEnVol())
 const pl = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`
 const nombre = (t) => Number(String(t).replace(/[^\d]/g, ''))
 
