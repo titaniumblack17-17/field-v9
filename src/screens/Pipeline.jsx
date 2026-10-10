@@ -250,8 +250,11 @@ let etapeVueMemorisee = null
 // annulable avant que l'écriture réelle ne parte (voir armerDeplacement).
 const DUREE_ANNULATION_MS = 5000
 
-export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale, etapeInitiale }) {
+export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale, etapeInitiale, familleInitiale }) {
   const [dossiers, setDossiers] = useState([])
+  // Filtre par famille d'étapes (depuis le Dashboard) : ne garde que les
+  // colonnes de la famille. null = tout le pipeline, comme avant.
+  const [famille, setFamille] = useState(familleInitiale ?? null)
   // Les deux pipelines n'ont ni le même vocabulaire d'étapes ni le même
   // volume : les montrer bout à bout obligeait à faire défiler loin pour
   // atteindre le SAV. Un seul kanban à l'écran à la fois, choisi ici.
@@ -289,7 +292,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale,
   // par exemple) l'emporte sur la mémoire, même logique que vueInitiale
   // ci-dessus — une navigation ciblée sur une colonne précise ne doit pas
   // retomber sur celle consultée la fois d'avant.
-  const [etapeVue, setEtapeVue] = useState(() => etapeInitiale ?? etapeVueMemorisee)
+  const [etapeVue, setEtapeVue] = useState(() => etapeInitiale ?? familleInitiale?.etapes?.[0] ?? etapeVueMemorisee)
   const zoneRef = useRef(null)
   const pillRefs = useRef({})
 
@@ -563,10 +566,11 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale,
   const etapesVisibles = useMemo(
     () =>
       ETAPES_PROJET.filter(([cle]) => {
+        if (famille && !famille.etapes.includes(cle)) return false
         if (cle === 'perdu' || cle === 'termine') return historiqueDeplie || activeDrag
         return montrerVides || byEtape[cle].length > 0 || activeDrag
       }),
-    [byEtape, historiqueDeplie, montrerVides, activeDrag]
+    [byEtape, historiqueDeplie, montrerVides, activeDrag, famille]
   )
   // Colonnes terminales du kanban affiché, et nombre de dossiers qu'elles
   // contiennent. Une colonne vide n'est pas masquée par ce mécanisme mais le
@@ -754,10 +758,24 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale,
 
       {!chargement && !erreur && (
         <>
+      {famille && vue === 'projet' && (
+        <div className="flex items-center gap-2 px-4 pb-2 flex-shrink-0">
+          <span
+            className="text-xs font-semibold rounded-full px-3 h-8 flex items-center"
+            style={{ background: 'rgba(255,255,255,0.06)', color: famille.couleur }}
+          >
+            Famille : {famille.libelle}
+          </span>
+          <button onClick={() => setFamille(null)} className="h-11 px-2 text-xs font-medium text-accent">
+            Tout afficher
+          </button>
+        </div>
+      )}
       {vue === 'projet' && (
       <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto flex-shrink-0">
         {ETAPES_PROJET.filter(
-          ([cle]) => cle !== 'perdu' && cle !== 'termine' && byEtape[cle].length > 0
+          ([cle]) =>
+            cle !== 'perdu' && cle !== 'termine' && byEtape[cle].length > 0 && (!famille || famille.etapes.includes(cle))
         ).map(([cle, libelle]) => (
           <button
             key={cle}
@@ -773,7 +791,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale,
             </span>
           </button>
         ))}
-        {byEtape.termine.length > 0 && (
+        {!famille && byEtape.termine.length > 0 && (
           <button
             ref={(el) => { pillRefs.current.termine = el }}
             // Toujours révéler puis y aller — jamais un bascule. Un appui
@@ -797,7 +815,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale,
             </span>
           </button>
         )}
-        {byEtape.perdu.length > 0 && (
+        {!famille && byEtape.perdu.length > 0 && (
           <button
             ref={(el) => { pillRefs.current.perdu = el }}
             onClick={() => {

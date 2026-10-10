@@ -12,6 +12,7 @@ const Capture = React.lazy(() => import('./screens/Capture'))
 const DossierForm = React.lazy(() => import('./screens/DossierForm'))
 const DossierDetail = React.lazy(() => import('./screens/DossierDetail'))
 const Pipeline = React.lazy(() => import('./screens/Pipeline'))
+const Dashboard = React.lazy(() => import('./screens/Dashboard'))
 const Catalogue = React.lazy(() => import('./screens/Catalogue'))
 import useConfirm from './hooks/useConfirm'
 import { tailleFile, ecouterTailleFile, viderFile } from './lib/fileAttente'
@@ -394,6 +395,17 @@ export default function App() {
         onCreate={() => push({ name: 'create' })}
         vueInitiale={view.vueInitiale}
         etapeInitiale={view.etapeInitiale}
+        familleInitiale={view.familleInitiale}
+      />
+    )
+  } else if (view.name === 'dashboard') {
+    écran = (
+      <Dashboard
+        onBack={back}
+        onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
+        onPipeline={(vueInitiale, etapeInitiale, familleInitiale) =>
+          push({ name: 'pipeline', vueInitiale, etapeInitiale, familleInitiale })
+        }
       />
     )
   } else if (view.name === 'catalogue') {
@@ -428,6 +440,7 @@ export default function App() {
         onClients={() => push({ name: 'list' })}
         onPipeline={(vueInitiale, etapeInitiale) => push({ name: 'pipeline', vueInitiale, etapeInitiale })}
         onCapture={() => push({ name: 'capture' })}
+        onDashboard={() => push({ name: 'dashboard' })}
       />
     )
   }
@@ -448,7 +461,7 @@ export default function App() {
   const plafondLargeur =
     view.name === 'pipeline'
       ? null
-      : view.name === 'brief' || view.name === 'catalogue'
+      : view.name === 'brief' || view.name === 'catalogue' || view.name === 'dashboard'
         ? 'max-w-5xl'
         : 'max-w-3xl'
 

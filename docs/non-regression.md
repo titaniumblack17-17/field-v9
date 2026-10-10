@@ -10,6 +10,13 @@ Viewport iPhone 390 × 844. Console sans erreur. Aucun défilement horizontal. C
 - [ ] Brief du soir et rapport hebdo s'ouvrent.
 - [ ] Rappels du jour : clôture d'un rappel (avec commentaire) fonctionne.
 
+## 1 bis. Dashboard (phase 3)
+- [ ] Pastille « Dashboard » sur le Board ; « ← Brief » ramène au Board.
+- [ ] Anneaux Objectif et Pipeline ; chaque segment et chaque ligne de légende ouvre la bonne liste / le Pipeline filtré (« Famille : X », « Tout afficher »).
+- [ ] Tuiles À trancher, Incomplets, En attente, En retard : liste = chiffre ; une ligne ouvre la fiche ; retour = Dashboard.
+- [ ] « En retard » = « N actions à traiter aujourd'hui » du Board ; jamais « 0 € » pour un montant vide.
+- [ ] Hors-ligne : dernières valeurs connues signalées ; temps réel INSERT / UPDATE / DELETE.
+
 ## 2. Pipeline
 - [ ] 14 étapes visibles, colonnes Terminé / Perdu repliées et comptées.
 - [ ] Glisser-déposer d'une carte change l'étape ; l'annulation la restaure.

@@ -28,31 +28,14 @@ import {
   joursEnAttente,
   joursDepuisStatut,
   estEnAttente,
+  exerciceDe,
+  ETAPES_SIGNEES,
+  ETAPES_FACTUREES,
   SEUIL_DEVIS_SANS_REPONSE_JOURS,
 } from '../constants/dossiers'
 
 // Objectif annuel de la spec (§1) : 5 M€ TTC.
 const OBJECTIF_ANNUEL = 5_000_000
-
-// Un dossier réglé appartient à l'exercice de son règlement ; un dossier
-// encore ouvert appartient à l'exercice en cours. Le 1er janvier, ce qui n'a
-// pas été réglé bascule donc de lui-même sur la nouvelle année — sans clôture
-// à faire, sans report à saisir.
-const exerciceDe = (dossier, anneeCourante) => {
-  if (!ETAPES_FACTUREES.includes(dossier.statut)) return anneeCourante
-  const regle = dossier.closed_at ?? dossier.date_installation
-  return regle ? Number(String(regle).slice(0, 4)) : anneeCourante
-}
-
-// Signé : la commande est passée, la vente est faite. Ce qui suit relève de la
-// logistique, pas de la prospection. « Terminé » en fait partie : classer un
-// dossier ne doit pas le faire disparaître de l'objectif de l'année.
-const ETAPES_SIGNEES = ['commande', 'reunion_chantier', 'installation', 'finition', 'financement', 'termine']
-
-// Facturé : l'installation est terminée. Aucune étape ne s'appelait « facturé »
-// avant « Terminé » — la finition en tenait lieu, et continue de compter une
-// fois le dossier classé.
-const ETAPES_FACTUREES = ['finition', 'termine']
 
 const euros = (n) =>
   n == null ? '—' : new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n) + ' €'
@@ -319,7 +302,7 @@ function CarteRapportHebdo({ rapport, ouverte, onToggle }) {
   )
 }
 
-export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPipeline, onCapture }) {
+export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPipeline, onCapture, onDashboard }) {
   const [dossiers, setDossiers] = useState([])
   // Sous-tâches de note en retard, tous dossiers confondus : chargées à part
   // de `dossiers` (table séparée), rejointes à leur dossier localement dans
@@ -1108,6 +1091,14 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
             >
               Capture
             </button>
+            {onDashboard && (
+              <button
+                onClick={onDashboard}
+                className="flex-shrink-0 px-3 h-9 rounded-full bg-carte text-accent text-xs font-semibold shadow"
+              >
+                Dashboard
+              </button>
+            )}
           </div>
         </header>
       </div>

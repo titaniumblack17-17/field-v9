@@ -232,3 +232,25 @@ export function styleDossier(dossier) {
   }
   return STYLES_TYPE[dossier?.type] ?? STYLES_TYPE.projet
 }
+
+// ── Objectif annuel : définitions partagées (Board et Dashboard) ──────────────
+// Un dossier réglé appartient à l'exercice de son règlement ; un dossier
+// encore ouvert appartient à l'exercice en cours. Le 1er janvier, ce qui n'a
+// pas été réglé bascule donc de lui-même sur la nouvelle année — sans clôture
+// à faire, sans report à saisir.
+export const exerciceDe = (dossier, anneeCourante) => {
+  if (!ETAPES_FACTUREES.includes(dossier.statut)) return anneeCourante
+  const regle = dossier.closed_at ?? dossier.date_installation
+  return regle ? Number(String(regle).slice(0, 4)) : anneeCourante
+}
+
+// Signé : la commande est passée, la vente est faite. Ce qui suit relève de la
+// logistique, pas de la prospection. « Terminé » en fait partie : classer un
+// dossier ne doit pas le faire disparaître de l'objectif de l'année.
+export const ETAPES_SIGNEES = ['commande', 'reunion_chantier', 'installation', 'finition', 'financement', 'termine']
+
+// Facturé : l'installation est terminée. Aucune étape ne s'appelait « facturé »
+// avant « Terminé » — la finition en tenait lieu, et continue de compter une
+// fois le dossier classé.
+export const ETAPES_FACTUREES = ['finition', 'termine']
+
