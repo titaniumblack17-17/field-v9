@@ -718,3 +718,8 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
 ## Phase 2 — historique des étapes (branche `feat/phase2-historique-etapes`, non fusionnée)
 
 Voir `docs/phase2-historique.md` (état des lieux, définition de « signé », requête de contrôle, retours arrière). Migrations `20261010_historique_etapes.sql` et `20261010_pipeline_snapshots.sql`, déjà appliquées en base. Tests : `e2e/historique.spec.js`.
+### Correctif 5 (phase 1) — cumul d'offres
+
+- Migration `20261010_variantes_retenues.sql` (+ rollback) : colonne `fichiers.variantes_retenues integer[]` ; les choix déjà faits y sont recopiés. `variante_retenue` reste la première offre retenue (compatibilité), `montant_ttc` porte la somme. Un cumul se fait par « Cumuler » → cocher → « Valider le cumul » ; HT/TTC se précise par offre quand le devis porte un doute ; `montant_ht` n'est renseigné que si toutes les offres retenues sont lues en HT.
+- `devis-montant-v2` (v3) : relire un devis dont les offres n'ont pas changé conserve le choix et le montant (y compris un cumul).
+- Deux devis chiffrés sur un même dossier se remplacent toujours (règle du déclencheur inchangée) : le cumul d'offres est interne à un devis.
