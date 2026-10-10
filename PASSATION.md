@@ -675,3 +675,70 @@ Projection 1 092 239 € · Signé 230 290 € · **37 projets encore sans monta
      Testé en navigateur avec les vraies données : chaque lien vérifié un
      par un (vue et étape actives confirmées par script), Anomalies
      détectées confirmée toujours accordéon.
+
+## Phase 1 — typage des documents (branche `feat/phase1-typage-documents`, non fusionnée)
+
+- `fichiers` gagne `type_doc` (devis/cdc/plan/autre), `version_doc`, `variantes` (jsonb `[{libelle, montant_ttc}]`), `variante_retenue` (index base 0) et `a_trancher_raison` (colonne ajoutée en plus des quatre demandées : motif d'un HT/TTC douteux). Migration additive : `supabase/migrations/20261009_fichiers_type_doc.sql` (déjà appliquée en base).
+- Analyse : nouvelle fonction Edge `devis-montant-v2` (déjà déployée). L'ancienne `devis-montant` reste en place, plus appelée par le front de cette branche. Une fois la branche fusionnée et vérifiée, `devis-montant` peut être retirée.
+- Le montant d'un devis à offres exclusives reste vide tant que Bruce n'a pas retenu une offre (un tap) ; le déclencheur existant recalcule alors le dossier. Les offres ne s'additionnent jamais.
+- Retirer à un devis chiffré son statut de devis (changement de type) remet son `montant_ttc` à vide **mais ne remet pas `montant_estime` du dossier à zéro** : le déclencheur `recalculer_montant_dossier` laisse le montant en place quand plus aucun fichier n'est chiffré (comportement antérieur, valable aussi à la suppression d'un fichier).
+- Les deux textes « n'a pas été reconnu comme un devis » encore en base sur les CDC V3 (Antoun) et V4 (Sharif) ne sont pas réécrits (migration additive) ; l'écran ne montre l'erreur d'analyse que pour un devis.
+- La sonde réseau (`src/lib/reseau.js`) portait un 401 en console : elle envoie maintenant l'apikey vers `/rest/v1/clients?select=id&limit=1` (la racine `/rest/v1/` répond 401 même avec la clé publique).
+- Un devis déposé sur une **fiche client** (hors dossier) n'est jamais analysé : Goual, Dahan, Laban (…020B) et Pagazani sont dans ce cas. À rattacher à leur dossier pour être lus.
+- Tests de parcours : `npm run e2e` (Playwright, devDependency, viewport 390x844). Ils créent un client `ZZTEST-E2E` sur la base réelle et le suppriment à la fin.
+- En attente de la maquette `docs/maquette-board.html` (absente du dépôt) pour la bande « À appeler » et les pastilles « En attente » (sous-point d).
+
+### Complément 2 (phase 1)
+
+- Montant « à chiffrer » : migration `20261009_montant_a_chiffrer.sql` (appliquée). Quand le dernier devis chiffré d'un dossier est retiré (retenue annulée, changement de type, suppression), `montant_estime` passe à NULL. Seul ce retrait déclenche la remise à vide (variable de session `field.vider_si_vide` posée par `sur_changement_devis`) : déposer une photo ou un PDF non chiffré laisse la saisie manuelle intacte. Retour arrière : `supabase/rollback/20261009_montant_a_chiffrer_rollback.sql`.
+- `devis-montant-v2` accepte `dryRun: true` (lit sans écrire, y compris pour un PDF encore sur une fiche client). Les erreurs d'analyse (PDF illisible…) s'écrivent toutefois même en dry-run.
+- Rattachés à leur dossier unique : Goual, Dahan, Pagazani (leur `montant_estime` égalait déjà une des offres lues). **Laban …020B reste sur la fiche client** : 4 offres (20 675 – 28 115 €) alors que le dossier porte 13 472 € (révision C déjà chiffrée).
+- Un devis dont `montant_estime` est vide s'affiche « À chiffrer » (carte Pipeline, fiche client, champ du dossier) pour les projets, jamais 0 €.
+- Catalogue : plus aucun chemin dans l'interface (la pilule de nav a été retirée) ; seule la route `catalogue` de App.jsx existe.
+- Synchro Todoist : `todoist-rappel` a répondu 429 (limite de débit Todoist) à tous les essais du 09/10 en soirée ; non vérifiée de bout en bout.
+- `npm run e2e` : e2e/phase1.spec.js et e2e/smoke.spec.js.
+
+### Complément 4 (phase 1) — Board : bande « À appeler », feuilles, pastilles
+
+- `BandeAppeler` remplace le bloc « Priorité du jour » (mêmes données : `board.prioriteJour`, `board.disponibles`, « Plus tard » inchangé). Le nombre affiché est celui des éléments non ignorés du tri unique ; la feuille liste chacun (le premier porte la mention « Priorité du jour ») puis la section « Aussi à traiter » entière. Le bouton « Appeler » est un lien `tel:` (même geste qu'avant) ; sans numéro, il ouvre la fiche.
+- `FeuilleBasse` : dialogue modal réutilisable (focus piégé, Échap, fond, « Fermer »). Servie aussi par la tuile « En attente » et par la ligne « Devis à trancher · N devis · M dossiers ».
+- « En attente » (tuile et pastille ⏳) : uniquement `statut = en_attente`. Les devis envoyés/relancés n'en reçoivent plus ; le SAV « nouveau » Kahloun, qui porte un `bloque_par` en texte libre (« Diagnostic Joël en attente »), n'a pas de pastille.
+- Feuille « À appeler » : un contact = un dossier, une seule ligne (les autres éléments urgents du même dossier sont comptés « (+N) » dans le motif, « Plus tard » les ignore tous) ; « Aussi à traiter » dans la feuille ne répète pas ces dossiers.
+- `PastilleAttente` (« ⏳ motif · N j ») sur les cartes Pipeline et les dossiers de la fiche client.
+- Les couleurs de la spec correspondent aux tokens existants (carte #1B1D22, accent-vif #22D3EE, alerte, fond) : aucune nouvelle couleur.
+- Todoist : la limite de débit (429, `retry_after` ≈ 21 min) persiste ; la tâche de test `6hj4XM476rG7XGvw` (« ZZTEST-SMOKE rappel de test — à supprimer ») est restée dans Todoist faute de pouvoir la supprimer.
+
+### Correctifs 2 (phase 1) — règle : on ne retire aucune fonction
+
+- Pipeline : la pastille « ⏳ réponse client — N j » (Devis envoyé / Relance, `joursEnAttente` + `classeAttente`) est restaurée à l'identique ; elle ne compte pour rien dans la tuile « En attente ».
+- Tuile et pastilles ⏳ du Board : `estEnAttente` (constants/dossiers.js) = `bloque_par` renseigné et statut hors termine/clos/solde/perdu. Texte libre affiché tel quel, tronqué ; jours = `joursEnAttente`, sinon jours depuis `statut_changed_at`. Aujourd'hui : 3 (Youssef, Fellous, Kahloun).
+- « Plus tard » : n'écarte à nouveau que l'élément concerné ; le contact reste représenté par son élément suivant.
+- Écarts connus avec la carte « Priorité du jour » d'avant la bande (non corrigés, à décider) : plus d'étiquette de type (SAV / Rappel / Tâche…), plus de ligne « En retard de N jours / À traiter aujourd'hui », un tap de plus pour ouvrir le dossier (la bande ouvre la feuille), « Plus tard » désormais dans la feuille seulement.
+
+## Phase 2 — historique des étapes (branche `feat/phase2-historique-etapes`, non fusionnée)
+
+Voir `docs/phase2-historique.md` (état des lieux, définition de « signé », requête de contrôle, retours arrière). Migrations `20261010_historique_etapes.sql` et `20261010_pipeline_snapshots.sql`, déjà appliquées en base. Tests : `e2e/historique.spec.js`.
+### Correctif 5 (phase 1) — cumul d'offres
+
+- Migration `20261010_variantes_retenues.sql` (+ rollback) : colonne `fichiers.variantes_retenues integer[]` ; les choix déjà faits y sont recopiés. `variante_retenue` reste la première offre retenue (compatibilité), `montant_ttc` porte la somme. Un cumul se fait par « Cumuler » → cocher → « Valider le cumul » ; HT/TTC se précise par offre quand le devis porte un doute ; `montant_ht` n'est renseigné que si toutes les offres retenues sont lues en HT.
+- `devis-montant-v2` (v3) : relire un devis dont les offres n'ont pas changé conserve le choix et le montant (y compris un cumul).
+- Deux devis chiffrés sur un même dossier se remplacent toujours (règle du déclencheur inchangée) : le cumul d'offres est interne à un devis.
+
+## Phase 3 — Dashboard (branche `feat/phase3-dashboard`, non fusionnée)
+
+- Écran `src/screens/Dashboard.jsx`, pastille « Dashboard » sur le Board (qui reste l'accueil). Données : RPC `dashboard_chiffres()` (SECURITY INVOKER, agrégats seulement ; migrations `20261011_dashboard_chiffres.sql` et `…_realtime_pipeline_snapshots.sql`, rollbacks dans `supabase/rollback/`) + les mêmes lectures que le Board pour les listes (dossiers, tâches) et `fichiers`.
+- Familles d'étapes (ordre du Pipeline) : Qualification (a_classer, prospect, prise_contact) · Devis (devis_a_faire, devis_envoye, relance) · Négociation (visite_local, negociation, confirmation) · Commande (financement, commande) · Chantier (reunion_chantier, installation) · Finition (finition, sav). « Projets actifs » = projets ni perdus ni terminés. Le regroupement vit dans `src/constants/dashboard.js` ET dans la RPC ; `e2e/dashboard.spec.js` compare la RPC à un recalcul indépendant.
+- Définitions : signé = celle de l'Objectif (désormais exportée de `constants/dossiers.js`, utilisée par le Board et le Dashboard) ; en retard = éléments de « Aussi à traiter » ; en attente = `bloque_par` renseigné et statut non terminal ; incomplets = devis manquant (étape ≥ Devis envoyé, aucun fichier de type devis) ou cahier des charges manquant (plan intégré sans fichier de type CDC) — définition proposée, à valider ; à trancher = devis à plusieurs offres ou HT/TTC douteux, sans montant.
+- Segment « À trancher » de l'anneau Objectif = somme, sur les devis à trancher des dossiers non encore signés, de l'offre la plus basse (« ≥ ») : ce n'est pas un montant acquis.
+- « À chiffrer » (RPC `a_chiffrer`) : seulement à partir de Devis envoyé ; jamais « 0 € ».
+- Série d'évolution : `pipeline_snapshots` ; signé par statut (sans la règle d'exercice) ; courbe affichée à partir de 7 jours de données.
+- Une table nouvelle doit être ajoutée à la publication realtime : `pipeline_snapshots` ne l'était pas, et l'abonnement ENTIER du Dashboard échouait sans erreur visible (corrigé).
+
+## Décisions par devis (branche `feat/decisions-devis`, depuis `feat/phase3-dashboard`, non fusionnée)
+
+- Colonnes `fichiers.decision` (a_trancher par défaut | retenu | alternative | remplace | mis_de_cote), `remplace_par`, `mis_de_cote_le`, `date_reprise`, et `decision_le` (ajoutée : date de chaque décision, sert à « Remplacé le… »). Migrations `20261012_decisions_devis.sql` et `20261012_dashboard_decisions.sql`, rollbacks dans `supabase/rollback/`.
+- Calcul (`recalculer_montant_dossier`) : montant du dossier = somme des devis `retenu` ; des devis existent mais aucun n'est retenu → NULL ; aucun devis du tout → saisie manuelle intacte (sauf retrait d'un devis chiffré). La règle « deux devis chiffrés se remplacent toujours » et la case « devis complémentaire » (colonne `cumule`, conservée mais sans effet) sont supprimées.
+- Remplissage : le devis le plus récent de chaque dossier (et les cumulés) → retenu ; les autres devis chiffrés que l'ancienne règle ignorait → remplacé (remplace_par = le devis retenu) ; devis sans montant → à trancher. Aucun montant modifié.
+- Numéro de devis : `parserReference` (racine = NOM_PRODUIT, numéro = 9 chiffres + lettre de révision). Proposition seulement quand la racine est identique et le rang plus élevé.
+- « Reportés » : dossier avec un devis mis de côté et aucun retenu ; hors signé et hors à trancher dans la RPC `dashboard_chiffres()` (clé `reportes`).
+- L'analyse (`devis-montant-v2`, v4) ne décide jamais : un devis analysé reste « à trancher » jusqu'à un tap (ou une saisie manuelle du montant, qui le retient).

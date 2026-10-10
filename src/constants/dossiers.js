@@ -153,6 +153,24 @@ export const joursEnAttente = (d) => {
   return Math.floor((Date.now() - new Date(d.statut_changed_at).getTime()) / 86_400_000)
 }
 
+// Statuts de fin de vie : un dossier qui n'a plus rien à attendre.
+export const STATUTS_TERMINAUX = ['termine', 'clos', 'solde', 'perdu']
+
+// « En attente » au sens de la tuile et des pastilles ⏳ du Board : tout dossier
+// dont `bloque_par` est renseigné (motif structuré ou texte libre) et qui n'est
+// pas terminé. Distinct de `joursEnAttente` (à qui la balle sur un devis ou un
+// SAV), qui reste inchangé.
+export const estEnAttente = (d) =>
+  Boolean((d?.bloque_par ?? '').trim()) && !STATUTS_TERMINAUX.includes(d.statut)
+
+// Jours depuis le dernier changement de statut, pour tout dossier (null sans
+// horodatage). Sert à dater l'attente d'un dossier qui n'est pas « en_attente »
+// mais porte un bloque_par.
+export const joursDepuisStatut = (d) =>
+  d?.statut_changed_at
+    ? Math.floor((Date.now() - new Date(d.statut_changed_at).getTime()) / 86_400_000)
+    : null
+
 // Pré-seuil : l'attente commence à traîner, une relance ne ferait pas de mal,
 // mais ce n'est pas encore l'alerte franche de SEUIL_DEVIS_SANS_REPONSE_JOURS
 // (30 j, seuil déjà utilisé ailleurs, réemployé tel quel pour le rouge plutôt
@@ -168,6 +186,17 @@ export const classeAttente = (jours) => {
   if (jours >= SEUIL_ATTENTE_ORANGE_JOURS) return 'text-alerte'
   return 'text-accent'
 }
+
+// « À chiffrer » : un dossier de vente dont le devis est parti (Devis envoyé et
+// toutes les étapes suivantes, hors « perdu ») sans montant renseigné. Jamais
+// sur un prospect ou un devis encore à faire — il n'y a rien à chiffrer là — et
+// jamais affiché « 0 € » : un montant vide n'est pas un montant nul.
+const ETAPES_APRES_DEVIS = [
+  'devis_envoye', 'relance', 'visite_local', 'negociation', 'confirmation',
+  'financement', 'commande', 'reunion_chantier', 'installation', 'finition', 'termine',
+]
+export const aChiffrer = (d) =>
+  d?.type === 'projet' && d.montant_estime == null && ETAPES_APRES_DEVIS.includes(d.statut)
 
 export const REMUNERATION = {
   facture: 'Facturé 500 € TTC',
@@ -203,3 +232,25 @@ export function styleDossier(dossier) {
   }
   return STYLES_TYPE[dossier?.type] ?? STYLES_TYPE.projet
 }
+
+// ── Objectif annuel : définitions partagées (Board et Dashboard) ──────────────
+// Un dossier réglé appartient à l'exercice de son règlement ; un dossier
+// encore ouvert appartient à l'exercice en cours. Le 1er janvier, ce qui n'a
+// pas été réglé bascule donc de lui-même sur la nouvelle année — sans clôture
+// à faire, sans report à saisir.
+export const exerciceDe = (dossier, anneeCourante) => {
+  if (!ETAPES_FACTUREES.includes(dossier.statut)) return anneeCourante
+  const regle = dossier.closed_at ?? dossier.date_installation
+  return regle ? Number(String(regle).slice(0, 4)) : anneeCourante
+}
+
+// Signé : la commande est passée, la vente est faite. Ce qui suit relève de la
+// logistique, pas de la prospection. « Terminé » en fait partie : classer un
+// dossier ne doit pas le faire disparaître de l'objectif de l'année.
+export const ETAPES_SIGNEES = ['commande', 'reunion_chantier', 'installation', 'finition', 'financement', 'termine']
+
+// Facturé : l'installation est terminée. Aucune étape ne s'appelait « facturé »
+// avant « Terminé » — la finition en tenait lieu, et continue de compter une
+// fois le dossier classé.
+export const ETAPES_FACTUREES = ['finition', 'termine']
+

@@ -23,11 +23,13 @@ import {
   PLAN_STATUT_LABELS,
   COMMERCIAUX_LABELS,
   PLAN_SANS_COMMERCIAL,
-  joursEnAttente,
-  classeAttente,
   MOTIFS_ATTENTE_SAV_LABELS,
   styleDossier,
+  aChiffrer,
+  joursEnAttente,
+  classeAttente,
 } from '../constants/dossiers'
+import PastilleAttente from '../components/PastilleAttente'
 
 function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
   // Un plan encore dû sur son propre projet est emprunté au kanban Projet
@@ -111,6 +113,10 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
           Estimé : <span className="font-semibold text-texte">{dossier.montant_estime} €</span>
         </p>
       )}
+      {/* Un montant vide n'est pas 0 € : c'est un dossier de vente à chiffrer. */}
+      {aChiffrer(dossier) && (
+        <p className="text-[11px] text-alerte">À chiffrer</p>
+      )}
       {(() => {
         const r = etatRappel(dossier.rappel_date, dossier.rappel_heure)
         if (!r) return null
@@ -137,19 +143,22 @@ function Card({ dossier, onOpen, onMove, isDragging, dansColonneActive }) {
           attendent un tiers, pas nous — affiché dès le premier jour (pas
           seulement au-delà du seuil d'alerte) pour voir la durée réelle
           plutôt qu'un silence jusqu'au 30ᵉ jour. */}
-      {(() => {
-        const jours = joursEnAttente(dossier)
-        if (jours == null) return null
-        const motif =
-          dossier.type === 'sav'
-            ? MOTIFS_ATTENTE_SAV_LABELS[dossier.bloque_par] ?? dossier.bloque_par ?? 'motif à préciser'
-            : 'réponse client'
-        return (
-          <p className={`text-[10px] mt-1 truncate ${classeAttente(jours)}`}>
-            ⏳ {motif} — {jours} j
-          </p>
-        )
-      })()}
+      {/* « À qui la balle » : un devis envoyé (Projet) attend un tiers, pas
+          nous — affiché dès le premier jour (pas seulement au-delà du seuil
+          d'alerte) pour voir la durée réelle plutôt qu'un silence jusqu'au
+          30ᵉ jour. Restauré tel qu'avant le 9 octobre ; ne se mélange pas à la
+          tuile « En attente » du Board (voir PastilleAttente pour celle-là). */}
+      {dossier.type === 'projet' &&
+        (() => {
+          const jours = joursEnAttente(dossier)
+          if (jours == null) return null
+          return (
+            <p className={`text-[10px] mt-1 truncate ${classeAttente(jours)}`}>
+              ⏳ réponse client — {jours} j
+            </p>
+          )
+        })()}
+      <PastilleAttente dossier={dossier} className="mt-1" />
       {/* Pour qui est ce plan se voit sans ouvrir la fiche : Bruce trie ses
           plans en premier lieu par commercial destinataire, pas par étape. */}
       {dossier.type === 'plan' && dossier.commercial && (
@@ -241,8 +250,11 @@ let etapeVueMemorisee = null
 // annulable avant que l'écriture réelle ne parte (voir armerDeplacement).
 const DUREE_ANNULATION_MS = 5000
 
-export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale, etapeInitiale }) {
+export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale, etapeInitiale, familleInitiale }) {
   const [dossiers, setDossiers] = useState([])
+  // Filtre par famille d'étapes (depuis le Dashboard) : ne garde que les
+  // colonnes de la famille. null = tout le pipeline, comme avant.
+  const [famille, setFamille] = useState(familleInitiale ?? null)
   // Les deux pipelines n'ont ni le même vocabulaire d'étapes ni le même
   // volume : les montrer bout à bout obligeait à faire défiler loin pour
   // atteindre le SAV. Un seul kanban à l'écran à la fois, choisi ici.
@@ -280,7 +292,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale,
   // par exemple) l'emporte sur la mémoire, même logique que vueInitiale
   // ci-dessus — une navigation ciblée sur une colonne précise ne doit pas
   // retomber sur celle consultée la fois d'avant.
-  const [etapeVue, setEtapeVue] = useState(() => etapeInitiale ?? etapeVueMemorisee)
+  const [etapeVue, setEtapeVue] = useState(() => etapeInitiale ?? familleInitiale?.etapes?.[0] ?? etapeVueMemorisee)
   const zoneRef = useRef(null)
   const pillRefs = useRef({})
 
@@ -554,10 +566,11 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale,
   const etapesVisibles = useMemo(
     () =>
       ETAPES_PROJET.filter(([cle]) => {
+        if (famille && !famille.etapes.includes(cle)) return false
         if (cle === 'perdu' || cle === 'termine') return historiqueDeplie || activeDrag
         return montrerVides || byEtape[cle].length > 0 || activeDrag
       }),
-    [byEtape, historiqueDeplie, montrerVides, activeDrag]
+    [byEtape, historiqueDeplie, montrerVides, activeDrag, famille]
   )
   // Colonnes terminales du kanban affiché, et nombre de dossiers qu'elles
   // contiennent. Une colonne vide n'est pas masquée par ce mécanisme mais le
@@ -745,10 +758,24 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale,
 
       {!chargement && !erreur && (
         <>
+      {famille && vue === 'projet' && (
+        <div className="flex items-center gap-2 px-4 pb-2 flex-shrink-0">
+          <span
+            className="text-xs font-semibold rounded-full px-3 h-8 flex items-center"
+            style={{ background: 'rgba(255,255,255,0.06)', color: famille.couleur }}
+          >
+            Famille : {famille.libelle}
+          </span>
+          <button onClick={() => setFamille(null)} className="h-11 px-2 text-xs font-medium text-accent">
+            Tout afficher
+          </button>
+        </div>
+      )}
       {vue === 'projet' && (
       <div className="flex gap-1.5 px-4 pb-3 overflow-x-auto flex-shrink-0">
         {ETAPES_PROJET.filter(
-          ([cle]) => cle !== 'perdu' && cle !== 'termine' && byEtape[cle].length > 0
+          ([cle]) =>
+            cle !== 'perdu' && cle !== 'termine' && byEtape[cle].length > 0 && (!famille || famille.etapes.includes(cle))
         ).map(([cle, libelle]) => (
           <button
             key={cle}
@@ -764,7 +791,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale,
             </span>
           </button>
         ))}
-        {byEtape.termine.length > 0 && (
+        {!famille && byEtape.termine.length > 0 && (
           <button
             ref={(el) => { pillRefs.current.termine = el }}
             // Toujours révéler puis y aller — jamais un bascule. Un appui
@@ -788,7 +815,7 @@ export default function Pipeline({ onBack, onOpenDossier, onCreate, vueInitiale,
             </span>
           </button>
         )}
-        {byEtape.perdu.length > 0 && (
+        {!famille && byEtape.perdu.length > 0 && (
           <button
             ref={(el) => { pillRefs.current.perdu = el }}
             onClick={() => {
