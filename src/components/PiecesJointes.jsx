@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { mettreEnFile, ligneEnFile, ecouterTailleFile } from '../lib/fileAttente'
+import { mettreEnFile, ligneEnFile } from '../lib/fileAttente'
 import { envoyerFichier, fichierColle } from '../lib/fichiers'
 import TexteModifiable from './TexteModifiable'
 import useConfirm from '../hooks/useConfirm'
@@ -61,10 +61,13 @@ const suitLaNomenclature = (nom) => /_\d{9}[A-Za-z]?\.[a-z0-9]+$/i.test(nom ?? '
  */
 const normaliser = (v) => JSON.parse(JSON.stringify(v ?? null))
 // Égalité profonde indifférente à l'ordre des clés (jsonb ne le conserve pas) ; null = absent.
+// Les horodatages s'écrivent « …Z » côté application et « …+00:00 » en base : on compare l'instant.
+const ESTDATE = /^\d{4}-\d\d-\d\dT\d\d:\d\d/
 function memeValeur(a, b) {
   if (a === b) return true
   if (a == null || b == null) return a == null && b == null
-  if (typeof a !== 'object' || typeof b !== 'object') return String(a) === String(b)
+  if (typeof a === 'string' && typeof b === 'string' && ESTDATE.test(a) && ESTDATE.test(b)) return Date.parse(a) === Date.parse(b)
+  if (typeof a !== 'object' || typeof b !== 'object') return String(a) === String(b) || (a !== '' && b !== '' && Number(a) === Number(b))
   if (Array.isArray(a) !== Array.isArray(b)) return false
   const ka = Object.keys(a).filter((k) => a[k] != null)
   const kb = Object.keys(b).filter((k) => b[k] != null)
@@ -74,9 +77,10 @@ function memeValeur(a, b) {
 /**
  * Un UPDATE temps réel d'un fichier que l'on écrit est-il un écho dépassé ?
  * Oui tant qu'une écriture est en vol, tant qu'une écriture de ce fichier attend dans la file
- * hors-ligne, et tant que l'écho ne contient pas toutes les valeurs écrites. Aucun délai : le
- * fichier est rendu aux mises à jour extérieures par `reconcilier` (voir PiecesJointes), une fois
- * ses écritures parties et sa file vide — pas avant.
+ * hors-ligne, et tant que l'écho ne contient pas TOUTES les valeurs écrites : les échos arrivent dans
+ * l'ordre des écritures, le premier qui les porte toutes confirme donc que les anciens sont passés.
+ * Aucun délai. Si le flux temps réel est coupé et qu'aucun écho ne revient, le fichier est rendu par
+ * une relecture à la reconnexion (voir `reconcilier`), jamais avant.
  */
 export function echoPerime(suivis, ligne, enFile = (id) => ligneEnFile('fichiers', id)) {
   const suivi = suivis.get(ligne.id)
@@ -118,6 +122,20 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   const chaines = useRef(new Map())
   const ecritures = useRef(new Map())
 
+  // Relit un fichier suivi dont plus rien n'est en vol ni en file hors-ligne, et le rend aux mises à jour
+  // extérieures. Une écriture qui repart pendant la relecture l'annule.
+  const reconcilier = async (id) => {
+    const libre = () => {
+      const s = ecritures.current.get(id)
+      return !s || (s.enCours === 0 && !ligneEnFile('fichiers', id))
+    }
+    if (!ecritures.current.has(id) || !libre()) return
+    const { data, error } = await supabase.from('fichiers').select('*').eq('id', id).maybeSingle()
+    if (error || !data || !ecritures.current.has(id) || !libre()) return
+    ecritures.current.delete(id)
+    setListe((cur) => cur.map((x) => (x.id === id ? data : x)))
+  }
+
   useEffect(() => {
     let actif = true
 
@@ -153,7 +171,10 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
           })
         }
       )
-      .subscribe()
+      .subscribe((statut) => {
+        // (Re)connexion du flux : les échos manqués pendant une coupure ne reviendront pas, la base fait foi.
+        if (statut === 'SUBSCRIBED') [...ecritures.current.keys()].forEach(reconcilier)
+      })
 
     return () => {
       actif = false
@@ -228,28 +249,6 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
   // Idem côté retour : tant qu'une écriture locale d'un fichier est en vol, ou que son écho
   // n'est pas revenu, les mises à jour temps réel de ce fichier qui ne reflètent pas encore
   // tout ce qu'on a écrit sont ignorées (voir echoPerime).
-  // Rend un fichier aux mises à jour extérieures, sans délai : quand plus aucune écriture n'est en
-  // vol et que sa file hors-ligne est vide, la base est la vérité — on la relit une fois et on
-  // remplace la ligne locale. Une écriture qui repart pendant la relecture l'annule.
-  const reconcilier = async (id) => {
-    const libre = () => {
-      const s = ecritures.current.get(id)
-      return !s || (s.enCours === 0 && !ligneEnFile('fichiers', id))
-    }
-    if (!ecritures.current.has(id) || !libre()) return
-    const { data, error } = await supabase.from('fichiers').select('*').eq('id', id).maybeSingle()
-    if (error || !data || !ecritures.current.has(id) || !libre()) return
-    ecritures.current.delete(id)
-    setListe((cur) => cur.map((x) => (x.id === id ? data : x)))
-  }
-
-  // Le rejeu hors-ligne vide la file ligne par ligne : à chaque changement, les fichiers qui n'ont
-  // plus rien à attendre sont relus.
-  useEffect(
-    () => ecouterTailleFile(() => [...ecritures.current.keys()].forEach((id) => reconcilier(id))),
-    []
-  )
-
   const ecrire = async (f, champs) => {
     setListe((cur) => cur.map((x) => (x.id === f.id ? { ...x, ...champs } : x)))
     const suivi = ecritures.current.get(f.id) ?? { enCours: 0, attendu: {} }
@@ -263,7 +262,6 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
         if (error) mettreEnFile({ type: 'update', table: 'fichiers', rowId: f.id, champs })
       } finally {
         suivi.enCours -= 1
-        reconcilier(f.id)
       }
     })
     chaines.current.set(f.id, envoi.catch(() => {}))
