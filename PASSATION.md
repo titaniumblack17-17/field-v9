@@ -767,3 +767,12 @@ Défauts réels trouvés et corrigés, chacun avec un test qui échouait avant l
 4. Un rejeu hors-ligne raté au retour du réseau n'était jamais retenté : `viderFileAvecRepli` (4 s, 8 s… 30 s).
 5. Une lecture qui ne revient jamais laissait « Chargement… » sans fin : délai de 20 s puis dernière version connue (`lireAvecCache`).
 Limite connue : si le flux temps réel ne renvoie jamais l'écho d'une écriture et ne se reconnecte pas, les mises à jour extérieures de CE fichier n'apparaissent qu'au retour au premier plan ou au rechargement.
+
+## Accueil unique (feat/accueil-unique, non fusionné)
+
+- `/` = `screens/Accueil.jsx` : « Aujourd'hui » (le Board) puis « Pilotage » (le Dashboard, `Dashboard integre`). L'ancien Board (`screens/BriefSoir.jsx`) est conservé derrière « Ancien accueil » (pied de page) en attendant la validation de `docs/inventaire-accueil.md`.
+- Un seul calcul : `lib/bilanBoard.js` (calculerBilan / calculerBoard / calculerEnAttente / calculerATrancherPar), état et gestes dans `hooks/useBoardData.js`, affichage dans `components/BoardAffichage.jsx` et `BoardBlocs.jsx`. Ne plus dupliquer ce calcul.
+- `App.jsx` : pile initiale `[accueil]` ; retour d'arrière-plan > 30 min → accueil (`DELAI_RETOUR_ACCUEIL_MS`), sauf fiche modifiée ; le recul dans l'historique est absorbé par `ignorerPopRef`.
+- Pastilles d'en-tête à 44 px ; pastille Dashboard retirée ; tuile « En attente » du Dashboard masquée dans l'accueil.
+- Hors-ligne à froid : 6 à 12 s de réconciliation avant l'affichage du cache (comportement de l'ancien Board, inchangé).
+- Dette connue : perte de mise à jour intermittente sur deux gestes rapprochés d'offres (écho temps réel d'une écriture précédente) — tâche ouverte, voir `e2e/offres.spec.js` / `decisions.spec.js`.

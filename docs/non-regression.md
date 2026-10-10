@@ -91,3 +91,9 @@ Viewport iPhone 390 × 844. Console sans erreur. Aucun défilement horizontal. C
 - Reproductions déterministes des défauts d'écriture : `ecritures-concurrentes.spec.js` (écho périmé, échos dans le désordre), `rejeu-hors-ligne.spec.js` (deux gestes hors-ligne, deux ordres ; rejeu qui se retente), `lecture-bloquee.spec.js` (lecture qui ne revient pas), `annulation-differee.spec.js`.
 - Suite répétée : `scripts/suite-repetee.sh <passages> <largeur>` (invalide un passage si une autre suite a tourné en parallèle). `DIAG=1` active le journal (`e2e/diag.js`) — il perturbe parfois les chargements, donc éteint par défaut.
 - Seul test rouge attendu : `smoke.spec.js` « rappel : création, synchro Todoist, clôture » tant que Todoist répond 429.
+
+## Accueil unique (feat/accueil-unique)
+
+- `e2e/accueil.spec.js` : ouverture à froid, N identique (ancien Board = « Aujourd'hui »), un test par fonction de l'inventaire (`docs/inventaire-accueil.md`), retour d'arrière-plan 29 / 31 min, URL d'ouverture, hors-ligne, cibles ≥ 44 px, aucune erreur console.
+- `board.spec.js` tourne désormais sur l'accueil (`/`) : chacun de ses tests est un test de fonction du Board retrouvée dans « Aujourd'hui ».
+- `dashboard.spec.js`, `non-devis`, `offres`, `nettoyage` : le Dashboard est la zone « Pilotage » de `/` (plus de pastille « Dashboard »).
