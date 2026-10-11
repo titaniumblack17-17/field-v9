@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { rendu } from './aides.js'
 
 // Accueil unique : « Aujourd'hui » (le Board) puis « Pilotage » (le Dashboard).
 // Lecture seule sur la base réelle : aucun de ces tests n'écrit (le ✓ et « Traité »
@@ -87,27 +88,22 @@ test('ouverture à froid : Aujourd\'hui puis Pilotage, aucune pastille Board/Das
 
 test('N identique : l\'ancien Board et « Aujourd\'hui » lisent exactement les mêmes nombres', async ({ page }) => {
   const problemes = surveiller(page)
-  await accueil(page)
-  const nouveau = await lireNombres(page)
-  await page.getByRole('button', { name: 'Ancien accueil' }).click()
-  await expect(page.getByRole('button', { name: /← Accueil/ })).toBeVisible()
-  await expect(page.getByText('Dossiers actifs').first()).toBeVisible()
-  const ancien = await lireNombres(page)
-  // Un dossier de Bruce peut bouger entre les deux lectures : une relecture confirme avant d'échouer.
-  if (JSON.stringify(ancien) !== JSON.stringify(nouveau)) {
-    await page.waitForTimeout(1500)
-    expect(await lireNombres(page)).toEqual(await (async () => {
-      await page.getByRole('button', { name: /← Accueil/ }).click()
-      await expect(page.getByRole('heading', { name: "Aujourd'hui" })).toBeVisible()
-      await expect(page.getByText('Dossiers actifs').first()).toBeVisible()
-      return lireNombres(page)
-    })())
-  } else {
-    expect(ancien).toEqual(nouveau)
-    // Le retour de l'ancien accueil ramène à l'accueil
-    await page.getByRole('button', { name: /← Accueil/ }).click()
-    await expect(page.getByRole('heading', { name: 'Pilotage' })).toBeVisible()
+  // Les données de Bruce bougent en direct : on confirme sur des lectures successives des deux écrans,
+  // sans attendre un délai — une divergence qui persiste sur trois lectures est un vrai défaut.
+  let nouveau, ancien
+  for (let essai = 0; essai < 3; essai++) {
+    await accueil(page)
+    nouveau = await lireNombres(page)
+    await page.getByRole('button', { name: 'Ancien accueil' }).click()
+    await expect(page.getByRole('button', { name: /← Accueil/ })).toBeVisible()
+    await expect(page.getByText('Dossiers actifs').first()).toBeVisible()
+    ancien = await lireNombres(page)
+    if (JSON.stringify(ancien) === JSON.stringify(nouveau)) break
   }
+  expect(ancien).toEqual(nouveau)
+  // Le retour de l'ancien accueil ramène à l'accueil
+  await page.getByRole('button', { name: /← Accueil/ }).click()
+  await expect(page.getByRole('heading', { name: 'Pilotage' })).toBeVisible()
   expect(problemes).toEqual([])
 })
 
@@ -334,14 +330,19 @@ test('retour d\'arrière-plan : plus de 30 min ramène à l\'accueil, moins de 3
   await page.getByRole('button', { name: 'Pipeline', exact: true }).first().click()
   await expect(page.getByRole('button', { name: '← Accueil' })).toBeVisible()
   await simuler(29)
-  await page.waitForTimeout(500)
+  await rendu(page)
   await expect(page.getByRole('button', { name: '← Accueil' })).toBeVisible()
-  // 31 min : retour à l'accueil, depuis le Pipeline puis depuis une fiche
+  // 31 min : retour à l'accueil. Le recul dans l'historique (popstate) est compté pour attendre son arrivée.
+  await page.evaluate(() => {
+    window.__pops = 0
+    window.addEventListener('popstate', () => (window.__pops += 1))
+  })
   await simuler(31)
   await expect(page.getByRole('heading', { name: "Aujourd'hui" })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Pilotage' })).toBeVisible()
   // L'historique est cohérent : « retour » ne dépile rien d'inattendu
-  await page.waitForTimeout(300)
+  await expect.poll(() => page.evaluate(() => window.__pops)).toBeGreaterThanOrEqual(1)
+  await rendu(page)
   await expect(page.getByRole('heading', { name: "Aujourd'hui" })).toBeVisible()
   expect(problemes).toEqual([])
 })
