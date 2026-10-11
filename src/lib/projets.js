@@ -1,7 +1,7 @@
 import { calculerBilan } from './bilanBoard'
-import { dossiersReportes, offresPlat } from './documents'
+import { offresPlat } from './documents'
 import { nomClient } from './client'
-import { FAMILLES } from '../constants/dashboard'
+import { FAMILLES, familleDe, estProjetActif } from '../constants/dashboard'
 import { ETAPES_PROJET_LABELS, aChiffrer, estEnAttente, joursDepuisStatut, joursEnAttente, MOTIFS_ATTENTE_SAV_LABELS } from '../constants/dossiers'
 
 // Liste des projets : une ligne par dossier de type « projet », ni perdu ni terminé.
@@ -13,11 +13,7 @@ const ETAPES_APRES_DEVIS = [
   'financement', 'commande', 'reunion_chantier', 'installation', 'finition',
 ]
 
-export const familleDe = (statut) => FAMILLES.find((f) => f.etapes.includes(statut)) ?? null
-
-/** Projet actif : ni perdu ni terminé, et rattaché à une famille d'étapes (comme la RPC). */
-export const estProjetActif = (d) =>
-  d?.type === 'projet' && d.statut !== 'perdu' && d.statut !== 'termine' && familleDe(d.statut) != null
+export { familleDe, estProjetActif }
 
 const TAGS = { rappel: 'Rappel', relance_devis: 'Relance devis', tache: 'Tâche', devis: 'Devis', sav: 'SAV' }
 
@@ -37,7 +33,8 @@ export function construireProjets({ dossiers, fichiers, taches, activite = {} })
   const offres = offresPlat(fichiers.filter((f) => f.type_doc === 'devis'))
   const aTrancherPar = new Map()
   for (const o of offres) if (o.etat === 'a_trancher') aTrancherPar.set(o.dossier_id, (aTrancherPar.get(o.dossier_id) ?? 0) + 1)
-  const reportes = dossiersReportes(fichiers.filter((f) => f.type_doc === 'devis'))
+  // « Reporté » : au moins une offre reportée (même nombre que « Offres reportées · dossiers » du Pilotage).
+  const reportes = new Set(offres.filter((o) => o.etat === 'reportee').map((o) => o.dossier_id))
 
   const avecDevis = new Set(fichiers.filter((f) => f.type_doc === 'devis').map((f) => f.dossier_id))
   const avecCdc = new Set(fichiers.filter((f) => f.type_doc === 'cdc').map((f) => f.dossier_id))

@@ -47,7 +47,7 @@ export default function Accueil({ onOpenDossier, onOpenClient, onClients, onPipe
           </button>
         </div>
       </main>
-      <BoardFeuilles b={b} onOpenDossier={onOpenDossier} />
+      <BoardFeuilles b={b} onOpenDossier={onOpenDossier} onProjets={onProjets} />
     </div>
   )
 }

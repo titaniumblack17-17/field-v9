@@ -389,7 +389,7 @@ test('chaque tuile d\'Aujourd\'hui dit ce qu\'elle compte', async ({ page }) => 
   await accueil(page)
   await expect(tuile(page, 'Dossiers actifs')).toContainText('projets, ni perdus ni terminés')
   await expect(tuile(page, 'À traiter')).toContainText('rappels, SAV, tâches')
-  await expect(tuile(page, 'En attente')).toContainText('un tiers doit répondre')
+  await expect(tuile(page, 'En attente')).toContainText(/projet|SAV|plan|un tiers doit répondre/)
   await expect(tuile(page, 'SAV ouverts')).toBeVisible()
   await expect(tuile(page, 'Objectif')).toContainText('€')
 })

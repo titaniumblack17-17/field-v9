@@ -442,6 +442,7 @@ export default function App() {
         onBack={back}
         onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
         familleInitiale={view.famille ?? null}
+        filtreInitial={view.filtre ?? null}
       />
     )
   } else if (view.name === 'dashboard') {
@@ -452,7 +453,7 @@ export default function App() {
         onPipeline={(vueInitiale, etapeInitiale, familleInitiale) =>
           push({ name: 'pipeline', vueInitiale, etapeInitiale, familleInitiale })
         }
-        onProjets={(famille) => push({ name: 'projets', famille })}
+        onProjets={(famille, filtre) => push({ name: 'projets', famille, filtre })}
       />
     )
   } else if (view.name === 'catalogue') {
@@ -491,7 +492,7 @@ export default function App() {
         onOpenClient={(client) => push({ name: 'detail', client })}
         onClients={() => push({ name: 'list' })}
         onPipeline={(vueInitiale, etapeInitiale) => push({ name: 'pipeline', vueInitiale, etapeInitiale })}
-        onProjets={(famille) => push({ name: 'projets', famille })}
+        onProjets={(famille, filtre) => push({ name: 'projets', famille, filtre })}
         onCapture={() => push({ name: 'capture' })}
         onDashboard={() => push({ name: 'dashboard' })}
       />
@@ -507,7 +508,7 @@ export default function App() {
         onPipeline={(vueInitiale, etapeInitiale, familleInitiale) =>
           push({ name: 'pipeline', vueInitiale, etapeInitiale, familleInitiale })
         }
-        onProjets={(famille) => push({ name: 'projets', famille })}
+        onProjets={(famille, filtre) => push({ name: 'projets', famille, filtre })}
         onCapture={() => push({ name: 'capture' })}
         onAncienAccueil={() => push({ name: 'brief' })}
       />

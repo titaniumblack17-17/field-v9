@@ -152,7 +152,10 @@ test('tuile « En attente » : liste filtrée avec pastilles, contact, retour', 
 
 test('« N devis · M dossiers » : chiffres alignés sur la base', async ({ page }) => {
   const problemes = surveiller(page)
-  const fichiers = await lire('fichiers?type_doc=eq.devis&dossier_id=not.is.null&select=id,dossier_id,type_doc,montant_ttc,variantes,decision,a_trancher_raison,date_reprise')
+  const fichiersTous = await lire('fichiers?type_doc=eq.devis&dossier_id=not.is.null&select=id,dossier_id,type_doc,montant_ttc,variantes,decision,a_trancher_raison,date_reprise')
+  // Même périmètre que le Pilotage : projets actifs (ni perdus ni terminés)
+  const actifs = new Set((await lire('dossiers?select=id&type=eq.projet&statut=not.in.(perdu,termine)')).map((d) => d.id))
+  const fichiers = fichiersTous.filter((f) => actifs.has(f.dossier_id))
   // Devis ayant au moins une offre à trancher (un devis sans offres = une offre selon sa décision)
   const devis = fichiers.filter((f) => {
     const v = Array.isArray(f.variantes) ? f.variantes : []

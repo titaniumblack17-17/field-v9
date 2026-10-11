@@ -37,6 +37,19 @@ const lignesAussi = (b, items, fermer, onOpenDossier) =>
     />
   ))
 
+/** « un tiers doit répondre », avec la part des projets et des SAV : le nombre de projets est celui de la liste. */
+export const detailEnAttente = (liste) => {
+  const n = (type) => liste.filter((d) => d.type === type).length
+  const parts = [
+    [n('projet'), (k) => `${k} projet${k > 1 ? 's' : ''}`],
+    [n('sav'), (k) => `${k} SAV`],
+    [n('plan'), (k) => `${k} plan${k > 1 ? 's' : ''}`],
+  ]
+    .filter(([k]) => k > 0)
+    .map(([k, f]) => f(k))
+  return parts.length ? parts.join(' · ') : 'un tiers doit répondre'
+}
+
 /** En-tête collant : recherche rapide + pastilles de navigation. */
 export function BoardEntete({ b, onOpenClient, onClients, onPipeline, onProjets, onCapture, onDashboard, retour }) {
   const { rechercheTexte, setRechercheTexte, resultatsRecherche } = b
@@ -210,7 +223,7 @@ export function BoardHaut({ b, onPipeline, onOpenDossier }) {
                 className="col-span-3 lg:col-span-1"
                 titre="En attente"
                 valeur={enAttente.length}
-                sousTitre="un tiers doit répondre"
+                sousTitre={detailEnAttente(enAttente)}
                 onClick={() => setFeuille('attente')}
               />
             </div>
@@ -440,7 +453,7 @@ export function BoardQualite({ b }) {
 }
 
 /** Feuilles du bas (À appeler, En attente, Devis à trancher), invite de texte, retour en haut. */
-export function BoardFeuilles({ b, onOpenDossier }) {
+export function BoardFeuilles({ b, onOpenDossier, onProjets }) {
   const { feuille, fermerFeuille, board, enAttente, aTrancherPar, plusTard, boitePrompt, montrerRetourHaut, retourEnHaut } = b
   return (
     <>
@@ -509,6 +522,17 @@ export function BoardFeuilles({ b, onOpenDossier }) {
 
       {feuille === 'attente' && (
         <FeuilleBasse titre={`En attente · ${enAttente.length}`} onFermer={fermerFeuille}>
+          {onProjets && (
+            <button
+              onClick={() => {
+                fermerFeuille()
+                onProjets(null, 'enAttente')
+              }}
+              className="w-full min-h-11 mb-2 px-3 rounded-imbrique bg-fond border border-separateur text-sm text-accent-vif text-left"
+            >
+              Voir les projets en attente dans la liste ›
+            </button>
+          )}
           {enAttente.length === 0 ? (
             <p className="text-texte-faible text-sm py-4">Aucun dossier en attente.</p>
           ) : (

@@ -14,7 +14,7 @@ import {
   exerciceDe,
   joursDevisSansReponse,
 } from '../constants/dossiers'
-import { COULEURS_OBJECTIF, COULEUR_PIPELINE, FAMILLES } from '../constants/dashboard'
+import { COULEURS_OBJECTIF, COULEUR_PIPELINE, FAMILLES, fichiersDesProjetsActifs } from '../constants/dashboard'
 import FeuilleBasse from '../components/FeuilleBasse'
 import PastilleAttente from '../components/PastilleAttente'
 import EtatErreur from '../components/EtatErreur'
@@ -281,7 +281,8 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
 
     // Dossiers reportés (offre ou devis mis de côté, rien de retenu) : hors signé.
     const reportesIds = dossiersReportes(fichiers)
-    const offres = offresPlat(fichiers)
+    // Potentiel ouvert : projets actifs seulement (même périmètre que la RPC et que la liste des projets).
+    const offres = offresPlat(fichiersDesProjetsActifs(fichiers, dossiers))
     const dateFr = (iso) => new Date(iso + 'T00:00:00').toLocaleDateString('fr-FR')
     const motifOffre = (o, plus = '') =>
       `${o.libelle} — ${o.montant == null ? 'à chiffrer' : euros(o.montant)}${o.projet ? ` · ${o.projet}` : ''}${plus}`
@@ -342,7 +343,8 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
   // Nettoyage du potentiel ouvert : devis déjà retenus dont d'autres offres traînent « à trancher ».
   // Rien n'est appliqué sans geste ; « décision requise » n'est qu'un signalement.
   const nettoyage = useMemo(() => {
-    const cibles = devisANettoyer(fichiers)
+    const fichiersActifs = fichiersDesProjetsActifs(fichiers, dossiers)
+    const cibles = devisANettoyer(fichiersActifs)
     const requis = decisionsRequises(fichiers)
     const nomDe = (id) => {
       const d = dossiers.find((x) => x.id === id)
@@ -351,8 +353,8 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
     const lignes = cibles
       .map((x) => ({ ...x, ...nomDe(x.f.dossier_id) }))
       .filter((x) => x.dossier)
-    const apres = fichiers.map((f) => (cibles.some((x) => x.f.id === f.id) ? { ...f, ...champsEcarterAutres(f) } : f))
-    const avantP = potentiel(fichiers).aTrancher
+    const apres = fichiersActifs.map((f) => (cibles.some((x) => x.f.id === f.id) ? { ...f, ...champsEcarterAutres(f) } : f))
+    const avantP = potentiel(fichiersActifs).aTrancher
     const apresP = potentiel(apres).aTrancher
     return {
       lignes,
@@ -396,11 +398,11 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
 
   const configListe = {
     signes: { titre: `Signé · ${signe.nb} dossiers`, lignes: listes.signes },
-    trancher: { titre: `À trancher · ${pl(at.offres, 'offre')} · ${at.devis} devis · ${pl(at.dossiers, 'dossier')}`, lignes: listes.atrancher },
-    incomplets: { titre: `Incomplets · ${chiffres.incomplets.dossiers} dossiers`, lignes: listes.incomplets },
+    trancher: { titre: `À trancher · ${pl(at.offres, 'offre')} · ${at.devis} devis · ${pl(at.dossiers, 'dossier')}`, lignes: listes.atrancher, filtre: 'aTrancher' },
+    incomplets: { titre: `Incomplets · ${chiffres.incomplets.dossiers} dossiers`, lignes: listes.incomplets, filtre: 'incomplets' },
     attente: { titre: `En attente · ${chiffres.en_attente.dossiers}`, lignes: listes.attente },
     retard: { titre: `En retard · ${chiffres.en_retard.total}`, lignes: listes.retard },
-    reportees: { titre: `Reportées · ${pl(rp.offres, 'offre')} · ${rp.devis} devis · ${pl(rp.dossiers, 'dossier')}`, lignes: listes.reportees },
+    reportees: { titre: `Offres reportées · ${pl(rp.offres, 'offre')} · ${rp.devis} devis · ${pl(rp.dossiers, 'dossier')}`, lignes: listes.reportees, filtre: 'reportes' },
   }
   const liste = feuille && feuille !== 'nettoyer' ? configListe[feuille] : null
 
@@ -502,7 +504,7 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
           />
           <LigneLegende
             couleur={COULEURS_OBJECTIF.reporte}
-            titre="Reportées"
+            titre="Offres reportées"
             valeur={rp.offres > 0 ? euros(reporteMontant) : '—'}
             detail={`${pl(rp.offres, 'offre')} · ${rp.devis} devis · ${pl(rp.dossiers, 'dossier')}`}
             onClick={() => setFeuille('reportees')}
@@ -719,6 +721,17 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
 
       {liste && (
         <FeuilleBasse titre={liste.titre} onFermer={fermer}>
+          {liste.filtre && onProjets && (
+            <button
+              onClick={() => {
+                fermer()
+                onProjets(null, liste.filtre)
+              }}
+              className="w-full min-h-11 mb-2 px-3 rounded-imbrique bg-fond border border-separateur text-sm text-accent-vif text-left"
+            >
+              Voir ces projets dans la liste ›
+            </button>
+          )}
           {liste.lignes.length === 0 ? (
             <p className="text-texte-faible text-sm py-4">Rien à afficher.</p>
           ) : (

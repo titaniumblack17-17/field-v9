@@ -33,7 +33,7 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
         <BoardListes b={b} onPipeline={onPipeline} />
         <BoardQualite b={b} />
       </main>
-      <BoardFeuilles b={b} onOpenDossier={onOpenDossier} />
+      <BoardFeuilles b={b} onOpenDossier={onOpenDossier} onProjets={onProjets} />
     </div>
   )
 }

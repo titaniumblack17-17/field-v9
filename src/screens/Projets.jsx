@@ -49,7 +49,7 @@ function Pastille({ actif, onClick, children, couleur, label }) {
   )
 }
 
-export default function Projets({ onBack, onOpenDossier, familleInitiale = null }) {
+export default function Projets({ onBack, onOpenDossier, familleInitiale = null, filtreInitial = null }) {
   const [dossiers, setDossiers] = useState([])
   const [fichiers, setFichiers] = useState([])
   const [taches, setTaches] = useState([])
@@ -61,7 +61,7 @@ export default function Projets({ onBack, onOpenDossier, familleInitiale = null 
   const [vue, setVue] = useState(() => {
     const v = lireVue()
     // Arrivée depuis une famille du Pilotage : cette famille, sans filtre résiduel.
-    return familleInitiale ? { ...VUE_PAR_DEFAUT, famille: familleInitiale, tri: v.tri } : v
+    return familleInitiale || filtreInitial ? { ...VUE_PAR_DEFAUT, tri: v.tri, famille: familleInitiale, ...(filtreInitial ? { [filtreInitial]: true } : {}) } : v
   })
   const defilementRestaure = useRef(false)
 
@@ -144,10 +144,10 @@ export default function Projets({ onBack, onOpenDossier, familleInitiale = null 
   useEffect(() => {
     if (chargement || defilementRestaure.current) return
     defilementRestaure.current = true
-    if (familleInitiale) return
+    if (familleInitiale || filtreInitial) return
     const y = Number(sessionStorage.getItem(`${CLE_VUE}:y`) ?? 0)
     if (y > 0) window.scrollTo(0, y)
-  }, [chargement, affichees.length, familleInitiale])
+  }, [chargement, affichees.length, familleInitiale, filtreInitial])
 
   const aucunFiltre = !vue.famille && !vue.aTrancher && !vue.reportes && !vue.enAttente && !vue.incomplets && !vue.recherche
 
@@ -202,16 +202,16 @@ export default function Projets({ onBack, onOpenDossier, familleInitiale = null 
                   {f.libelle} <span className="tabular-nums">{nombres.familles[f.cle]}</span>
                 </Pastille>
               ))}
-              <Pastille actif={vue.aTrancher} onClick={() => changer({ aTrancher: !vue.aTrancher })} label={`À trancher : ${nombres.aTrancher}`}>
+              <Pastille actif={vue.aTrancher} onClick={() => changer({ aTrancher: !vue.aTrancher })} label={`Dossiers à trancher : ${nombres.aTrancher}`}>
                 À trancher <span className="tabular-nums">{nombres.aTrancher}</span>
               </Pastille>
-              <Pastille actif={vue.reportes} onClick={() => changer({ reportes: !vue.reportes })} label={`Reportés : ${nombres.reportes}`}>
+              <Pastille actif={vue.reportes} onClick={() => changer({ reportes: !vue.reportes })} label={`Dossiers reportés : ${nombres.reportes}`}>
                 Reportés <span className="tabular-nums">{nombres.reportes}</span>
               </Pastille>
-              <Pastille actif={vue.enAttente} onClick={() => changer({ enAttente: !vue.enAttente })} label={`En attente : ${nombres.enAttente}`}>
+              <Pastille actif={vue.enAttente} onClick={() => changer({ enAttente: !vue.enAttente })} label={`Projets en attente : ${nombres.enAttente}`}>
                 En attente <span className="tabular-nums">{nombres.enAttente}</span>
               </Pastille>
-              <Pastille actif={vue.incomplets} onClick={() => changer({ incomplets: !vue.incomplets })} label={`Incomplets : ${nombres.incomplets}`}>
+              <Pastille actif={vue.incomplets} onClick={() => changer({ incomplets: !vue.incomplets })} label={`Projets incomplets : ${nombres.incomplets}`}>
                 Incomplets <span className="tabular-nums">{nombres.incomplets}</span>
               </Pastille>
               {!aucunFiltre && (

@@ -56,12 +56,14 @@ test('liste : une ligne par projet actif ; compteurs des filtres = base = RPC ; 
       expect(await compteur(chip(page, `Famille ${f.libelle}`))).toBe(nb)
       expect(brut.filter((d) => f.etapes.includes(d.statut)).length).toBe(nb)
     }
-    expect(await compteur(chip(page, 'À trancher'))).toBe(c.projets.a_trancher)
-    expect(await compteur(chip(page, 'Reportés'))).toBe(c.projets.reportes)
-    expect(await compteur(chip(page, 'En attente'))).toBe(c.projets.en_attente)
-    expect(await compteur(chip(page, 'Incomplets'))).toBe(c.projets.incomplets)
+    expect(await compteur(chip(page, 'Dossiers à trancher'))).toBe(c.projets.a_trancher)
+    expect(await compteur(chip(page, 'Dossiers reportés'))).toBe(c.projets.reportes)
+    expect(await compteur(chip(page, 'Projets en attente'))).toBe(c.projets.en_attente)
+    expect(await compteur(chip(page, 'Projets incomplets'))).toBe(c.projets.incomplets)
     // …et les compteurs égalent ceux du Pilotage (portée projets)
     expect(c.projets.incomplets).toBe(c.incomplets.dossiers)
+    expect(c.projets.a_trancher).toBe(c.potentiel.a_trancher.dossiers) // « À trancher » : même nombre dans le Pilotage
+    expect(c.projets.reportes).toBe(c.potentiel.reportees.dossiers) // « Offres reportées · dossiers »
   }).toPass({ timeout: 30_000 })
   // Cibles tactiles ≥ 44 px
   for (const b of await page.getByRole('group', { name: 'Tri' }).getByRole('button').all()) expect((await b.boundingBox()).height).toBeGreaterThanOrEqual(44)
@@ -73,7 +75,7 @@ test('liste : une ligne par projet actif ; compteurs des filtres = base = RPC ; 
 
 test('chaque filtre : le nombre de lignes égale son compteur', async ({ page }) => {
   await ouvrirListe(page)
-  const intitules = [...FAMILLES.map((f) => `Famille ${f.libelle}`), 'À trancher', 'Reportés', 'En attente', 'Incomplets']
+  const intitules = [...FAMILLES.map((f) => `Famille ${f.libelle}`), 'Dossiers à trancher', 'Dossiers reportés', 'Projets en attente', 'Projets incomplets']
   for (const intitule of intitules) {
     const b = chip(page, intitule)
     const n = await compteur(b)
@@ -211,13 +213,17 @@ test.describe('fiche projet', () => {
     ;[projet] = await rest('POST', 'dossiers', { client_id: client.id, type: 'projet', statut: 'devis_envoye', titre: `${NOM} projet`, plan_statut: 'a_faire' })
     ;[sav] = await rest('POST', 'dossiers', { client_id: client.id, type: 'sav', statut: 'en_attente', titre: `${NOM} sav`, bloque_par: 'fournisseur' })
     await rest('POST', 'fichiers', {
+      dossier_id: projet.id, chemin: 'zztest/aucun.pdf', taille: 1, type_mime: 'application/pdf', type_doc: 'devis', nom: 'ZZTEST_P4_202699702.pdf',
+      date_devis: '2026-10-02', variantes: [{ libelle: 'Option', montant_ttc: 700, etat: 'reportee', date_reprise: '2027-01-15' }],
+    })
+    await rest('POST', 'fichiers', {
       dossier_id: projet.id, chemin: 'zztest/aucun.pdf', taille: 1, type_mime: 'application/pdf', type_doc: 'devis', nom: 'ZZTEST_P4_202699701.pdf',
       date_devis: '2026-10-01', variantes: [{ libelle: 'Fauteuils', montant_ttc: 1000, etat: 'a_trancher' }, { libelle: 'Local', montant_ttc: 2000, etat: 'a_trancher' }],
     })
   })
   test.afterAll(async () => {
     // Nettoyage par nom unique : même si beforeAll a échoué à mi-chemin, rien ne reste.
-    await rest('DELETE', `fichiers?chemin=eq.zztest/aucun.pdf&nom=eq.ZZTEST_P4_202699701.pdf`)
+    await rest('DELETE', `fichiers?chemin=eq.zztest/aucun.pdf&nom=like.ZZTEST_P4_2026997*`)
     await rest('DELETE', `dossiers?titre=like.${NOM}*`)
     await rest('DELETE', `clients?nom_praticien=eq.${NOM}`)
   })
@@ -240,7 +246,7 @@ test.describe('fiche projet', () => {
     await expect(synthese).toContainText('Devis envoyé')
     await expect(synthese).toContainText('à chiffrer') // jamais 0 €
     await expect(synthese).toContainText('Non signé')
-    await expect(synthese).toContainText('1 devis · 2 offres')
+    await expect(synthese).toContainText('2 devis · 3 offres')
     await expect(synthese).toContainText('2 à trancher')
     for (const b of await synthese.getByRole('button').all()) expect((await b.boundingBox()).height).toBeGreaterThanOrEqual(44)
 
@@ -261,10 +267,24 @@ test.describe('fiche projet', () => {
     expect(problemes).toEqual([])
   })
 
+  test('avec des projets à trancher et à offre reportée : le N de chaque tuile du Pilotage = N de la liste (valeurs non nulles)', async ({ page }) => {
+    const lus = await tuilesEgalesListe(page)
+    expect(lus['Dossiers à trancher']).toBeGreaterThanOrEqual(1)
+    expect(lus['Dossiers reportés']).toBeGreaterThanOrEqual(1)
+    expect(lus['Projets incomplets']).toBeGreaterThanOrEqual(1) // le projet de test n'a pas de cahier des charges
+    // Le projet de test figure dans la liste filtrée « à trancher »
+    await page.evaluate(() => sessionStorage.clear())
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Projets', exact: true }).click()
+    await chip(page, 'Dossiers à trancher').click()
+    await page.getByRole('searchbox', { name: 'Rechercher un projet' }).fill(NOM)
+    await expect(lignes(page).filter({ hasText: `${NOM} Essai`.replace(' Essai', '') })).toHaveCount(1)
+  })
+
   test('documents typés : le cahier des charges manquant est signalé et mène à la zone Documents', async ({ page }) => {
     await ouvrir(page, `${NOM} projet`)
     const docs = page.getByLabel('Documents typés')
-    await expect(docs.getByRole('button', { name: 'Devis : 1' })).toBeVisible()
+    await expect(docs.getByRole('button', { name: 'Devis : 2' })).toBeVisible()
     await expect(docs.getByRole('button', { name: 'Cahier des charges : manquant' })).toBeVisible()
     await expect(docs.getByRole('button', { name: 'Plans : 0' })).toBeVisible()
     for (const b of await docs.getByRole('button').all()) expect((await b.boundingBox()).height).toBeGreaterThanOrEqual(44)
@@ -295,4 +315,80 @@ test.describe('fiche projet', () => {
     // Un SAV n'a ni synthèse projet ni historique de projet
     await expect(page.getByLabel('Synthèse du projet')).toHaveCount(0)
   })
+})
+
+// ─── Chaque tuile du Pilotage qui mène à la liste : N de la tuile = N de la liste ──────────────────
+
+// N de chaque tuile du Pilotage qui mène à la liste = N de la liste filtrée ; renvoie les N lus.
+async function tuilesEgalesListe(page) {
+  const lus = {}
+  const nombre = (t, motif) => Number((t.match(motif) ?? [0, 0])[1])
+  const vers = async (lireTuile, ouvrirFeuille) => {
+    await page.evaluate(() => sessionStorage.clear()).catch(() => {})
+    await page.goto('/')
+    await expect(page.getByText('Dossiers actifs').first()).toBeVisible()
+    const n = await lireTuile() // le N de la tuile, lu AVANT de quitter l'accueil
+    await ouvrirFeuille()
+    await page.getByRole('dialog').getByRole('button', { name: /dans la liste/ }).click()
+    await expect(page.getByRole('heading', { name: 'Projets' })).toBeVisible()
+    return n
+  }
+  const pilotage = page.getByLabel('Pilotage', { exact: true })
+  const cas = [
+    {
+      nom: 'À trancher (dossiers)',
+      tuile: async () => nombre(await pilotage.getByRole('button', { name: /^À trancher/ }).first().innerText(), /(\d+) dossiers?/),
+      ouvrir: () => pilotage.getByRole('button', { name: /^À trancher/ }).first().click(),
+      chip: 'Dossiers à trancher',
+    },
+    {
+      nom: 'Offres reportées (dossiers)',
+      tuile: async () => nombre(await pilotage.getByLabel('Potentiel ouvert').getByRole('button', { name: /^Offres reportées/ }).innerText(), /(\d+) dossiers?/),
+      ouvrir: () => pilotage.getByLabel('Potentiel ouvert').getByRole('button', { name: /^Offres reportées/ }).click(),
+      chip: 'Dossiers reportés',
+    },
+    {
+      nom: 'Incomplets',
+      tuile: async () => nombre(await pilotage.getByRole('button', { name: /^Incomplets/ }).innerText(), /Incomplets\s*(\d+)/),
+      ouvrir: () => pilotage.getByRole('button', { name: /^Incomplets/ }).click(),
+      chip: 'Projets incomplets',
+    },
+    {
+      nom: 'En attente (part des projets)',
+      tuile: async () => nombre(await page.locator('main').first().locator('button', { has: page.locator('p', { hasText: /^En attente$/ }) }).first().innerText(), /(\d+) projets?/),
+      ouvrir: () => page.locator('main').first().locator('button', { has: page.locator('p', { hasText: /^En attente$/ }) }).first().click(),
+      chip: 'Projets en attente',
+    },
+  ]
+  for (const c of cas) {
+    await expect(async () => {
+      const n = await vers(c.tuile, c.ouvrir)
+      lus[c.chip] = n
+      // On a atterri sur la liste filtrée : le filtre est actif, son compteur et ses lignes égalent le N de la tuile
+      await expect(chip(page, c.chip)).toHaveAttribute('aria-pressed', 'true')
+      expect(await compteur(chip(page, c.chip))).toBe(n)
+      if (n === 0) await expect(page.getByText('Aucun projet pour ces filtres.')).toBeVisible()
+      else await expect(lignes(page)).toHaveCount(n)
+    }, `${c.nom}`).toPass({ timeout: 40_000 })
+  }
+  // Les familles : la ligne du Pipeline du Pilotage égale la pastille de la liste
+  await page.goto('/')
+  await expect(page.getByText('Dossiers actifs').first()).toBeVisible()
+  for (const f of FAMILLES) {
+    const legende = pilotage.getByLabel('Pipeline', { exact: true }).locator('button', { hasText: new RegExp(`^${f.libelle}`) }).first()
+    const nL = Number((await legende.innerText()).split('\n').map((x) => x.trim()).filter((x) => /^\d+$/.test(x)).pop())
+    await page.evaluate(() => sessionStorage.clear())
+    await page.getByRole('button', { name: `Liste des projets : ${f.libelle}` }).click()
+    await expect(chip(page, `Famille ${f.libelle}`)).toHaveAttribute('aria-pressed', 'true')
+    expect(await compteur(chip(page, `Famille ${f.libelle}`))).toBe(nL)
+    await page.goBack()
+  }
+  await pasDeDebordement(page)
+  return lus
+}
+
+test('tuile du Pilotage → liste : le N de la tuile est celui de la liste, pour chaque filtre', async ({ page }) => {
+  const problemes = surveiller(page)
+  await tuilesEgalesListe(page)
+  expect(problemes).toEqual([])
 })

@@ -1,4 +1,5 @@
 import { dossiersReportes, offresPlat } from './documents'
+import { fichiersDesProjetsActifs } from '../constants/dashboard'
 import { etatRappel, etatEcheanceTache, aujourdhui as calculerAujourdhui } from './rappel'
 import {
   STATUTS_SAV_LABELS,
@@ -241,7 +242,8 @@ export function calculerEnAttente(dossiers) {
 
 // Potentiel à trancher (par offre) : « N devis · M dossiers » — même calcul que le Dashboard.
 export function calculerATrancherPar(devisSansMontant, dossiers) {
-    const ouvertes = offresPlat(devisSansMontant).filter((o) => o.etat === 'a_trancher')
+    // Même périmètre que le Pilotage : les projets actifs (ni perdus ni terminés).
+    const ouvertes = offresPlat(fichiersDesProjetsActifs(devisSansMontant, dossiers)).filter((o) => o.etat === 'a_trancher')
     const parDossier = new Map()
     for (const o of ouvertes) parDossier.set(o.dossier_id, (parDossier.get(o.dossier_id) ?? new Set()).add(o.fichier_id))
     const lignes = [...parDossier.entries()]

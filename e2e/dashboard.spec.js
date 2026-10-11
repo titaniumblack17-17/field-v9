@@ -58,7 +58,7 @@ const recalcul = async () => {
   })
   const devisF = fichiers.filter((f) => f.type_doc === 'devis')
   // Offres à plat, recalculées ici à partir des lignes brutes (indépendamment de l'application)
-  const offres = devisF.flatMap((f) => {
+  const offresTout = devisF.flatMap((f) => {
     const v = Array.isArray(f.variantes) ? f.variantes : []
     if (v.length >= 1) {
       return v.map((o) => ({ fichier: f.id, dossier: f.dossier_id, etat: ['retenue', 'a_trancher', 'ecartee', 'reportee'].includes(o.etat) ? o.etat : 'a_trancher', montant: Number(o.montant_ttc) }))
@@ -66,13 +66,16 @@ const recalcul = async () => {
     if (f.montant_ttc == null) return []
     return [{ fichier: f.id, dossier: f.dossier_id, etat: { retenu: 'retenue', a_trancher: 'a_trancher', mis_de_cote: 'reportee' }[f.decision] ?? 'ecartee', montant: Number(f.montant_ttc) }]
   })
+  // Potentiel ouvert : projets actifs seulement (ni perdus ni terminés), comme la RPC et la liste des projets.
+  const idsActifs = new Set(actifs.map((d) => d.id))
+  const offres = offresTout.filter((o) => idsActifs.has(o.dossier))
   const parDossier = (l) => l.reduce((m, o) => m.set(o.dossier, [...(m.get(o.dossier) ?? []), o]), new Map())
   // Dossiers reportés : (devis mis de côté, aucun devis retenu) ou (offre reportée, aucune offre retenue)
   const reportes = new Set()
   for (const [id, l] of parDossier(devisF.map((f) => ({ dossier: f.dossier_id, decision: f.decision })))) {
     if (l.some((x) => x.decision === 'mis_de_cote') && !l.some((x) => x.decision === 'retenu')) reportes.add(id)
   }
-  for (const [id, l] of parDossier(offres)) if (l.some((o) => o.etat === 'reportee') && !l.some((o) => o.etat === 'retenue')) reportes.add(id)
+  for (const [id, l] of parDossier(offresTout)) if (l.some((o) => o.etat === 'reportee') && !l.some((o) => o.etat === 'retenue')) reportes.add(id)
   const signes = projets.filter((d) => !reportes.has(d.id) && d.statut !== 'perdu' && ETAPES_SIGNEES.includes(d.statut) && exerciceDe(d, annee) === annee)
   // Potentiel ouvert : à trancher = offres à trancher (plancher = offre la plus basse par devis) ; reportées = somme
   const ouvertes = offres.filter((o) => o.etat === 'a_trancher')

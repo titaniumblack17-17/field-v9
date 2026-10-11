@@ -195,13 +195,13 @@ test('reportée avec date de reprise : rappel, Dashboard (Potentiel ouvert, anne
   await versDashboard(page)
   const potentiel = page.getByLabel('Potentiel ouvert')
   await expect(potentiel).toContainText('À trancher')
-  await expect(potentiel).toContainText('Reportées')
+  await expect(potentiel).toContainText('Offres reportées')
   for (const seg of ['signe', 'a-trancher', 'reporte', 'reste']) {
     expect(await page.locator(`[data-segment="${seg}"]`).count()).toBeGreaterThanOrEqual(seg === 'reste' ? 0 : 1)
   }
-  await potentiel.getByRole('button', { name: /^Reportées/ }).click()
+  await potentiel.getByRole('button', { name: /^Offres reportées/ }).click()
   const feuille = page.getByRole('dialog')
-  await expect(feuille.getByRole('heading', { name: new RegExp(`Reportées · ${apres.offres} offres?`) })).toBeVisible()
+  await expect(feuille.getByRole('heading', { name: new RegExp(`Offres reportées · ${apres.offres} offres?`) })).toBeVisible()
   await expect(feuille.locator('ul > li')).toHaveCount(apres.offres)
   await expect(feuille).toContainText('reprise le 03/11/2026')
   await pasDeDebordement(page)

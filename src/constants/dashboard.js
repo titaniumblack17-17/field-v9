@@ -14,3 +14,15 @@ export const FAMILLES = [
 
 export const COULEURS_OBJECTIF = { signe: '#8B92FF', aTrancher: '#F5B94A', reporte: '#8B8B93', reste: '#2A2C33' }
 export const COULEUR_PIPELINE = '#22D3EE'
+
+export const familleDe = (statut) => FAMILLES.find((f) => f.etapes.includes(statut)) ?? null
+
+/** Projet actif : ni perdu ni terminé, rattaché à une famille d'étapes (même définition que la RPC dashboard_chiffres()). */
+export const estProjetActif = (d) =>
+  d?.type === 'projet' && d.statut !== 'perdu' && d.statut !== 'termine' && familleDe(d.statut) != null
+
+/** Fichiers des seuls projets actifs : le potentiel ouvert (à trancher, offres reportées) ne compte rien d'autre. */
+export const fichiersDesProjetsActifs = (fichiers, dossiers) => {
+  const ids = new Set(dossiers.filter(estProjetActif).map((d) => d.id))
+  return fichiers.filter((f) => ids.has(f.dossier_id))
+}
