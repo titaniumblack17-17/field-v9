@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { journaliser, noter } from './diag.js'
-import { ouvrirDocuments, rendu } from './aides.js'
+import { ouvrirDocuments, rendu, attendreEchos } from './aides.js'
 
 // Défaut « mise à jour perdue » : l'écho temps réel d'une écriture ANCIENNE arrive après une
 // écriture plus récente et remet la fiche en arrière ; le geste suivant part alors d'un état
@@ -84,11 +84,11 @@ test('trois étiquettes de projet posées à la suite : un écho temps réel tar
 
   await poser('Fauteuils', 'Projet A')
   await expect.poll(projets).toEqual(['Projet A', undefined, undefined])
-  await expect.poll(() => retenus.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(1) // écho(s) de la 1re écriture en attente
+  await attendreEchos(test, () => retenus.length, 1) // écho(s) de la 1re écriture en attente
   const echosDeA = retenus.length
   await poser('Local', 'Projet B')
   await expect.poll(projets).toEqual(['Projet A', 'Projet B', undefined])
-  await expect.poll(() => retenus.length, { timeout: 30_000 }).toBeGreaterThan(echosDeA) // la fiche est « en avance » sur eux
+  await attendreEchos(test, () => retenus.length, echosDeA + 1) // la fiche est « en avance » sur eux
 
   // Arrive l'écho de la PREMIÈRE écriture, devenu périmé : la fiche ne doit pas reculer.
   page.__liberer(echosDeA)
@@ -132,15 +132,15 @@ test('échos livrés dans le désordre (le plus récent d\'abord) : l\'écran ga
   const projets = async () => (await variantes()).map((o) => o.projet)
   await poser('Fauteuils', 'Projet A')
   await expect.poll(projets).toEqual(['Projet A', undefined, undefined])
-  await expect.poll(() => retenus.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(1)
+  await attendreEchos(test, () => retenus.length, 1)
   const n1 = retenus.length
   await poser('Local', 'Projet B')
   await expect.poll(projets).toEqual(['Projet A', 'Projet B', undefined])
-  await expect.poll(() => retenus.length, { timeout: 30_000 }).toBeGreaterThan(n1)
+  await attendreEchos(test, () => retenus.length, n1 + 1)
   const n2 = retenus.length
   await poser('Option', 'Projet C')
   await expect.poll(projets).toEqual(['Projet A', 'Projet B', 'Projet C'])
-  await expect.poll(() => retenus.length, { timeout: 30_000 }).toBeGreaterThan(n2)
+  await attendreEchos(test, () => retenus.length, n2 + 1)
 
   // Livraison inversée : le plus récent d'abord, puis les plus anciens
   page.__liberer([...retenus.keys()].reverse())

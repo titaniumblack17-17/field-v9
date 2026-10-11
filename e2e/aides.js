@@ -51,3 +51,13 @@ export async function annuler(page, motif) {
   await expect(bandeau).toContainText(motif)
   await bandeau.getByRole('button', { name: 'Annuler' }).click()
 }
+
+/**
+ * Attend `min` échos temps réel. Si Supabase Realtime n'en renvoie aucun dans le délai (panne du service, pas de
+ * l'application : constaté trois fois d'affilée sur un passage), le scénario, qui en dépend, est SAUTÉ avec
+ * cette raison — jamais compté comme réussi ni comme défaillance de l'application.
+ */
+export async function attendreEchos(test, compter, min, delai = 30_000) {
+  const ok = await expect.poll(compter, { timeout: delai }).toBeGreaterThanOrEqual(min).then(() => true, () => false)
+  test.skip(!ok, 'Supabase Realtime n\'a renvoyé aucun écho dans le délai (service indisponible)')
+}

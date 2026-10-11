@@ -242,11 +242,17 @@ for (const [nom, largeur, hauteur] of [['iPhone 390', 390, 844], ['ordinateur 12
     })
 
     test('« En retard » égale « Aussi à traiter » du Board ; évolution honnête', async ({ page }) => {
-      const c = await rpc()
       await page.goto('/')
-      const ligne = await page.getByText(/actions? à traiter aujourd'hui/).innerText()
-      const T = Number(ligne.match(/(\d+) actions?/)[1])
-      expect(c.en_retard.total).toBe(T)
+      let c
+      let T
+      // L'ouverture du Board réconcilie d'abord Todoist (des rappels clos là-bas se ferment en base) : le nombre
+      // affiché et la RPC sont relus ensemble, jusqu'à un instant cohérent.
+      await expect(async () => {
+        const ligne = await page.getByText(/actions? à traiter aujourd'hui/).innerText()
+        T = Number(ligne.match(/(\d+) actions?/)[1])
+        c = await rpc()
+        expect(c.en_retard.total).toBe(T)
+      }).toPass({ timeout: 30_000 })
       await ouvrirDashboard(page)
       await expect(page.getByRole('button', { name: /^En retard/ })).toContainText(String(T))
       const n = c.serie.length
