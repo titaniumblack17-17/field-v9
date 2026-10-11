@@ -43,4 +43,14 @@ Chaque fonction de l'ancien Board, où elle vit dans l'accueil (`Accueil.jsx` : 
 | SAV ouverts | SAV non clos (« dont N en retard ») | tuile d'Aujourd'hui |
 | **À trancher** | devis ayant au moins une offre « à trancher » ; N = « N devis · M dossiers » (+ nombre d'offres) | tuile « À trancher » du Pilotage ET ligne « Devis à trancher » d'Aujourd'hui : **la ligne ouvre la feuille du Pilotage** (une seule liste, une ligne par offre), même N (test) |
 
+**Phase 4 — périmètre du potentiel ouvert : les projets actifs.** « À trancher » et « Offres reportées » (Pilotage, ligne d'Aujourd'hui, liste des projets, RPC `potentiel` et `projets`) ne comptent que les offres des projets ni perdus ni terminés. Constat à l'origine : « À trancher = 1 dossier (≥ 68 055 €) » était le projet **Grunberg** (`GRUNBERG_PCICLASSIC_202511001C.pdf`), statut *terminé*, dont 2 offres n'ont jamais été tranchées — exclu de la liste (ni perdu ni terminé) mais compté par le Pilotage. Il ne compte plus nulle part ; ses offres restent intactes en base.
+
+| Filtre de la liste | Même N que | Définition |
+|---|---|---|
+| Dossiers à trancher | tuile « À trancher · dossiers » | projets actifs ayant au moins une offre à trancher |
+| Dossiers reportés | « Offres reportées · dossiers » | projets actifs ayant au moins une offre reportée (même si une autre offre est retenue) |
+| Projets incomplets | tuile « Incomplets » | devis manquant (après « Devis envoyé ») ou cahier des charges manquant |
+| Projets en attente | part « projets » de la tuile « En attente » | `bloque_par` renseigné ; la tuile détaille « N projets · M SAV » (les SAV ne sont pas des projets) |
+| Famille | ligne du Pipeline du Pilotage | projets actifs de la famille |
+
 Reste distinct, par nature : « Objectif » (signé de l'exercice) et la jauge détaillée, « Incomplets » (devis ou CDC manquant).

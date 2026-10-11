@@ -124,6 +124,22 @@ test('chaque tri : l\'ordre affiché suit le critère', async ({ page }) => {
   await tri('Ancienneté').click()
   const parAnc = (await lire()).map((l) => l.jours)
   for (let i = 1; i < parAnc.length; i++) expect(parAnc[i]).toBeLessThanOrEqual(parAnc[i - 1])
+  // Sens confirmé sur la base : la dernière action de chaque projet, recalculée ici à part, va de la plus
+  // ancienne (en haut : sans action depuis le plus longtemps) à la plus récente.
+  const [dossiers, notes, etapes, fichiersDocs] = await Promise.all([
+    rest('GET', 'dossiers?select=id,created_at,statut_changed_at&type=eq.projet'),
+    rest('GET', 'dossier_notes?select=dossier_id,created_at'),
+    rest('GET', 'dossier_etapes_historique?select=dossier_id,changed_at'),
+    rest('GET', 'fichiers?select=dossier_id,created_at&dossier_id=not.is.null'),
+  ])
+  const derniere = new Map(dossiers.map((d) => [d.id, Math.max(Date.parse(d.created_at), Date.parse(d.statut_changed_at ?? 0) || 0)]))
+  const noter = (id, t) => derniere.has(id) && t > derniere.get(id) && derniere.set(id, t)
+  notes.forEach((n) => noter(n.dossier_id, Date.parse(n.created_at)))
+  etapes.forEach((e) => noter(e.dossier_id, Date.parse(e.changed_at)))
+  fichiersDocs.forEach((f) => noter(f.dossier_id, Date.parse(f.created_at)))
+  const ids = await lignes(page).evaluateAll((lis) => lis.map((li) => li.getAttribute('data-dossier-id')))
+  const instants = ids.map((id) => derniere.get(id))
+  for (let i = 1; i < instants.length; i++) expect(instants[i]).toBeGreaterThanOrEqual(instants[i - 1] - 86_400_000) // à un jour près (arrondi affiché)
   await pasDeDebordement(page)
 })
 

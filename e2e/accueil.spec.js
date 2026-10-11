@@ -420,3 +420,52 @@ test('« à trancher » : la ligne d\'Aujourd\'hui et la tuile du Pilotage ouvre
   }).toPass({ timeout: 30_000 })
   expect(titreA).toContain(`${texteLigne.split('/')[0]} devis`)
 })
+
+// ─── « Aussi à traiter » : étiquette entière, nom du client visible, rien ne déborde ──────────────
+
+test('« Aussi à traiter » : sur chaque ligne, l\'étiquette est entière, le nom du client visible et rien ne déborde', async ({ page }) => {
+  const problemes = surveiller(page)
+  await accueil(page)
+  await tuile(page, 'À traiter').click() // déplie toute la liste
+  const section = page.locator('section.scroll-mt-32').filter({ hasText: /^Aussi à traiter/ })
+  await expect(section.locator('ul > li').first()).toBeVisible()
+  const defauts = await section.locator('ul > li').evaluateAll((lis) =>
+    lis.flatMap((li, i) => {
+      const boite = li.getBoundingClientRect()
+      const p = li.querySelector('p.font-medium')
+      const etiquette = p?.querySelector('span.uppercase')
+      const out = []
+      if (etiquette) {
+        // étiquette entière : ni tronquée par son contenu, ni sortie de sa ligne
+        if (etiquette.scrollWidth > etiquette.clientWidth + 1) out.push(`#${i} étiquette tronquée « ${etiquette.textContent} »`)
+        const e = etiquette.getBoundingClientRect()
+        if (e.right > boite.right - 1 || e.width < 20) out.push(`#${i} étiquette hors de sa ligne (${Math.round(e.width)} px)`)
+      }
+      // nom du client : visible (au moins quelques caractères), éventuellement tronqué par « … »
+      const nomEl = p?.querySelector('[data-nom-client]')
+      const noeud = nomEl ?? [...(p?.childNodes ?? [])].reverse().find((n) => n.nodeType === 3 && n.textContent.trim())
+      if (noeud) {
+        const pb = p.getBoundingClientRect()
+        let nom
+        if (nomEl) nom = nomEl.getBoundingClientRect()
+        else {
+          const r = document.createRange()
+          r.selectNodeContents(noeud)
+          nom = r.getBoundingClientRect()
+        }
+        const visible = Math.min(nom.right, pb.right) - Math.max(nom.left, pb.left)
+        if (visible < 24) out.push(`#${i} nom du client invisible (${Math.round(visible)} px) « ${noeud.textContent.trim()} »`)
+      } else out.push(`#${i} nom du client absent`)
+      // rien ne déborde de la carte
+      for (const el of li.querySelectorAll('*')) {
+        if (el.closest('p.font-medium') && el.tagName === 'P') continue
+        const r = el.getBoundingClientRect()
+        if (r.width > 0 && r.right > boite.right + 1) out.push(`#${i} ${el.tagName.toLowerCase()} déborde de ${Math.round(r.right - boite.right)} px : « ${(el.textContent ?? '').trim().slice(0, 40)} »`)
+      }
+      return out
+    })
+  )
+  expect(defauts).toEqual([])
+  await pasDeDebordement(page)
+  expect(problemes).toEqual([])
+})

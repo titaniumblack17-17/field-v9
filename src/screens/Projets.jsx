@@ -33,12 +33,13 @@ const lire = (cle, requete) =>
     })
   )
 
-function Pastille({ actif, onClick, children, couleur, label }) {
+function Pastille({ actif, onClick, children, couleur, label, titre }) {
   return (
     <button
       onClick={onClick}
       aria-pressed={actif}
       aria-label={label}
+      title={titre}
       className={`flex-shrink-0 min-h-11 px-3 rounded-full border text-sm font-medium flex items-center gap-1.5 ${
         actif ? 'bg-accent text-white border-accent' : 'bg-carte text-texte-doux border-separateur'
       }`}
@@ -184,7 +185,7 @@ export default function Projets({ onBack, onOpenDossier, familleInitiale = null,
           <>
             <div role="group" aria-label="Tri" className="flex gap-2 overflow-x-auto py-2 -mx-4 px-4">
               {TRIS.map(([cle, libelle]) => (
-                <Pastille key={cle} actif={vue.tri === cle} onClick={() => changer({ tri: cle })} label={`Trier : ${libelle}`}>
+                <Pastille key={cle} actif={vue.tri === cle} onClick={() => changer({ tri: cle })} label={`Trier : ${libelle}`} titre={cle === 'anciennete' ? 'Sans action depuis le plus longtemps en haut' : undefined}>
                   {libelle}
                 </Pastille>
               ))}
@@ -229,7 +230,7 @@ export default function Projets({ onBack, onOpenDossier, familleInitiale = null,
             ) : (
               <ul className="space-y-2" aria-label="Projets">
                 {affichees.map((l) => (
-                  <li key={l.id}>
+                  <li key={l.id} data-dossier-id={l.id}>
                     <button
                       onClick={() => ouvrir(l.dossier)}
                       style={{ borderColor: l.famille.couleur }}

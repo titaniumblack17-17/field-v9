@@ -60,22 +60,26 @@ export function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait,
     >
       <button
         onClick={() => onOuvrir(dossier)}
-        className="flex-1 min-w-0 text-left px-4 py-3 active:scale-[0.98] transition flex items-center gap-3"
+        // Téléphone : le texte de droite (« En retard de N jours · M j sans réponse ») passe SOUS le nom, sur toute la
+        // largeur ; il ne vole plus la place du client. À partir de sm : colonne de droite, bornée à 45 % de la ligne.
+        className="flex-1 min-w-0 text-left px-4 py-3 active:scale-[0.98] transition flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3"
       >
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-texte truncate">
+          <p className="font-medium text-texte flex items-baseline min-w-0">
             {/* Tag de type (Rappel/SAV/Tâche/Devis) : seulement dans la liste
                 fusionnée « Aussi à traiter », où plusieurs familles se
                 mélangent — inutile dans les 7 sections détaillées plus bas,
                 déjà homogènes chacune sur son propre type. */}
             {tag && (
               <span
-                className={`inline-block align-middle text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 mr-1.5 ${TAG_STYLES[tag] ?? 'text-texte-faible bg-carte-douce'}`}
+                className={`flex-shrink-0 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 mr-1.5 ${TAG_STYLES[tag] ?? 'text-texte-faible bg-carte-douce'}`}
               >
                 {TAG_LABELS[tag] ?? tag}
               </span>
             )}
-            {nomClient(dossier.clients) ?? '—'}
+            <span data-nom-client className="truncate min-w-0">
+              {nomClient(dossier.clients) ?? '—'}
+            </span>
           </p>
           <p className="text-sm text-texte-doux truncate">
             {dossier.commercial ? `${dossier.commercial} · ` : ''}
@@ -93,9 +97,9 @@ export function Ligne({ dossier, onOuvrir, droite, droiteClasse, alerte, onFait,
           // Une couleur fournie l'emporte : un retard doit rester rouge même
           // dans une section dont le défaut est orange.
           <span
-            className={`text-sm flex-shrink-0 text-right ${
+            className={`text-sm sm:flex-shrink-0 sm:text-right ${
               droiteClasse ?? (alerte ? 'text-alerte font-medium' : 'text-texte-doux')
-            }`}
+            } sm:max-w-[45%] break-words`}
           >
             {droite}
           </span>
@@ -166,7 +170,7 @@ export function TuileKPI({ titre, valeur, sousTitre, urgent, onClick, className 
       onClick={onClick}
       className={`bg-carte rounded-xl shadow-sm px-3 py-3 text-left active:scale-[0.98] transition min-w-0 ${className}`}
     >
-      <p className="text-xs text-texte-doux truncate">{titre}</p>
+      <p className="text-xs text-texte-doux leading-tight">{titre}</p>
       <p className={`text-2xl font-bold tabular-nums mt-1 ${urgent ? 'text-alerte' : 'text-texte'}`}>{valeur}</p>
       {sousTitre && <p className="text-xs text-texte-faible mt-0.5 leading-tight">{sousTitre}</p>}
     </button>
