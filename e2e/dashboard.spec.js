@@ -220,8 +220,9 @@ for (const [nom, largeur, hauteur] of [['iPhone 390', 390, 844], ['ordinateur 12
         { ouvrir: () => page.getByRole('button', { name: /^En retard/ }).click(), titre: new RegExp(`En retard · ${c.en_retard.total}`), lignes: c.en_retard.total },
         { ouvrir: () => page.getByLabel('Objectif', { exact: true }).locator('button', { hasText: /^Signé/ }).click(), titre: new RegExp(`Signé · ${r.signes.length} dossiers`), lignes: r.signes.length },
         { ouvrir: () => page.locator('[data-segment="signe"]').dispatchEvent('click'), titre: new RegExp(`Signé · ${r.signes.length} dossiers`), lignes: r.signes.length },
-        { ouvrir: () => page.locator('[data-segment="a-trancher"]').dispatchEvent('click'), titre: /À trancher · /, lignes: c.potentiel.a_trancher.offres },
-        ...(c.potentiel.reportees.offres > 0 ? [{ ouvrir: () => page.locator('[data-segment="reporte"]').dispatchEvent('click'), titre: /Reportées · /, lignes: c.potentiel.reportees.offres }] : []),
+        // Un segment vide n'est pas dessiné (potentiel à trancher = 0 quand rien n'est à trancher sur un projet actif).
+        ...(c.potentiel.a_trancher.offres > 0 ? [{ ouvrir: () => page.locator('[data-segment="a-trancher"]').dispatchEvent('click'), titre: /À trancher · /, lignes: c.potentiel.a_trancher.offres }] : []),
+        ...(c.potentiel.reportees.offres > 0 ? [{ ouvrir: () => page.locator('[data-segment="reporte"]').dispatchEvent('click'), titre: /Offres reportées · /, lignes: c.potentiel.reportees.offres }] : []),
       ]
       for (const cible of cas) {
         await cible.ouvrir()
