@@ -82,3 +82,12 @@ Viewport iPhone 390 × 844. Console sans erreur. Aucun défilement horizontal. C
 ## 11. Sécurité (inchangé)
 - [ ] RLS toujours désactivée, auth non touchée.
 - [ ] `widget_chiffres_board` ne renvoie aucune donnée nominative.
+
+## Stabilité de la suite (fix/offres-concurrence)
+
+- Un seul passage de suite à la fois sur la machine : verrou global `e2e/verrou-global.js` (dossier `/tmp/field-v9-e2e.verrou`, repris si son processus est mort). Toutes les sessions partagent la même base Supabase.
+- Fixtures de test à noms uniques par passage ; `nettoyage` et `non-devis` ne regardent que leurs propres lignes (aucun compteur global de la base).
+- Attentes sur un état, jamais sur un délai fixe (`e2e/aides.js` : `ouvrirDocuments`, `versDashboard`, `annuler`, `rendu`, `attendreEchos`). Plafond d'attente 15 s par défaut.
+- Reproductions déterministes des défauts d'écriture : `ecritures-concurrentes.spec.js` (écho périmé, échos dans le désordre), `rejeu-hors-ligne.spec.js` (deux gestes hors-ligne, deux ordres ; rejeu qui se retente), `lecture-bloquee.spec.js` (lecture qui ne revient pas), `annulation-differee.spec.js`.
+- Suite répétée : `scripts/suite-repetee.sh <passages> <largeur>` (invalide un passage si une autre suite a tourné en parallèle). `DIAG=1` active le journal (`e2e/diag.js`) — il perturbe parfois les chargements, donc éteint par défaut.
+- Seul test rouge attendu : `smoke.spec.js` « rappel : création, synchro Todoist, clôture » tant que Todoist répond 429.
