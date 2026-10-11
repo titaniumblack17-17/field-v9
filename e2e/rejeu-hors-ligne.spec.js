@@ -92,8 +92,12 @@ for (const [titre, gestes] of ordres) {
     // renvoie un écho SANS le geste en attente.
     await page.clock.fastForward(10_000)
     const avantEcho = echos
-    await rest('PATCH', `fichiers?id=eq.${X.id}`, { taille: 2468 })
-    await expect.poll(() => echos, { timeout: 30_000 }).toBeGreaterThan(avantEcho)
+    // Un changement extérieur ; si le flux n'en renvoie rien (la page vient d'avancer son horloge), on en pose un autre.
+    let taille = 2468
+    await expect(async () => {
+      await rest('PATCH', `fichiers?id=eq.${X.id}`, { taille: (taille += 1) })
+      await expect.poll(() => echos, { timeout: 8000 }).toBeGreaterThan(avantEcho)
+    }).toPass({ timeout: 60_000 })
     await rendu(page)
     await expect(geste(page, libelle1, bouton1)).toHaveAttribute('aria-pressed', 'true') // l'écran n'a pas reculé
 
