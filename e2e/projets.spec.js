@@ -216,10 +216,10 @@ test.describe('fiche projet', () => {
     })
   })
   test.afterAll(async () => {
-    await rest('DELETE', `fichiers?dossier_id=eq.${projet.id}&chemin=eq.zztest/aucun.pdf`)
-    await rest('DELETE', `dossiers?id=eq.${projet.id}&titre=eq.${NOM} projet`)
-    await rest('DELETE', `dossiers?id=eq.${sav.id}&titre=eq.${NOM} sav`)
-    await rest('DELETE', `clients?id=eq.${client.id}&nom_praticien=eq.${NOM}`)
+    // Nettoyage par nom unique : même si beforeAll a échoué à mi-chemin, rien ne reste.
+    await rest('DELETE', `fichiers?chemin=eq.zztest/aucun.pdf&nom=eq.ZZTEST_P4_202699701.pdf`)
+    await rest('DELETE', `dossiers?titre=like.${NOM}*`)
+    await rest('DELETE', `clients?nom_praticien=eq.${NOM}`)
   })
 
   const ouvrir = async (page, titre) => {
