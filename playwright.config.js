@@ -7,7 +7,11 @@ import 'dotenv/config'
 export default defineConfig({
   testDir: './e2e',
   timeout: 60_000,
+  // Plafond des attentes sur un état (jamais un délai fixe) : l'écran d'ouverture attend d'abord la réconciliation
+  // Todoist, qui prend parfois plusieurs secondes.
+  expect: { timeout: 15_000 },
   workers: 1,
+  globalSetup: './e2e/verrou-global.js',
   reporter: [['list']],
   use: {
     baseURL: 'http://localhost:5173',

@@ -15,7 +15,7 @@ const Pipeline = React.lazy(() => import('./screens/Pipeline'))
 const Dashboard = React.lazy(() => import('./screens/Dashboard'))
 const Catalogue = React.lazy(() => import('./screens/Catalogue'))
 import useConfirm from './hooks/useConfirm'
-import { tailleFile, ecouterTailleFile, viderFile } from './lib/fileAttente'
+import { tailleFile, ecouterTailleFile, viderFileAvecRepli } from './lib/fileAttente'
 import { supabase } from './lib/supabaseClient'
 import { assurerRappelDeRelance, synchroniserRappel } from './lib/rappel'
 import { verifierConnexionReelle } from './lib/reseau'
@@ -112,7 +112,7 @@ async function executerActionEnFile(action) {
     case 'note': {
       // supabase-js ne lève jamais sur un échec d'insert (réseau coupé,
       // contrainte violée, RLS...) — la promesse se résout avec { error }
-      // plutôt que de rejeter. Sans cette vérification, viderFile comptait
+      // plutôt que de rejeter. Sans cette vérification, le vidage de la file comptait
       // l'action comme traitée et la retirait de la file même quand rien
       // n'avait été écrit en base : une note tapée par Bruce a disparu
       // ainsi, sans bandeau ni trace ensuite, malgré un résultat qui
@@ -221,7 +221,7 @@ function useFileAttente(enLigne) {
     if (enLigne && taille > 0) {
       const diag = diagnosticActif()
       if (diag) journaliser('useFileAttente:vidage-debut-effetEnLigne')
-      viderFile(executerActionEnFile)
+      viderFileAvecRepli(executerActionEnFile)
         .then((resultat) => diag && journaliser('useFileAttente:vidage-fin-effetEnLigne', resultat))
         .catch((erreur) => diag && journaliser('useFileAttente:vidage-erreur-effetEnLigne', { erreur: String(erreur) }))
     }
@@ -257,7 +257,7 @@ function useFileAttente(enLigne) {
       if (!reel) return
       if (diag) journaliser('useFileAttente:vidage-debut')
       try {
-        const resultatVidage = await viderFile(executerActionEnFile)
+        const resultatVidage = await viderFileAvecRepli(executerActionEnFile)
         if (diag) journaliser('useFileAttente:vidage-fin', resultatVidage)
       } catch (erreur) {
         if (diag) journaliser('useFileAttente:vidage-erreur', { erreur: String(erreur) })

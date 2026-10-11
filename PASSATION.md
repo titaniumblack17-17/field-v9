@@ -757,3 +757,13 @@ Voir `docs/phase2-historique.md` (état des lieux, définition de « signé », 
 - Dashboard › Potentiel ouvert › « Nettoyer » : liste les devis concernés, bouton « Écarter les autres » par devis, bouton global avec confirmation (nombre d'offres, devis, montant retiré du plancher « À trancher »). Rien n'est écrit avant confirmation.
 - « Décision requise » en tête (devis à montant retenu mais aucune offre retenue — cas Ponsart) : signalement seul, aucune action, aucune écriture.
 - Helpers : `devisANettoyer`, `champsEcarterAutres`, `decisionsRequises` (`src/lib/documents.js`). Test : `e2e/nettoyage.spec.js` (fixtures ZZTEST-NET).
+
+## Concurrence d'écriture sur les fichiers (branche fix/offres-concurrence, non fusionnée)
+
+Défauts réels trouvés et corrigés, chacun avec un test qui échouait avant le correctif :
+1. Un écho temps réel d'une écriture ancienne faisait reculer la fiche, le geste suivant écrasait le précédent (`PiecesJointes.jsx` : `echoPerime`, `ecritures`).
+2. Les échos arrivent dans le désordre : l'ordre de validation en base (`commit_timestamp`) fait foi (`commits`).
+3. Le fichier n'est rendu aux mises à jour extérieures qu'après confirmation par un écho complet, quand sa file hors-ligne est vide ; sinon relecture à la reconnexion du flux ou au retour au premier plan (`reconcilier`). Plus de délai de grâce.
+4. Un rejeu hors-ligne raté au retour du réseau n'était jamais retenté : `viderFileAvecRepli` (4 s, 8 s… 30 s).
+5. Une lecture qui ne revient jamais laissait « Chargement… » sans fin : délai de 20 s puis dernière version connue (`lireAvecCache`).
+Limite connue : si le flux temps réel ne renvoie jamais l'écho d'une écriture et ne se reconnecte pas, les mises à jour extérieures de CE fichier n'apparaissent qu'au retour au premier plan ou au rechargement.

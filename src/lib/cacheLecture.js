@@ -55,6 +55,11 @@ export const lireCache = (cle) => {
   }
 }
 
+// Une lecture qui ne revient jamais (réseau qui s'enlise, connexion HTTP morte) laissait l'écran sur
+// « Chargement… » sans fin. Au-delà de ce délai, elle est traitée comme un échec : dernière version
+// connue si elle existe (signalée comme telle), sinon l'écran d'erreur et son bouton Réessayer.
+export const DELAI_LECTURE_MS = 20_000
+
 /**
  * Essaie `fetchFn`. En cas d'échec (réseau coupé), retombe sur la dernière
  * version connue dans le cache si elle existe. Ne masque jamais l'origine de
@@ -62,9 +67,13 @@ export const lireCache = (cle) => {
  * affiche un indicateur si besoin. Si `fetchFn` échoue et qu'aucun cache
  * n'existe, l'erreur d'origine remonte telle quelle.
  */
-export async function lireAvecCache(cle, fetchFn) {
+export async function lireAvecCache(cle, fetchFn, delaiMs = DELAI_LECTURE_MS) {
+  let minuteur
   try {
-    const valeur = await fetchFn()
+    const limite = new Promise((_, rejeter) => {
+      minuteur = setTimeout(() => rejeter(new Error('Lecture trop longue')), delaiMs)
+    })
+    const valeur = await Promise.race([fetchFn(), limite])
     ecrireCache(cle, valeur)
     return { valeur, depuisCache: false, horodatage: null }
   } catch (erreur) {
@@ -73,5 +82,7 @@ export async function lireAvecCache(cle, fetchFn) {
       return { valeur: secours.valeur, depuisCache: true, horodatage: secours.horodatage }
     }
     throw erreur
+  } finally {
+    clearTimeout(minuteur)
   }
 }

@@ -184,15 +184,12 @@ test('Pipeline : pastille « réponse client » restaurée sur les devis, pastil
   await accueil(page)
   // Vue Projet : « ⏳ réponse client — N j » sur Devis envoyé / Relance, comme avant
   await page.getByRole('button', { name: 'Pipeline', exact: true }).click()
-  await page.waitForTimeout(800)
   await expect(page.getByText(/⏳ réponse client — \d+ j/).first()).toBeVisible()
-  expect(await page.getByText(/⏳ réponse client — \d+ j/).count()).toBe(
-    (await lire('dossiers?type=eq.projet&statut=in.(devis_envoye,relance)&select=id')).length
-  )
+  const attendusReponse = (await lire('dossiers?type=eq.projet&statut=in.(devis_envoye,relance)&select=id')).length
+  await expect(page.getByText(/⏳ réponse client — \d+ j/)).toHaveCount(attendusReponse)
   await page.goBack()
   // Vue SAV : une pastille par dossier dont bloque_par est renseigné (Kahloun compris)
   await page.getByRole('button', { name: /^SAV ouverts/ }).first().click()
-  await page.waitForTimeout(800)
   await expect(page.getByText(/⏳ .+ · \d+ j/)).toHaveCount(attendus.length)
   await pasDeDebordement(page)
   expect(problemes).toEqual([])
@@ -230,14 +227,17 @@ test('compteurs du Board : actions = 1 priorité + « Aussi à traiter », conta
   expect(Number(T)).toBe(1 + aussi)
   expect(Number(C)).toBe(Number((await bande(page).innerText()).match(/^\d+/)[0]))
   expect(Number(C)).toBeLessThanOrEqual(Number(T))
-  // Lignes visibles + « Voir les N autres » = « Aussi à traiter »
+  // Lignes visibles + « Voir les N autres » = « Aussi à traiter » (relu ensemble : les données de Bruce bougent en direct)
   const voir = page.getByRole('button', { name: /^Voir les \d+ autres/ })
-  const visibles = await page.locator('section', { hasText: 'Aussi à traiter' }).first().locator('ul > li').count()
-  const reste = (await voir.count()) ? Number((await voir.innerText()).match(/\d+/)[0]) : 0
-  expect(visibles + reste).toBe(aussi)
-  if (reste) {
+  const section = () => page.locator('section', { hasText: 'Aussi à traiter' }).first()
+  const titreN = async () => Number((await page.getByRole('heading', { name: /^Aussi à traiter · \d+/ }).innerText()).match(/(\d+)\s*$/)[1])
+  await expect.poll(async () => {
+    const reste = (await voir.count()) ? Number((await voir.innerText()).match(/\d+/)[0]) : 0
+    return (await section().locator('ul > li').count()) + reste - (await titreN())
+  }).toBe(0)
+  if (await voir.count()) {
     await voir.click()
-    expect(await page.locator('section', { hasText: 'Aussi à traiter' }).first().locator('ul > li').count()).toBe(aussi)
+    await expect.poll(async () => (await section().locator('ul > li').count()) - (await titreN())).toBe(0)
   }
 })
 

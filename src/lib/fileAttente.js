@@ -31,6 +31,10 @@ export const mettreEnFile = (action) => {
 
 export const tailleFile = () => lireFile().length
 
+// Une écriture sur cette ligne attend-elle encore dans la file (hors-ligne) ? Tant que oui, la
+// base ne reflète pas ce que l'écran montre : ce qui revient du temps réel n'est pas à croire.
+export const ligneEnFile = (table, rowId) => lireFile().some((a) => a.table === table && a.rowId === rowId)
+
 // Pour l'indicateur d'UI (Tâche 6) : notifie à chaque changement de taille,
 // retourne la fonction de désabonnement.
 export const ecouterTailleFile = (callback) => {
@@ -84,4 +88,22 @@ export async function viderFile(executer) {
   } finally {
     enCours = false
   }
+}
+
+let minuteurRepli = null
+
+/**
+ * Vide la file et, si des actions restent (le réseau n'était pas encore réellement prêt au moment
+ * de l'événement « online », ou une écriture a échoué), retente seule avec un délai croissant
+ * (4 s, 8 s… 30 s) tant que la file n'est pas vide. Sans cela, un rejeu raté au retour du réseau
+ * attendait le prochain retour au premier plan, parfois des heures.
+ */
+export async function viderFileAvecRepli(executer, essai = 0) {
+  const resultat = await viderFile(executer)
+  clearTimeout(minuteurRepli)
+  if (resultat.restantes > 0) {
+    const delai = Math.min(4000 * 2 ** essai, 30_000)
+    minuteurRepli = setTimeout(() => viderFileAvecRepli(executer, essai + 1), delai)
+  }
+  return resultat
 }

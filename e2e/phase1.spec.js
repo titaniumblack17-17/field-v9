@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test'
+import { ouvrirDocuments, rendu } from './aides.js'
+import { journaliser, noter } from './diag.js'
 
 const URL_DB = process.env.VITE_SUPABASE_URL
 const CLE = process.env.VITE_SUPABASE_ANON_KEY
@@ -54,11 +56,7 @@ const ouvrirDossierTest = async (page) => {
   await page.locator('input[type=search]').fill('ZZTEST-E2E')
   await page.getByText('ZZTEST-E2E Essai').click()
   await page.getByText('ZZTEST e2e dossier').click()
-  const rubrique = page.getByText(/^Documents déposés/)
-  await expect(rubrique).toBeVisible()
-  await page.waitForTimeout(1200) // la rubrique s'ouvre seule tant qu'une offre reste à trancher
-  if (!(await page.getByLabel('Jalons du dossier').isVisible())) await rubrique.click()
-  await expect(page.getByLabel('Jalons du dossier')).toBeVisible()
+  await ouvrirDocuments(page)
 }
 
 const offre = (page, libelle) => page.getByRole('group', { name: new RegExp(`État de l'offre ${libelle}`) })
@@ -72,7 +70,8 @@ test('parcours général : écrans, retour, pas de débordement, pas d\'erreur',
 
   for (const nom of ['Pipeline', 'Capture', 'Clients']) {
     await page.getByRole('button', { name: nom, exact: true }).click()
-    await page.waitForTimeout(900)
+    await expect(page.getByRole('button', { name: /← (Brief|Accueil)/ })).toBeVisible()
+    await rendu(page)
     await pasDeDebordement(page)
     await page.goBack()
     await expect(page.getByText('Dossiers actifs').first()).toBeVisible()
@@ -80,7 +79,8 @@ test('parcours général : écrans, retour, pas de débordement, pas d\'erreur',
 
   for (const zone of ['SAV ouverts', 'Devis sans réponse', 'Rappels à venir', 'Plans à produire', 'À chiffrer']) {
     await page.getByRole('button', { name: new RegExp(`^${zone}`) }).first().click()
-    await page.waitForTimeout(700)
+    await expect(page.getByRole('button', { name: /← (Brief|Accueil)/ })).toBeVisible()
+    await rendu(page)
     await pasDeDebordement(page)
     await page.goBack()
     await expect(page.getByText('Dossiers actifs').first()).toBeVisible()
@@ -123,7 +123,8 @@ test('documents : à trancher, question HT/TTC, calcul TVA, cibles ≥ 44 px', a
   expect(problemes).toEqual([])
 })
 
-test('documents : changement de type et file hors-ligne rejouée', async ({ page, context }) => {
+test('documents : changement de type et file hors-ligne rejouée', async ({ page, context }, testInfo) => {
+  journaliser(page, testInfo)
   await ouvrirDossierTest(page)
   await expect(offre(page, 'Étude 2').getByRole('button', { name: 'Retenue', exact: true })).toHaveAttribute('aria-pressed', 'true')
 
@@ -131,11 +132,12 @@ test('documents : changement de type et file hors-ligne rejouée', async ({ page
   await context.setOffline(true)
   await offre(page, 'Étude 2').getByRole('button', { name: 'À trancher', exact: true }).click()
   await offre(page, 'Étude 3').getByRole('button', { name: 'Retenue', exact: true }).click()
-  await page.waitForTimeout(600)
-  expect((await page.evaluate(() => JSON.parse(localStorage.getItem('fv9:file-attente') ?? '[]').length))).toBeGreaterThan(0)
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('fv9:file-attente') ?? '[]').length)).toBeGreaterThan(0)
   expect((await ligne(devisTtc.id)).montant_ttc).toBe(65385) // la base n'a rien reçu
 
+  noter(`TEST file d'attente avant retour réseau : ${String(await page.evaluate(() => localStorage.getItem('fv9:file-attente'))).slice(0, 600)}`)
   await context.setOffline(false)
+  noter('TEST réseau rétabli')
   await expect.poll(async () => (await ligne(devisTtc.id)).montant_ttc, { timeout: 20_000 }).toBe(71975)
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('fv9:file-attente') ?? '[]').length)).toBe(0)
 
