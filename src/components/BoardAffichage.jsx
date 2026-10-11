@@ -171,7 +171,8 @@ export function BoardHaut({ b, onPipeline, onOpenDossier }) {
               <TuileKPI
                 className="col-span-2 lg:col-span-1"
                 titre="Dossiers actifs"
-                valeur={bilan.totalActifsTousTypes}
+                valeur={bilan.nbProjetsActifs}
+                sousTitre="projets, ni perdus ni terminés"
                 onClick={() => onPipeline()}
               />
               <TuileKPI
@@ -184,6 +185,7 @@ export function BoardHaut({ b, onPipeline, onOpenDossier }) {
               <TuileKPI
                 className="col-span-2 lg:col-span-1"
                 titre="À traiter"
+                sousTitre="rappels, SAV, tâches"
                 valeur={bilan.totalATraiter}
                 urgent={bilan.totalATraiter > 0}
                 onClick={allerAAussiATraiter}
@@ -286,7 +288,7 @@ export function BoardJauge({ b }) {
 }
 
 /** Listes de navigation : À traiter, Production, Financier. */
-export function BoardListes({ b, onPipeline }) {
+export function BoardListes({ b, onPipeline, onTrancher }) {
   const { chargement, erreur, bilan, aTrancherPar, setFeuille, allerAAussiATraiter } = b
   if (chargement || erreur) return null
   return (
@@ -321,7 +323,7 @@ export function BoardListes({ b, onPipeline }) {
               />
               {aTrancherPar.nbDevis > 0 && (
                 <button
-                  onClick={() => setFeuille('trancher')}
+                  onClick={() => (onTrancher ? onTrancher() : setFeuille('trancher'))}
                   className="w-full flex items-center justify-between gap-3 bg-carte rounded-xl px-4 min-h-12 text-left active:scale-[0.99] transition"
                 >
                   <span className="text-texte">Devis à trancher</span>

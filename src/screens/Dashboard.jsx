@@ -184,7 +184,7 @@ const lire = (cle, requete) => lireAvecCache(cle, () => requete().then(({ data, 
 }))
 
 // `integre` : affiché dans la zone « Pilotage » de l'accueil — sans en-tête ni plein écran.
-export default function Dashboard({ onBack, onOpenDossier, onPipeline, integre = false }) {
+export default function Dashboard({ onBack, onOpenDossier, onPipeline, integre = false, ouvrirRef = null }) {
   const [chiffres, setChiffres] = useState(null)
   const [dossiers, setDossiers] = useState([])
   const [fichiers, setFichiers] = useState([])
@@ -202,6 +202,10 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, integre =
   const [confirmationGlobale, setConfirmationGlobale] = useState(false)
   const [annulable, setAnnulable] = useState(null)
   const minuteurAnnulation = useRef(null)
+  // L'accueil ouvre une feuille d'ici (ex. « à trancher ») depuis une ligne d'« Aujourd'hui » : une seule liste.
+  useEffect(() => {
+    if (ouvrirRef) ouvrirRef.current = setFeuille
+  }, [ouvrirRef])
 
   const charger = useCallback(async () => {
     try {

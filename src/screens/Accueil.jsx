@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import useBoardData from '../hooks/useBoardData'
 import {
   BoardEntete,
@@ -15,6 +15,8 @@ import Dashboard from './Dashboard'
 // L'ancien Board reste accessible par « Ancien accueil » en pied de page.
 export default function Accueil({ onOpenDossier, onOpenClient, onClients, onPipeline, onCapture, onAncienAccueil }) {
   const b = useBoardData()
+  // Une seule liste « à trancher » : la ligne d'Aujourd'hui ouvre la feuille du Pilotage.
+  const ouvrirPilotage = useRef(null)
   return (
     <div className="min-h-screen bg-fond">
       <BoardEntete
@@ -28,12 +30,12 @@ export default function Accueil({ onOpenDossier, onOpenClient, onClients, onPipe
         <section aria-label="Aujourd'hui">
           <h1 className="text-lg font-bold text-texte mt-1">Aujourd'hui</h1>
           <BoardHaut b={b} onPipeline={onPipeline} onOpenDossier={onOpenDossier} />
-          <BoardListes b={b} onPipeline={onPipeline} />
+          <BoardListes b={b} onPipeline={onPipeline} onTrancher={() => ouvrirPilotage.current?.('trancher')} />
         </section>
 
         <section aria-label="Pilotage" className="mt-10">
           <h1 className="text-lg font-bold text-texte">Pilotage</h1>
-          <Dashboard integre onOpenDossier={onOpenDossier} onPipeline={onPipeline} />
+          <Dashboard integre ouvrirRef={ouvrirPilotage} onOpenDossier={onOpenDossier} onPipeline={onPipeline} />
           <BoardJauge b={b} />
           <BoardQualite b={b} />
         </section>

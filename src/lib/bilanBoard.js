@@ -33,10 +33,6 @@ export function calculerBilan(dossiers, taches, devisSansMontant) {
       (d) => d.statut !== 'perdu' && exerciceDe(d, annee) === annee
     )
 
-    // Un plan livré ou en cours de règlement n'a plus de travail dû : seul
-    // « soldé » ferme réellement le dossier — sert au KPI « Dossiers actifs »
-    // (Projet + Plan + SAV), pas au détail « Plans à produire » plus bas.
-    const plansActifs = dossiers.filter((d) => d.type === 'plan' && d.statut !== 'solde')
 
     // Un SAV ouvert, c'est un praticien qui ne peut pas travailler. Ça passe
     // avant un rappel commercial, et ça n'a pas besoin d'un écran à soi : un
@@ -189,7 +185,8 @@ export function calculerBilan(dossiers, taches, devisSansMontant) {
       signe: somme(signes),
       facture: somme(factures),
       pourcentageObjectif: Math.round((somme(signes) / OBJECTIF_ANNUEL) * 100),
-      totalActifsTousTypes: actifs.length + plansActifs.length + savOuverts.length,
+      // « Actif » = un projet ni perdu ni terminé, partout (tuile « Dossiers actifs » et « projets actifs » du Pilotage).
+      nbProjetsActifs: projets.filter((d) => d.statut !== 'perdu' && d.statut !== 'termine').length,
       totalATraiter: aRappeler.length + savOuverts.length + tachesEnRetard.length,
       savEnRetard: savOuverts.filter((d) => d.statut !== 'en_attente').length,
       // Le trou le plus coûteux n'est pas dans le pipeline lointain : c'est une

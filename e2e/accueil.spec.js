@@ -369,3 +369,54 @@ test('cibles tactiles ≥ 44 px dans l\'en-tête et les tuiles d\'Aujourd\'hui',
     expect((await tuile(page, titre).boundingBox()).height).toBeGreaterThanOrEqual(44)
   }
 })
+
+// ─── Libellés alignés (docs/inventaire-accueil.md, « Définitions ») ──────────────────────────────
+
+test('« Actif » partout : « Dossiers actifs » (Aujourd\'hui) = « projets actifs » (Pilotage) = RPC = recalcul indépendant', async ({ page }) => {
+  await accueil(page)
+  const pipeline = page.getByLabel('Pipeline', { exact: true }).first()
+  // Les données de Bruce bougent en direct : tout est relu ensemble jusqu'à un instant cohérent.
+  await expect(async () => {
+    const tuile = Number(await valeurTuile(page, 'Dossiers actifs'))
+    const pilotage = Number((await pipeline.innerText()).match(/(\d+)\s*projets actifs/)[1])
+    const rpc = await (await fetch(`${URL_DB}/rest/v1/rpc/dashboard_chiffres`, { method: 'POST', headers: { apikey: CLE, Authorization: `Bearer ${CLE}`, 'content-type': 'application/json' }, body: '{}' })).json()
+    const brut = (await lire('dossiers?select=id&type=eq.projet&statut=not.in.(perdu,termine)')).length
+    expect([tuile, pilotage, rpc.projets_actifs]).toEqual([brut, brut, brut])
+  }).toPass({ timeout: 30_000 })
+})
+
+test('chaque tuile d\'Aujourd\'hui dit ce qu\'elle compte', async ({ page }) => {
+  await accueil(page)
+  await expect(tuile(page, 'Dossiers actifs')).toContainText('projets, ni perdus ni terminés')
+  await expect(tuile(page, 'À traiter')).toContainText('rappels, SAV, tâches')
+  await expect(tuile(page, 'En attente')).toContainText('un tiers doit répondre')
+  await expect(tuile(page, 'SAV ouverts')).toBeVisible()
+  await expect(tuile(page, 'Objectif')).toContainText('€')
+})
+
+test('« à trancher » : la ligne d\'Aujourd\'hui et la tuile du Pilotage ouvrent la MÊME liste, avec le même N', async ({ page }) => {
+  await accueil(page)
+  const ligne = aujourdhui(page).locator('button', { hasText: /^Devis à trancher/ })
+  if (!(await ligne.count())) test.skip(true, 'Aucun devis à trancher')
+  const tuilePilotage = page.getByLabel('Pilotage', { exact: true }).getByRole('button', { name: /^À trancher/ }).first()
+  let texteLigne, textePilotage, listeA, listeB, titreA, titreB
+  await expect(async () => {
+    texteLigne = (await ligne.innerText()).match(/(\d+) devis · (\d+) dossiers?/).slice(1, 3).join('/')
+    textePilotage = (await tuilePilotage.innerText()).match(/(\d+) devis · (\d+) dossiers?/).slice(1, 3).join('/')
+    expect(texteLigne).toBe(textePilotage)
+    await ligne.click()
+    const f = page.getByRole('dialog')
+    titreA = await f.getByRole('heading').innerText()
+    listeA = await f.locator('ul > li').allInnerTexts()
+    await page.keyboard.press('Escape')
+    await expect(f).toHaveCount(0)
+    await tuilePilotage.click()
+    titreB = await f.getByRole('heading').innerText()
+    listeB = await f.locator('ul > li').allInnerTexts()
+    await page.keyboard.press('Escape')
+    await expect(f).toHaveCount(0)
+    expect(titreA).toBe(titreB)
+    expect(listeA).toEqual(listeB)
+  }).toPass({ timeout: 30_000 })
+  expect(titreA).toContain(`${texteLigne.split('/')[0]} devis`)
+})
