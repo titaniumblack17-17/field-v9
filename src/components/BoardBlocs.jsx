@@ -168,7 +168,7 @@ export function TuileKPI({ titre, valeur, sousTitre, urgent, onClick, className 
     >
       <p className="text-xs text-texte-doux truncate">{titre}</p>
       <p className={`text-2xl font-bold tabular-nums mt-1 ${urgent ? 'text-alerte' : 'text-texte'}`}>{valeur}</p>
-      {sousTitre && <p className="text-xs text-texte-faible mt-0.5 truncate">{sousTitre}</p>}
+      {sousTitre && <p className="text-xs text-texte-faible mt-0.5 leading-tight">{sousTitre}</p>}
     </button>
   )
 }

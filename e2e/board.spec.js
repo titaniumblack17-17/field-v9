@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { aTrancher } from '../src/lib/documents.js'
+import { aTrancher, potentiel } from '../src/lib/documents.js'
 
 // Lecture seule sur la base réelle : ces tests n'écrivent rien (« Plus tard »
 // reste un état local de l'écran).
@@ -152,7 +152,7 @@ test('tuile « En attente » : liste filtrée avec pastilles, contact, retour', 
 
 test('« N devis · M dossiers » : chiffres alignés sur la base', async ({ page }) => {
   const problemes = surveiller(page)
-  const fichiers = await lire('fichiers?type_doc=eq.devis&dossier_id=not.is.null&select=id,dossier_id,montant_ttc,variantes,decision')
+  const fichiers = await lire('fichiers?type_doc=eq.devis&dossier_id=not.is.null&select=id,dossier_id,type_doc,montant_ttc,variantes,decision,a_trancher_raison,date_reprise')
   // Devis ayant au moins une offre à trancher (un devis sans offres = une offre selon sa décision)
   const devis = fichiers.filter((f) => {
     const v = Array.isArray(f.variantes) ? f.variantes : []
@@ -169,7 +169,8 @@ test('« N devis · M dossiers » : chiffres alignés sur la base', async ({ pag
   await expect(ligne).toContainText(`${devis.length} devis · ${dossiers.size} dossier${dossiers.size > 1 ? 's' : ''}`)
   await ligne.click()
   const feuille = page.getByRole('dialog')
-  await expect(feuille.locator('ul > li')).toHaveCount(dossiers.size)
+  // Une seule liste « à trancher » : celle du Pilotage, une ligne par OFFRE à trancher
+  await expect(feuille.locator('ul > li')).toHaveCount(potentiel(fichiers).aTrancher.offres)
   await page.keyboard.press('Escape')
   await pasDeDebordement(page)
   expect(problemes).toEqual([])
