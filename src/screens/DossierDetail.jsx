@@ -8,6 +8,8 @@ import { resumeDossier } from '../lib/resume'
 import { copierPressePapier } from '../lib/texte'
 import ChampChoix from '../components/ChampChoix'
 import PiecesJointes from '../components/PiecesJointes'
+import PastilleAttente from '../components/PastilleAttente'
+import { SyntheseProjet, DocumentsTypes, HistoriqueEtapes, useFichiersDossier } from '../components/FicheProjet'
 import Rappels from '../components/Rappels'
 import NoteTexte from '../components/NoteTexte'
 import NoteTaches from '../components/NoteTaches'
@@ -33,6 +35,7 @@ import {
   joursEnAttente,
   classeAttente,
   aChiffrer,
+  estEnAttente,
 } from '../constants/dossiers'
 
 // Deux notes suffisent à montrer que le journal vit ; le reste se déplie.
@@ -51,7 +54,7 @@ const CHAMPS = [
   'sous_garantie',
 ]
 
-export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenClient }) {
+export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenClient, onPipeline, onAccueil }) {
   const [values, setValues] = useState(() => ({ ...dossier }))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -73,6 +76,18 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   const [taches, setTaches] = useState({})
   const [ajoutTachePour, setAjoutTachePour] = useState(null)
   const [texteNouvelleTache, setTexteNouvelleTache] = useState('')
+  // Zone Documents : un tap sur le montant, les devis ou un document la rouvre et y mène.
+  const [ouvrirDocuments, setOuvrirDocuments] = useState(0)
+  const fichiersFiche = useFichiersDossier(dossier.id)
+  const allerAuxDocuments = () => {
+    setOuvrirDocuments((n) => n + 1)
+    setTimeout(() => document.getElementById('zone-documents')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
+  // « En attente de qui » : mène au champ (SAV) ou aux rappels.
+  const allerAuMotifAttente = () => {
+    const cible = document.getElementById('bloque_par') ?? document.getElementById('zone-rappels')
+    cible?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
 
   // Partager un dossier avec un collègue aujourd'hui, faute de compte
   // partagé dans Field V9, ça passe par un texte propre à coller dans un
@@ -599,6 +614,23 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
           </button>
         </div>
 
+        {estEnAttente(values) && (
+          <button onClick={allerAuMotifAttente} aria-label="En attente — voir le motif" className="min-h-11 mb-3 flex items-center">
+            <PastilleAttente dossier={values} />
+          </button>
+        )}
+
+        {values.type === 'projet' && (
+          <SyntheseProjet
+            dossier={values}
+            fichiers={fichiersFiche}
+            onPipeline={onPipeline}
+            onDocuments={allerAuxDocuments}
+            onAccueil={onAccueil}
+          />
+        )}
+        <DocumentsTypes dossier={values} fichiers={fichiersFiche} onDocuments={allerAuxDocuments} />
+
         <div
           style={{ borderColor: s.bordure }}
           className="bg-carte rounded-carte shadow-sm border-2 overflow-hidden"
@@ -774,9 +806,17 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
 
         {error && <p className="text-erreur text-sm mt-3">{error}</p>}
 
-        <Rappels dossierId={dossier.id} statut={dossier.statut} />
+        <div id="zone-rappels">
+          <Rappels dossierId={dossier.id} statut={dossier.statut} />
+        </div>
 
-        <PiecesJointes dossierId={dossier.id} onMontantChange={relireMontant} />
+        <div id="zone-documents" className="scroll-mt-20">
+          <PiecesJointes dossierId={dossier.id} onMontantChange={relireMontant} ouvrirNonce={ouvrirDocuments} />
+        </div>
+
+        {values.type === 'projet' && (
+          <HistoriqueEtapes dossierId={dossier.id} statutActuel={dossier.statut} onPipeline={onPipeline} />
+        )}
 
         <div className="mt-4">
           <div className="flex items-baseline justify-between px-1 mb-2">

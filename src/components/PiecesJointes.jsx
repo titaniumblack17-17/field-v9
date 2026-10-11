@@ -94,7 +94,7 @@ export function echoPerime(suivis, ligne, enFile = (id) => ligneEnFile('fichiers
   return true
 }
 
-export default function PiecesJointes({ clientId, dossierId, onMontantChange }) {
+export default function PiecesJointes({ clientId, dossierId, onMontantChange, ouvrirNonce = 0 }) {
   const colonne = clientId ? 'client_id' : 'dossier_id'
   const valeur = clientId ?? dossierId
 
@@ -533,6 +533,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
         titre={dossierId ? 'Documents déposés' : 'Pièces jointes'}
         compte={liste.length}
         forceOuvert={envoi || nbATrancher > 0}
+        ouvrirNonce={ouvrirNonce}
         action={
           <button
             onClick={() => champFichier.current?.click()}

@@ -15,12 +15,17 @@ import React, { useEffect, useState } from 'react'
  * contient déjà une information renseignée — un repère visuel pour ne pas
  * avoir à déplier juste pour vérifier s'il y a quelque chose dedans.
  */
-export default function Rubrique({ titre, compte, defautOuvert = false, forceOuvert = false, rempli = false, action, children }) {
+export default function Rubrique({ titre, compte, defautOuvert = false, forceOuvert = false, ouvrirNonce = 0, rempli = false, action, children }) {
   const [ouvert, setOuvert] = useState(defautOuvert)
 
   useEffect(() => {
     if (forceOuvert) setOuvert(true)
   }, [forceOuvert])
+
+  // Chaque incrément du compteur rouvre la section, même repliée à la main entre-temps.
+  useEffect(() => {
+    if (ouvrirNonce > 0) setOuvert(true)
+  }, [ouvrirNonce])
 
   return (
     <div className="mt-4">

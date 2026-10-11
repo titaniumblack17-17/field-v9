@@ -13,7 +13,7 @@ import Dashboard from './Dashboard'
 // Accueil unique : « Aujourd'hui » (tout le contenu utile du Board, mêmes
 // données, mêmes règles, un seul calcul) puis « Pilotage » (le Dashboard).
 // L'ancien Board reste accessible par « Ancien accueil » en pied de page.
-export default function Accueil({ onOpenDossier, onOpenClient, onClients, onPipeline, onCapture, onAncienAccueil }) {
+export default function Accueil({ onOpenDossier, onOpenClient, onClients, onPipeline, onProjets, onCapture, onAncienAccueil }) {
   const b = useBoardData()
   // Une seule liste « à trancher » : la ligne d'Aujourd'hui ouvre la feuille du Pilotage.
   const ouvrirPilotage = useRef(null)
@@ -24,6 +24,7 @@ export default function Accueil({ onOpenDossier, onOpenClient, onClients, onPipe
         onOpenClient={onOpenClient}
         onClients={onClients}
         onPipeline={onPipeline}
+        onProjets={onProjets}
         onCapture={onCapture}
       />
       <main className="px-4 pb-8">
@@ -35,7 +36,7 @@ export default function Accueil({ onOpenDossier, onOpenClient, onClients, onPipe
 
         <section aria-label="Pilotage" className="mt-10">
           <h1 className="text-lg font-bold text-texte">Pilotage</h1>
-          <Dashboard integre ouvrirRef={ouvrirPilotage} onOpenDossier={onOpenDossier} onPipeline={onPipeline} />
+          <Dashboard integre ouvrirRef={ouvrirPilotage} onOpenDossier={onOpenDossier} onPipeline={onPipeline} onProjets={onProjets} />
           <BoardJauge b={b} />
           <BoardQualite b={b} />
         </section>

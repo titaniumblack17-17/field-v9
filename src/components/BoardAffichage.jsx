@@ -38,7 +38,7 @@ const lignesAussi = (b, items, fermer, onOpenDossier) =>
   ))
 
 /** En-tête collant : recherche rapide + pastilles de navigation. */
-export function BoardEntete({ b, onOpenClient, onClients, onPipeline, onCapture, onDashboard, retour }) {
+export function BoardEntete({ b, onOpenClient, onClients, onPipeline, onProjets, onCapture, onDashboard, retour }) {
   const { rechercheTexte, setRechercheTexte, resultatsRecherche } = b
   return (
     <div className="sticky top-0 z-10 bg-fond/90 backdrop-blur">
@@ -125,6 +125,14 @@ export function BoardEntete({ b, onOpenClient, onClients, onPipeline, onCapture,
             >
               Pipeline
             </button>
+            {onProjets && (
+              <button
+                onClick={() => onProjets()}
+                className="flex-shrink-0 px-4 h-11 rounded-full bg-carte text-accent text-xs font-semibold shadow"
+              >
+                Projets
+              </button>
+            )}
             <button
               onClick={onCapture}
               className="flex-shrink-0 px-4 h-11 rounded-full bg-carte text-accent text-xs font-semibold shadow"

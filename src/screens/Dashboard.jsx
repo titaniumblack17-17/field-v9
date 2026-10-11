@@ -184,7 +184,7 @@ const lire = (cle, requete) => lireAvecCache(cle, () => requete().then(({ data, 
 }))
 
 // `integre` : affiché dans la zone « Pilotage » de l'accueil — sans en-tête ni plein écran.
-export default function Dashboard({ onBack, onOpenDossier, onPipeline, integre = false, ouvrirRef = null }) {
+export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets = null, integre = false, ouvrirRef = null }) {
   const [chiffres, setChiffres] = useState(null)
   const [dossiers, setDossiers] = useState([])
   const [fichiers, setFichiers] = useState([])
@@ -587,6 +587,28 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, integre =
               })}
             </div>
           </div>
+          {/* Point d'entrée vers la liste des projets, par famille. */}
+          {onProjets && (
+            <nav aria-label="Listes de projets par famille" className="flex flex-wrap gap-2 mt-3">
+              <button
+                onClick={() => onProjets()}
+                className="min-h-11 px-3 rounded-full bg-fond text-sm font-medium text-accent-vif border border-separateur"
+              >
+                Tous les projets ›
+              </button>
+              {FAMILLES.map((f) => (
+                <button
+                  key={f.cle}
+                  onClick={() => onProjets(f.cle)}
+                  aria-label={`Liste des projets : ${f.libelle}`}
+                  className="min-h-11 px-3 rounded-full bg-fond text-sm text-texte-doux border border-separateur flex items-center gap-1.5"
+                >
+                  <span className="w-2 h-2 rounded-full" style={{ background: f.couleur }} aria-hidden="true" />
+                  {f.libelle}
+                </button>
+              ))}
+            </nav>
+          )}
         </section>
 
         <section className="mt-4 bg-carte rounded-xl p-4" aria-label="Évolution">

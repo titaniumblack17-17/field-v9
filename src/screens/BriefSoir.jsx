@@ -13,7 +13,7 @@ import {
 // l'inventaire soit validé. Tout son contenu vit désormais dans les mêmes blocs
 // que la zone « Aujourd'hui » de l'accueil unique (BoardAffichage, useBoardData,
 // bilanBoard) : mêmes données, mêmes règles, même N.
-export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPipeline, onCapture, onDashboard, onBack }) {
+export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPipeline, onProjets, onCapture, onDashboard, onBack }) {
   const b = useBoardData()
   return (
     <div className="min-h-screen bg-fond">
@@ -22,6 +22,7 @@ export default function BriefSoir({ onOpenDossier, onOpenClient, onClients, onPi
         onOpenClient={onOpenClient}
         onClients={onClients}
         onPipeline={onPipeline}
+        onProjets={onProjets}
         onCapture={onCapture}
         onDashboard={onDashboard}
         retour={onBack ? { label: 'Accueil', onClick: onBack } : null}

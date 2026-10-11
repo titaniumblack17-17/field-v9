@@ -776,3 +776,9 @@ Limite connue : si le flux temps réel ne renvoie jamais l'écho d'une écriture
 - Pastilles d'en-tête à 44 px ; pastille Dashboard retirée ; tuile « En attente » du Dashboard masquée dans l'accueil.
 - Hors-ligne à froid : 6 à 12 s de réconciliation avant l'affichage du cache (comportement de l'ancien Board, inchangé).
 - Dette connue : perte de mise à jour intermittente sur deux gestes rapprochés d'offres (écho temps réel d'une écriture précédente) — tâche ouverte, voir `e2e/offres.spec.js` / `decisions.spec.js`.
+
+## Phase 4 — liste des projets et fiche projet (non fusionnée)
+
+- Écran `screens/Projets.jsx` (route `projets`, pastille « Projets » de l'en-tête, entrées « Liste des projets : <famille> » dans le Pilotage). Logique pure dans `lib/projets.js` (`construireProjets`, `compteurs`, `filtrer`, `trier`) : l'urgence réutilise `calculerBilan` (même logique que « Aujourd'hui »). Filtres et tri gardés en `sessionStorage` (`fv9:vue-projets`), position de défilement enregistrée à l'ouverture d'une fiche.
+- Compteurs : migration additive `20261014_dashboard_projets.sql` (clé `projets` : actifs, a_trancher, reportes, en_attente, incomplets — portée projets actifs, donc ≠ des compteurs globaux du Pilotage qui incluent SAV et plans). Rollback : `supabase/rollback/20261014_dashboard_projets_rollback.sql`. APPLIQUÉE en production le 11/10/2026 ; les clés existantes sont inchangées (comparées avant/après).
+- Fiche : `components/FicheProjet.jsx` (`SyntheseProjet`, `DocumentsTypes`, `HistoriqueEtapes`, `useFichiersDossier`), `Rubrique` accepte `ouvrirNonce` pour rouvrir la zone Documents.

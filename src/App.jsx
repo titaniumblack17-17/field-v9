@@ -13,6 +13,7 @@ const Capture = React.lazy(() => import('./screens/Capture'))
 const DossierForm = React.lazy(() => import('./screens/DossierForm'))
 const DossierDetail = React.lazy(() => import('./screens/DossierDetail'))
 const Pipeline = React.lazy(() => import('./screens/Pipeline'))
+const Projets = React.lazy(() => import('./screens/Projets'))
 const Dashboard = React.lazy(() => import('./screens/Dashboard'))
 const Catalogue = React.lazy(() => import('./screens/Catalogue'))
 import useConfirm from './hooks/useConfirm'
@@ -435,6 +436,14 @@ export default function App() {
         familleInitiale={view.familleInitiale}
       />
     )
+  } else if (view.name === 'projets') {
+    écran = (
+      <Projets
+        onBack={back}
+        onOpenDossier={(dossier) => push({ name: 'dossier-detail', dossier })}
+        familleInitiale={view.famille ?? null}
+      />
+    )
   } else if (view.name === 'dashboard') {
     écran = (
       <Dashboard
@@ -443,6 +452,7 @@ export default function App() {
         onPipeline={(vueInitiale, etapeInitiale, familleInitiale) =>
           push({ name: 'pipeline', vueInitiale, etapeInitiale, familleInitiale })
         }
+        onProjets={(famille) => push({ name: 'projets', famille })}
       />
     )
   } else if (view.name === 'catalogue') {
@@ -465,6 +475,10 @@ export default function App() {
         onBack={back}
         onDirtyChange={signalerModif}
         onOpenClient={(client) => push({ name: 'detail', client })}
+        onPipeline={(vueInitiale, etapeInitiale, familleInitiale) =>
+          push({ name: 'pipeline', vueInitiale, etapeInitiale, familleInitiale })
+        }
+        onAccueil={() => push({ name: 'accueil' })}
       />
     )
   } else if (view.name === 'brief') {
@@ -477,6 +491,7 @@ export default function App() {
         onOpenClient={(client) => push({ name: 'detail', client })}
         onClients={() => push({ name: 'list' })}
         onPipeline={(vueInitiale, etapeInitiale) => push({ name: 'pipeline', vueInitiale, etapeInitiale })}
+        onProjets={(famille) => push({ name: 'projets', famille })}
         onCapture={() => push({ name: 'capture' })}
         onDashboard={() => push({ name: 'dashboard' })}
       />
@@ -492,6 +507,7 @@ export default function App() {
         onPipeline={(vueInitiale, etapeInitiale, familleInitiale) =>
           push({ name: 'pipeline', vueInitiale, etapeInitiale, familleInitiale })
         }
+        onProjets={(famille) => push({ name: 'projets', famille })}
         onCapture={() => push({ name: 'capture' })}
         onAncienAccueil={() => push({ name: 'brief' })}
       />
