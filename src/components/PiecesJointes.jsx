@@ -138,6 +138,16 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange }) 
     setListe((cur) => cur.map((x) => (x.id === id ? data : x)))
   }
 
+  // Un écho peut ne jamais revenir (flux coupé sans reconnexion, évènement perdu côté serveur) : au retour au
+  // premier plan, les fichiers que plus rien n'attend sont relus, et la base reprend la main.
+  useEffect(() => {
+    const auRetour = () => {
+      if (document.visibilityState === 'visible') [...ecritures.current.keys()].forEach(reconcilier)
+    }
+    document.addEventListener('visibilitychange', auRetour)
+    return () => document.removeEventListener('visibilitychange', auRetour)
+  }, [])
+
   useEffect(() => {
     let actif = true
 

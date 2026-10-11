@@ -19,6 +19,10 @@ const rest = async (methode, chemin, corps) => {
   return texte ? JSON.parse(texte) : null
 }
 
+// Le temps réel de Supabase ne renvoie parfois aucun écho dans les 30 s (constaté 3 fois sur ~80 passages, journal à
+// l'appui : 0 trame reçue). Ces scénarios en ont besoin : on les rejoue, on ne les saute pas.
+test.describe.configure({ retries: 2 })
+
 let client, dossier, X
 const OFFRES = () => [
   { libelle: 'Fauteuils', montant_ttc: 1000, etat: 'a_trancher' },
