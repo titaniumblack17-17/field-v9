@@ -11,6 +11,32 @@ const EXTENSION_PAR_TYPE = {
   'application/pdf': 'pdf',
 }
 
+// Safari iOS livre parfois un fichier sans type MIME (PDF enregistré depuis
+// WhatsApp dans Fichiers, HEIC…). Envoyé tel quel, le dépôt le refuse ou le
+// range en octet-stream : on déduit alors le type de l'extension.
+const MIME_PAR_EXTENSION = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  heic: 'image/heic',
+  heif: 'image/heif',
+  webp: 'image/webp',
+}
+const extensionDe = (nom) => (nom.includes('.') ? nom.split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '') : '')
+export const typeMime = (fichier, nom) => fichier.type || MIME_PAR_EXTENSION[extensionDe(nom)] || ''
+
+// Traduit une erreur du dépôt ou du réseau en message lisible, jamais muet.
+const messageEnvoi = (nom, err) => {
+  const brut = String(err?.message ?? err ?? '')
+  if (/failed to fetch|network|load failed|fetch/i.test(brut)) {
+    return `Pas de réseau : « ${nom} » n’a pas été envoyé. Réessayez une fois reconnecté.`
+  }
+  if (/mime|not supported|invalid/i.test(brut)) return `« ${nom} » : format non accepté (PDF ou image uniquement).`
+  if (/size|exceed|too large|payload/i.test(brut)) return `« ${nom} » dépasse la limite de 25 Mo.`
+  return `« ${nom} » n’a pas pu être envoyé (${brut || 'erreur inconnue'}).`
+}
+
 // Un fichier collé (capture d'écran, image copiée) arrive souvent sans nom
 // exploitable — ou avec un nom générique imposé par le navigateur (« image.png »
 // quel que soit le contenu). L'horodatage reste le seul repère fiable pour le
@@ -44,41 +70,48 @@ export async function envoyerFichier({ clientId, dossierId, fichier }) {
   if (fichier.size > TAILLE_MAX) {
     return { erreur: `« ${nom} » dépasse la limite de 25 Mo.` }
   }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { erreur: `Pas de réseau : « ${nom} » n’a pas été envoyé. Réessayez une fois reconnecté.`, horsLigne: true }
+  }
 
   const colonne = clientId ? 'client_id' : 'dossier_id'
   const valeur = clientId ?? dossierId
+  const mime = typeMime(fichier, nom)
 
   // Chemin non devinable, et extension conservée pour que l'ouverture depuis
   // le lien signé reste correcte.
-  const ext = nom.includes('.') ? `.${nom.split('.').pop()}` : ''
+  const ext = extensionDe(nom) ? `.${extensionDe(nom)}` : ''
   const chemin = `${colonne}/${valeur}/${crypto.randomUUID()}${ext}`
 
-  const { error: errEnvoi } = await supabase.storage
-    .from('documents')
-    .upload(chemin, fichier, { contentType: fichier.type || undefined })
-  if (errEnvoi) return { erreur: errEnvoi.message }
+  try {
+    const { error: errEnvoi } = await supabase.storage
+      .from('documents')
+      .upload(chemin, fichier, { contentType: mime || undefined })
+    if (errEnvoi) return { erreur: messageEnvoi(nom, errEnvoi) }
 
-  const { data: ligne, error: errBase } = await supabase
-    .from('fichiers')
-    .insert({
-      [colonne]: valeur,
-      chemin,
-      nom,
-      taille: fichier.size,
-      type_mime: fichier.type || null,
-      ...typeParNom(nom),
-    })
-    .select()
-    .single()
+    const { data: ligne, error: errBase } = await supabase
+      .from('fichiers')
+      .insert({
+        [colonne]: valeur,
+        chemin,
+        nom,
+        taille: fichier.size,
+        type_mime: mime || null,
+        ...typeParNom(nom),
+      })
+      .select()
+      .single()
 
-  if (errBase) {
-    // Sans cette ligne, le fichier resterait dans le dépôt sans référence :
-    // invisible dans l'app et impossible à retrouver.
-    await supabase.storage.from('documents').remove([chemin])
-    return { erreur: errBase.message }
+    if (errBase) {
+      // Sans cette ligne, le fichier resterait dans le dépôt sans référence :
+      // invisible dans l'app et impossible à retrouver.
+      await supabase.storage.from('documents').remove([chemin])
+      return { erreur: messageEnvoi(nom, errBase) }
+    }
+    return { ligne }
+  } catch (err) {
+    return { erreur: messageEnvoi(nom, err) }
   }
-
-  return { ligne }
 }
 
 /**

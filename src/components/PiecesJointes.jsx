@@ -5,6 +5,7 @@ import { envoyerFichier, fichierColle } from '../lib/fichiers'
 import TexteModifiable from './TexteModifiable'
 import useConfirm from '../hooks/useConfirm'
 import Rubrique from './Rubrique'
+import FeuilleBasse from './FeuilleBasse'
 import OffresDevis from './OffresDevis'
 import { ajouterRappel } from '../lib/rappel'
 import {
@@ -94,6 +95,10 @@ export function echoPerime(suivis, ligne, enFile = (id) => ligneEnFile('fichiers
   return true
 }
 
+const estIOS = () =>
+  typeof navigator !== 'undefined' &&
+  (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
+
 export default function PiecesJointes({ clientId, dossierId, onMontantChange, ouvrirNonce = 0 }) {
   const colonne = clientId ? 'client_id' : 'dossier_id'
   const valeur = clientId ?? dossierId
@@ -117,6 +122,9 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
   const [erreur, setErreur] = useState(null)
   const [confirmer, boîteConfirmation] = useConfirm()
   const champFichier = useRef(null)
+  const [feuilleAjout, setFeuilleAjout] = useState(false)
+  const [dernierEchec, setDernierEchec] = useState(null)
+  const zoneErreur = useRef(null)
   const champCollage = useRef(null)
   // Files d'écriture et écritures non encore échoées, par fichier (voir ecrire).
   const chaines = useRef(new Map())
@@ -206,10 +214,12 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
   const envoyerEtSuivre = async (fichier) => {
     setEnvoi(true)
     setErreur(null)
+    setDernierEchec(null)
     const { ligne, erreur: err } = await envoyerFichier({ clientId, dossierId, fichier })
     setEnvoi(false)
     if (err) {
       setErreur(err)
+      setDernierEchec(fichier) // gardé en mémoire pour « Réessayer » (un fichier ne tient pas dans la file hors-ligne)
       return
     }
     // Un devis déposé sur un dossier se lit tout de suite : c'est le moment où
@@ -524,19 +534,37 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
           + Ajouter, visible même repliée, puisse encore le déclencher. */}
       <input
         ref={champFichier}
+        data-ajout={dossierId ? 'dossier' : 'client'}
         type="file"
-        accept="application/pdf,image/*"
+        accept="application/pdf,.pdf,image/*"
         onChange={envoyer}
         className="hidden"
       />
+      {feuilleAjout && (
+        <FeuilleBasse titre="Ajouter un document" onFermer={() => setFeuilleAjout(false)}>
+          <p data-testid="aide-whatsapp" className="text-sm text-texte-doux mb-3">
+            Depuis WhatsApp : partager › Enregistrer dans Fichiers, puis choisir le fichier ici.
+          </p>
+          <button
+            onClick={() => {
+              setFeuilleAjout(false)
+              champFichier.current?.click()
+            }}
+            className="w-full h-12 rounded-xl bg-accent-vif text-fond font-medium"
+          >
+            Choisir un fichier
+          </button>
+        </FeuilleBasse>
+      )}
       <Rubrique
         titre={dossierId ? 'Documents déposés' : 'Pièces jointes'}
         compte={liste.length}
-        forceOuvert={envoi || nbATrancher > 0}
+        forceOuvert={envoi || !!erreur || nbATrancher > 0}
         ouvrirNonce={ouvrirNonce}
         action={
           <button
-            onClick={() => champFichier.current?.click()}
+            data-ajout={dossierId ? 'dossier' : 'client'}
+            onClick={() => (estIOS() ? setFeuilleAjout(true) : champFichier.current?.click())}
             disabled={envoi}
             className="text-accent text-sm font-medium h-11 px-2 -mr-2 inline-flex items-center disabled:opacity-50"
           >
@@ -544,7 +572,16 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
           </button>
         }
       >
-      {erreur && <p className="text-erreur text-sm mb-2 px-1">{erreur}</p>}
+      {erreur && (
+        <div ref={zoneErreur} role="alert" className="text-erreur text-sm mb-2 px-1 flex items-center gap-2">
+          <p className="flex-1">{erreur}</p>
+          {dernierEchec && !envoi && (
+            <button onClick={() => envoyerEtSuivre(dernierEchec)} className="text-accent font-medium h-11 px-2 shrink-0">
+              Réessayer
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Les trois jalons documentaires d'un dossier, dans l'ordre où ils
           arrivent : le cahier des charges cadre, le devis chiffre, le plan
