@@ -9,6 +9,8 @@ import { copierPressePapier } from '../lib/texte'
 import ChampChoix from '../components/ChampChoix'
 import PiecesJointes from '../components/PiecesJointes'
 import PastilleAttente from '../components/PastilleAttente'
+import BlocFinancement from '../components/BlocFinancement'
+import { useFinancement, resume as resumeFinancement } from '../lib/financement'
 import { SyntheseProjet, DocumentsTypes, HistoriqueEtapes, useFichiersDossier } from '../components/FicheProjet'
 import Rappels from '../components/Rappels'
 import NoteTexte from '../components/NoteTexte'
@@ -79,6 +81,7 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   // Zone Documents : un tap sur le montant, les devis ou un document la rouvre et y mène.
   const [ouvrirDocuments, setOuvrirDocuments] = useState(0)
   const fichiersFiche = useFichiersDossier(dossier.id)
+  const financement = useFinancement(dossier.id)
   const allerAuxDocuments = () => {
     setOuvrirDocuments((n) => n + 1)
     setTimeout(() => document.getElementById('zone-documents')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
@@ -614,6 +617,16 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
           </button>
         </div>
 
+        {values.type === 'projet' && financement.fin && (
+          <button
+            onClick={() => document.getElementById('zone-financement')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            aria-label={`Financement : ${resumeFinancement(financement.fin)} — voir`}
+            className="min-h-11 mb-2 -mt-2 text-sm text-texte-doux flex items-center"
+          >
+            Financement · <span className="font-semibold text-texte ml-1">{resumeFinancement(financement.fin)}</span>
+          </button>
+        )}
+
         {estEnAttente(values) && (
           <button onClick={allerAuMotifAttente} aria-label="En attente — voir le motif" className="min-h-11 mb-3 flex items-center">
             <PastilleAttente dossier={values} />
@@ -630,6 +643,9 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
           />
         )}
         <DocumentsTypes dossier={values} fichiers={fichiersFiche} onDocuments={allerAuxDocuments} />
+        {values.type === 'projet' && (
+          <BlocFinancement dossier={values} fin={financement.fin} organismes={financement.organismes} ecrire={financement.ecrire} />
+        )}
 
         <div
           style={{ borderColor: s.bordure }}

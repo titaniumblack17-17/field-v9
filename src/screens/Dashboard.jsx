@@ -14,7 +14,9 @@ import {
   exerciceDe,
   joursDevisSansReponse,
 } from '../constants/dossiers'
-import { COULEURS_OBJECTIF, COULEUR_PIPELINE, FAMILLES, fichiersDesProjetsActifs } from '../constants/dashboard'
+import { COULEURS_OBJECTIF, COULEUR_PIPELINE, FAMILLES, estProjetActif, fichiersDesProjetsActifs } from '../constants/dashboard'
+import { estSigne } from '../lib/projets'
+import { enAttenteAccord, nonConfirme, resume as resumeFinancement } from '../lib/financement'
 import FeuilleBasse from '../components/FeuilleBasse'
 import PastilleAttente from '../components/PastilleAttente'
 import EtatErreur from '../components/EtatErreur'
@@ -189,6 +191,7 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
   const [dossiers, setDossiers] = useState([])
   const [fichiers, setFichiers] = useState([])
   const [taches, setTaches] = useState([])
+  const [financements, setFinancements] = useState([])
   const [depuisCache, setDepuisCache] = useState(false)
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
@@ -209,7 +212,7 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
 
   const charger = useCallback(async () => {
     try {
-      const [c, d, f, t] = await Promise.all([
+      const [c, d, f, t, fi] = await Promise.all([
         lireAvecCache('dashboard-chiffres', async () => {
           const { data, error } = await supabase.rpc('dashboard_chiffres')
           if (error) throw new Error(error.message)
@@ -229,11 +232,13 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
         lire('brief-taches', () =>
           supabase.from('dossier_note_taches').select('*').eq('fait', false).not('echeance', 'is', null)
         ),
+        lire('dashboard-financements', () => supabase.from('dossier_financement').select('dossier_id, mode, statut, organisme, montant_finance')),
       ])
       setChiffres(c.valeur)
       setDossiers(d.valeur)
       setFichiers(f.valeur)
       setTaches(t.valeur)
+      setFinancements(fi.valeur)
       setDepuisCache(c.depuisCache || d.depuisCache || f.depuisCache || t.depuisCache)
       setErreur(null)
     } catch {
@@ -257,7 +262,7 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
       minuteur.current = setTimeout(charger, 500)
     }
     let canal = supabase.channel('dashboard-temps-reel')
-    for (const table of ['dossiers', 'fichiers', 'dossier_note_taches', 'pipeline_snapshots']) {
+    for (const table of ['dossiers', 'fichiers', 'dossier_note_taches', 'pipeline_snapshots', 'dossier_financement']) {
       canal = canal.on('postgres_changes', { event: '*', schema: 'public', table }, replanifier)
     }
     canal.subscribe()
@@ -337,8 +342,19 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
       if (jours != null && !dusIds.has(d.id)) retard.push(ligne(d, `Devis sans réponse · ${jours} j`, `devis-${d.id}`))
     }
 
-    return { signes, atrancher, incomplets, attente, retard, reportees }
-  }, [chiffres, dossiers, fichiers, taches])
+    // Financement : mêmes définitions que la clé « financement » de la RPC (projets actifs ; signé = comme « Signé »).
+    const finDe = new Map(financements.map((x) => [x.dossier_id, x]))
+    const motifFin = (d) => {
+      const x = finDe.get(d.id)
+      return `Financement · ${resumeFinancement(x)}${x.montant_finance != null ? ` · ${euros(x.montant_finance)}` : ''}`
+    }
+    const finAttente = projets.filter((d) => estProjetActif(d) && enAttenteAccord(finDe.get(d.id))).map((d) => ligne(d, motifFin(d)))
+    const finNonConfirme = projets
+      .filter((d) => estProjetActif(d) && nonConfirme(finDe.get(d.id)) && estSigne(d, fichiers, annee))
+      .map((d) => ligne(d, motifFin(d)))
+
+    return { signes, atrancher, incomplets, attente, retard, reportees, finAttente, finNonConfirme }
+  }, [chiffres, dossiers, fichiers, taches, financements])
 
   // Nettoyage du potentiel ouvert : devis déjà retenus dont d'autres offres traînent « à trancher ».
   // Rien n'est appliqué sans geste ; « décision requise » n'est qu'un signalement.
@@ -388,6 +404,7 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
   // Potentiel ouvert (par offre) : à trancher et reportées.
   const at = chiffres.potentiel.a_trancher
   const rp = chiffres.potentiel.reportees
+  const fin = chiffres.financement
   const pourcentage = Math.round((Number(signe.montant) / objectif) * 100)
   const aTrancherMontant = Number(at.montant_min)
   const reporteMontant = Number(rp.montant)
@@ -402,6 +419,8 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
     incomplets: { titre: `Incomplets · ${chiffres.incomplets.dossiers} dossiers`, lignes: listes.incomplets, filtre: 'incomplets' },
     attente: { titre: `En attente · ${chiffres.en_attente.dossiers}`, lignes: listes.attente },
     retard: { titre: `En retard · ${chiffres.en_retard.total}`, lignes: listes.retard },
+    finattente: { titre: `Financement en attente d'accord · ${pl(fin.en_attente_accord.dossiers, 'dossier')}`, lignes: listes.finAttente, filtre: 'finAttente' },
+    finnonconfirme: { titre: `Signé, financement non confirmé · ${pl(fin.signe_non_confirme.dossiers, 'dossier')}`, lignes: listes.finNonConfirme, filtre: 'finNonConfirme' },
     reportees: { titre: `Offres reportées · ${pl(rp.offres, 'offre')} · ${rp.devis} devis · ${pl(rp.dossiers, 'dossier')}`, lignes: listes.reportees, filtre: 'reportes' },
   }
   const liste = feuille && feuille !== 'nettoyer' ? configListe[feuille] : null
@@ -459,6 +478,12 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
             onClick={() => setFeuille('trancher')}
           />
           <Tuile
+            titre="Financement en attente d'accord"
+            valeur={fin.en_attente_accord.dossiers}
+            detail={fin.en_attente_accord.montant > 0 ? `déposé · ${euros(Number(fin.en_attente_accord.montant))}` : 'déposé, sans accord'}
+            onClick={() => setFeuille('finattente')}
+          />
+          <Tuile
             titre="Incomplets"
             valeur={chiffres.incomplets.dossiers}
             detail={`${chiffres.incomplets.sans_devis} sans devis · ${chiffres.incomplets.sans_cdc} sans CDC`}
@@ -482,6 +507,16 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
             onClick={() => setFeuille('retard')}
           />
         </div>
+
+        {fin.signe_non_confirme.dossiers > 0 && (
+          <button
+            onClick={() => setFeuille('finnonconfirme')}
+            className="mt-3 w-full min-h-11 px-4 py-2 rounded-xl bg-alerte/10 border border-alerte/40 text-left text-sm text-alerte"
+          >
+            Signé, financement non confirmé · <span className="font-semibold tabular-nums">{pl(fin.signe_non_confirme.dossiers, 'dossier')}</span>
+            {fin.signe_non_confirme.montant > 0 ? ` · ${euros(Number(fin.signe_non_confirme.montant))}` : ''}
+          </button>
+        )}
 
         <section className="mt-3 bg-carte rounded-xl px-4 pt-3 pb-1" aria-label="Potentiel ouvert">
           <div className="flex items-center justify-between">

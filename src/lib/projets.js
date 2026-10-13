@@ -1,8 +1,9 @@
 import { calculerBilan } from './bilanBoard'
-import { offresPlat } from './documents'
+import { offresPlat, dossiersReportes } from './documents'
 import { nomClient } from './client'
+import { enAttenteAccord, nonConfirme, resume } from './financement'
 import { FAMILLES, familleDe, estProjetActif } from '../constants/dashboard'
-import { ETAPES_PROJET_LABELS, aChiffrer, estEnAttente, joursDepuisStatut, joursEnAttente, MOTIFS_ATTENTE_SAV_LABELS } from '../constants/dossiers'
+import { ETAPES_PROJET_LABELS, ETAPES_SIGNEES, exerciceDe, aChiffrer, estEnAttente, joursDepuisStatut, joursEnAttente, MOTIFS_ATTENTE_SAV_LABELS } from '../constants/dossiers'
 
 // Liste des projets : une ligne par dossier de type « projet », ni perdu ni terminé.
 // Tous les calculs sont purs (testables) et reprennent les définitions du Pilotage et de la RPC
@@ -15,6 +16,12 @@ const ETAPES_APRES_DEVIS = [
 
 export { familleDe, estProjetActif }
 
+/** Un projet est « signé » comme le Pilotage le compte : étape signée, pas reporté, exercice de l'année. */
+export function estSigne(d, fichiers, annee = new Date().getFullYear()) {
+  const reportes = dossiersReportes(fichiers.filter((f) => f.type_doc === 'devis'))
+  return d.type === 'projet' && d.statut !== 'perdu' && ETAPES_SIGNEES.includes(d.statut) && !reportes.has(d.id) && exerciceDe(d, annee) === annee
+}
+
 const TAGS = { rappel: 'Rappel', relance_devis: 'Relance devis', tache: 'Tâche', devis: 'Devis', sav: 'SAV' }
 
 const instant = (v) => (v ? new Date(v).getTime() : 0)
@@ -23,7 +30,8 @@ const instant = (v) => (v ? new Date(v).getTime() : 0)
  * Lignes de la liste. `fichiers` : lignes `fichiers` (devis, CDC…) ; `activite` : { notes, etapes } —
  * horodatages des notes et des changements d'étape par dossier (pour « ancienneté depuis la dernière action »).
  */
-export function construireProjets({ dossiers, fichiers, taches, activite = {} }) {
+export function construireProjets({ dossiers, fichiers, taches, activite = {}, financements = [] }) {
+  const finDe = new Map(financements.map((x) => [x.dossier_id, x]))
   const actifs = dossiers.filter(estProjetActif)
   // Même logique d'urgence que « Aujourd'hui » : les éléments urgents du Board, par dossier.
   const bilan = calculerBilan(actifs, taches, fichiers.filter((f) => f.type_doc === 'devis'))
@@ -88,6 +96,10 @@ export function construireProjets({ dossiers, fichiers, taches, activite = {} })
       aTrancher: nbATrancher > 0,
       reporte: reportes.has(d.id),
       enAttente: attente,
+      // Financement : mêmes définitions que la clé « financement » de dashboard_chiffres().
+      financement: finDe.get(d.id) ?? null,
+      finAttente: enAttenteAccord(finDe.get(d.id)),
+      finNonConfirme: nonConfirme(finDe.get(d.id)) && estSigne(d, fichiers),
       incomplet: manquants.length > 0,
       derniereAction: derniere,
       jours: derniere ? Math.max(0, Math.floor((Date.now() - derniere) / 86_400_000)) : null,
@@ -105,6 +117,8 @@ export function compteurs(lignes) {
     aTrancher: lignes.filter((l) => l.aTrancher).length,
     reportes: lignes.filter((l) => l.reporte).length,
     enAttente: lignes.filter((l) => l.enAttente).length,
+    finAttente: lignes.filter((l) => l.finAttente).length,
+    finNonConfirme: lignes.filter((l) => l.finNonConfirme).length,
     incomplets: lignes.filter((l) => l.incomplet).length,
   }
 }
@@ -117,6 +131,8 @@ export const VUE_PAR_DEFAUT = {
   aTrancher: false,
   reportes: false,
   enAttente: false,
+  finAttente: false,
+  finNonConfirme: false,
   incomplets: false,
   recherche: '',
   tri: 'action',
@@ -130,9 +146,11 @@ export function filtrer(lignes, vue) {
     if (vue.aTrancher && !l.aTrancher) return false
     if (vue.reportes && !l.reporte) return false
     if (vue.enAttente && !l.enAttente) return false
+    if (vue.finAttente && !l.finAttente) return false
+    if (vue.finNonConfirme && !l.finNonConfirme) return false
     if (vue.incomplets && !l.incomplet) return false
     if (q) {
-      const meule = normaliser([l.client, l.ville, l.titre, l.etape, ...l.motifs.map((m) => m.texte)].join(' '))
+      const meule = normaliser([l.client, l.ville, l.titre, l.etape, resume(l.financement), ...l.motifs.map((m) => m.texte)].join(' '))
       if (!meule.includes(q)) return false
     }
     return true

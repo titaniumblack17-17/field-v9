@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { lireAvecCache } from '../lib/cacheLecture'
 import { FAMILLES } from '../constants/dashboard'
 import { construireProjets, compteurs, filtrer, trier, TRIS, VUE_PAR_DEFAUT } from '../lib/projets'
+import { resume } from '../lib/financement'
 import EtatErreur from '../components/EtatErreur'
 
 const euros = (n) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n) + ' €'
@@ -55,6 +56,7 @@ export default function Projets({ onBack, onOpenDossier, familleInitiale = null,
   const [fichiers, setFichiers] = useState([])
   const [taches, setTaches] = useState([])
   const [activite, setActivite] = useState({ notes: [], etapes: [] })
+  const [financements, setFinancements] = useState([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState(null)
   const [depuisCache, setDepuisCache] = useState(false)
@@ -68,7 +70,7 @@ export default function Projets({ onBack, onOpenDossier, familleInitiale = null,
 
   const charger = useCallback(async () => {
     try {
-      const [d, f, t, n, e] = await Promise.all([
+      const [d, f, t, n, e, fi] = await Promise.all([
         lire('projets-dossiers', () =>
           supabase
             .from('dossiers')
@@ -84,11 +86,13 @@ export default function Projets({ onBack, onOpenDossier, familleInitiale = null,
         lire('brief-taches', () => supabase.from('dossier_note_taches').select('*').eq('fait', false).not('echeance', 'is', null)),
         lire('projets-notes', () => supabase.from('dossier_notes').select('dossier_id, created_at')),
         lire('projets-etapes', () => supabase.from('dossier_etapes_historique').select('dossier_id, changed_at')),
+        lire('projets-financements', () => supabase.from('dossier_financement').select('dossier_id, mode, statut, organisme, montant_finance')),
       ])
       setDossiers(d.valeur)
       setFichiers(f.valeur)
       setTaches(t.valeur)
       setActivite({ notes: n.valeur, etapes: e.valeur })
+      setFinancements(fi.valeur)
       setDepuisCache(d.depuisCache || f.depuisCache || t.depuisCache)
       setErreur(null)
     } catch {
@@ -111,7 +115,7 @@ export default function Projets({ onBack, onOpenDossier, familleInitiale = null,
       minuteur.current = setTimeout(charger, 500)
     }
     let canal = supabase.channel('projets-temps-reel')
-    for (const table of ['dossiers', 'fichiers', 'dossier_note_taches']) {
+    for (const table of ['dossiers', 'fichiers', 'dossier_note_taches', 'dossier_financement']) {
       canal = canal.on('postgres_changes', { event: '*', schema: 'public', table }, replanifier)
     }
     canal.subscribe()
@@ -121,7 +125,7 @@ export default function Projets({ onBack, onOpenDossier, familleInitiale = null,
     }
   }, [charger])
 
-  const lignes = useMemo(() => construireProjets({ dossiers, fichiers, taches, activite }), [dossiers, fichiers, taches, activite])
+  const lignes = useMemo(() => construireProjets({ dossiers, fichiers, taches, activite, financements }), [dossiers, fichiers, taches, activite, financements])
   const nombres = useMemo(() => compteurs(lignes), [lignes])
   const affichees = useMemo(() => trier(filtrer(lignes, vue), vue.tri), [lignes, vue])
 
@@ -150,7 +154,7 @@ export default function Projets({ onBack, onOpenDossier, familleInitiale = null,
     if (y > 0) window.scrollTo(0, y)
   }, [chargement, affichees.length, familleInitiale, filtreInitial])
 
-  const aucunFiltre = !vue.famille && !vue.aTrancher && !vue.reportes && !vue.enAttente && !vue.incomplets && !vue.recherche
+  const aucunFiltre = !vue.famille && !vue.aTrancher && !vue.reportes && !vue.enAttente && !vue.finAttente && !vue.finNonConfirme && !vue.incomplets && !vue.recherche
 
   return (
     <div className="min-h-screen bg-fond">
@@ -212,6 +216,12 @@ export default function Projets({ onBack, onOpenDossier, familleInitiale = null,
               <Pastille actif={vue.enAttente} onClick={() => changer({ enAttente: !vue.enAttente })} label={`Projets en attente : ${nombres.enAttente}`}>
                 En attente <span className="tabular-nums">{nombres.enAttente}</span>
               </Pastille>
+              <Pastille actif={vue.finAttente} onClick={() => changer({ finAttente: !vue.finAttente })} label={`Financement en attente d'accord : ${nombres.finAttente}`}>
+                Financement <span className="tabular-nums">{nombres.finAttente}</span>
+              </Pastille>
+              <Pastille actif={vue.finNonConfirme} onClick={() => changer({ finNonConfirme: !vue.finNonConfirme })} label={`Signés, financement non confirmé : ${nombres.finNonConfirme}`}>
+                Signé, financement ? <span className="tabular-nums">{nombres.finNonConfirme}</span>
+              </Pastille>
               <Pastille actif={vue.incomplets} onClick={() => changer({ incomplets: !vue.incomplets })} label={`Projets incomplets : ${nombres.incomplets}`}>
                 Incomplets <span className="tabular-nums">{nombres.incomplets}</span>
               </Pastille>
@@ -252,6 +262,9 @@ export default function Projets({ onBack, onOpenDossier, familleInitiale = null,
                           {l.jours == null ? '' : l.jours === 0 ? "aujourd'hui" : `il y a ${l.jours} j`}
                         </span>
                       </span>
+                      {l.financement && (
+                        <span className="block text-xs text-texte-doux mt-0.5 truncate">Financement · {resume(l.financement)}</span>
+                      )}
                       {l.motifs.length > 0 && (
                         <span className="block text-xs text-alerte mt-0.5 truncate">
                           {l.motifs[0].texte}

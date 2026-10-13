@@ -1,15 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { lireAvecCache } from '../lib/cacheLecture'
-import { dossiersReportes, offresPlat } from '../lib/documents'
-import { familleDe } from '../lib/projets'
+import { offresPlat } from '../lib/documents'
+import { familleDe, estSigne } from '../lib/projets'
 import Rubrique from './Rubrique'
-import {
-  ETAPES_PROJET_LABELS,
-  ETAPES_SIGNEES,
-  aChiffrer,
-  exerciceDe,
-} from '../constants/dossiers'
+import { ETAPES_PROJET_LABELS, aChiffrer } from '../constants/dossiers'
 
 const euros = (n) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n) + ' €'
 const ETAPES_APRES_DEVIS = [
@@ -52,11 +47,7 @@ export function useFichiersDossier(dossierId) {
   return fichiers
 }
 
-/** Un projet est « signé » comme le Pilotage le compte : étape signée, pas reporté, exercice de l'année. */
-export function estSigne(d, fichiers, annee = new Date().getFullYear()) {
-  const reportes = dossiersReportes(fichiers.filter((f) => f.type_doc === 'devis'))
-  return d.type === 'projet' && d.statut !== 'perdu' && ETAPES_SIGNEES.includes(d.statut) && !reportes.has(d.id) && exerciceDe(d, annee) === annee
-}
+export { estSigne }
 
 const carte = 'bg-carte rounded-carte shadow-sm'
 

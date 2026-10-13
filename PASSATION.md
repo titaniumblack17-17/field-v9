@@ -788,3 +788,28 @@ Limite connue : si le flux temps réel ne renvoie jamais l'écho d'une écriture
 - `constants/dashboard.js` : `familleDe`, `estProjetActif`, `fichiersDesProjetsActifs` (une seule définition, utilisée par la RPC miroir côté client, le Board, le Dashboard et la liste).
 - Libellés : « Offres reportées » (Pilotage), « Dossiers à trancher / reportés », « Projets en attente / incomplets » (liste). Chaque feuille du Pilotage (À trancher, Offres reportées, Incomplets) et la feuille « En attente » ont un lien « … dans la liste ».
 - `Ligne` (accueil) : texte de droite sous le nom sur téléphone, étiquette `flex-shrink-0`, nom tronqué par « … » ; titres de tuiles sur plusieurs lignes.
+
+## Financement d'un projet — V1 (branche `feat/financement-projet`, non fusionnée)
+
+- **Base** (`supabase/migrations/20261016_financement.sql`, retour : `supabase/rollback/20261016_financement_rollback.sql`) :
+  `dossier_financement` (un par dossier, `dossier_id` unique ; mode comptant / banque / leasing / echelonne / mixte ;
+  statut a_proposer / depose / accord / refus / debloque ; organisme, montant_finance, apport, duree_mois, mensualite,
+  date_statut, note ; `montant_ref` = montant du dossier au moment du pré-remplissage, pour signaler un changement),
+  `dossier_financement_historique` (journal : une ligne à la création et à chaque changement de statut, par déclencheur
+  qui ne fait jamais échouer l'écriture). Table ajoutée à la publication `supabase_realtime`. Aucune RLS.
+  La migration a été appliquée en reprenant la fonction `dashboard_chiffres()` vivante (CTE `fin*` + clé), le fichier du
+  dépôt en porte la définition complète.
+- **RPC** : clé `financement` = `{ en_attente_accord: {dossiers, montant}, signe_non_confirme: {dossiers, montant} }`.
+  Définitions (communes à la RPC, à `src/lib/financement.js`, à la liste et au Pilotage) : *en attente d'accord* = projet
+  actif, mode ≠ comptant, statut `depose` ; *signé, financement non confirmé* = projet signé (comme « Signé », hors
+  terminé), mode ≠ comptant, statut a_proposer / depose / refus. Les clés existantes (donc l'objectif signé) sont inchangées.
+- **Fiche projet** : `src/components/BlocFinancement.jsx` (pastilles mode et statut, montants facultatifs, organisme
+  avec autocomplétion sur ceux déjà saisis, avertissement si le montant du dossier change, journal, relance), résumé
+  « Banque · Accord » sous le titre. Écritures optimistes, file hors-ligne avec `rowId` (la ligne est créée côté client
+  avec son identifiant ; tant qu'elle attend dans la file, ses échos temps réel sont ignorés).
+- **Pilotage / liste** : tuile « Financement en attente d'accord », signal « Signé, financement non confirmé », deux
+  pastilles de filtre dans Projets (compteurs = base). `estSigne` est désormais dans `src/lib/projets.js`.
+- **Relance** : bouton « Programmer une relance à 10 jours » sur un statut Déposé → rappel (jour ouvré, jamais avant
+  aujourd'hui) via `ajouterRappel`, donc Todoist comme tout rappel. Optionnel : rien n'est créé sans le geste.
+- **V2 (non faite)** : échéancier généré en N fois avec cases « payé ».
+- Tests : `e2e/financement.spec.js` (modes, statuts, journal, hors-ligne, égalité tuile / liste / base, relance).

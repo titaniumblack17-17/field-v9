@@ -78,6 +78,16 @@ const dansNJoursOuvres = (n) => {
   return versISO(d)
 }
 
+/** Première date ouvrée (ni week-end ni férié) à partir de `iso` incluse, jamais avant aujourd'hui. */
+export const prochainJourOuvre = (iso) => {
+  const d = new Date(`${iso}T12:00:00`)
+  const auj = new Date()
+  auj.setHours(12, 0, 0, 0)
+  if (d < auj) d.setTime(auj.getTime())
+  while (!estJourOuvre(d)) d.setDate(d.getDate() + 1)
+  return versISO(d)
+}
+
 // Cadence de relance des pros du secteur : première relance à J+3, seconde
 // à J+7 après. Poser un rappel juste après l'envoi ou pendant une relance
 // n'a donc pas la même échéance naturelle — plutôt que de retomber

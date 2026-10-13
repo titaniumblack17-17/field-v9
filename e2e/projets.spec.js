@@ -98,7 +98,7 @@ test('chaque tri : l\'ordre affiché suit le critère', async ({ page }) => {
       const t = await li.innerText()
       const montant = t.match(/([\d\u00a0\u202f ]+) €/)?.[1]?.replace(/\D/g, '')
       const etape = Object.values(ETAPES_PROJET_LABELS).find((e) => t.includes(`\n${e}\n`) || t.includes(`${e}\nil y a`) || t.includes(`${e}\naujourd`)) ?? null
-      const jours = t.includes("aujourd'hui") ? 0 : Number(t.match(/il y a (\d+) j/)?.[1] ?? NaN)
+      const jours = t.split('\n').includes("aujourd'hui") ? 0 : Number(t.match(/il y a (\d+) j/)?.[1] ?? NaN)
       const rang = /(Rappel|Tâche|Relance devis|Devis) · .*(retard|sans réponse|jour)/i.test(t) ? 3 : /Devis à trancher|manquant/.test(t) ? 2 : /En attente/.test(t) ? 1 : 0
       out.push({ montant: montant == null ? null : Number(montant), etape, jours, rang })
     }
