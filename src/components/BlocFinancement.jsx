@@ -3,9 +3,10 @@ import { supabase } from '../lib/supabaseClient'
 import { lireAvecCache } from '../lib/cacheLecture'
 import { mettreEnFile, ligneEnFile } from '../lib/fileAttente'
 import { ajouterRappel, prochainJourOuvre } from '../lib/rappel'
-import { MODES, STATUTS, STATUTS_LABELS, JOURS_RELANCE, ecartMontant, joursDepuis, resume } from '../lib/financement'
+import { MODES, STATUTS, STATUTS_LABELS, JOURS_RELANCE, ecartMontant, estimation, joursDepuis, libellesChamps, resume } from '../lib/financement'
 
 const euros = (n) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n) + ' €'
+const eurosDec = (n) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n) + ' €'
 const dateFr = (iso) => new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
 function Pastille({ actif, onClick, children, label }) {
@@ -24,7 +25,7 @@ function Pastille({ actif, onClick, children, label }) {
 }
 
 // Champ numérique facultatif : enregistré à la sortie du champ, vide = pas de valeur.
-function ChampNombre({ id, libelle, valeur, unite, onSauver }) {
+function ChampNombre({ id, libelle, valeur, unite, onSauver, aide }) {
   const [saisie, setSaisie] = useState(valeur == null ? '' : String(valeur))
   useEffect(() => setSaisie(valeur == null ? '' : String(valeur)), [valeur])
   return (
@@ -45,6 +46,7 @@ function ChampNombre({ id, libelle, valeur, unite, onSauver }) {
         />
         {unite && <span className="text-xs text-texte-doux flex-shrink-0">{unite}</span>}
       </div>
+      {aide && <p data-testid={`${id}-aide`} className="text-xs text-texte-faible px-1">{aide}</p>}
     </div>
   )
 }
@@ -98,6 +100,8 @@ export default function BlocFinancement({ dossier, fin, organismes, ecrire }) {
   const montantDossier = dossier.montant_estime != null && Number(dossier.montant_estime) !== 0 ? Number(dossier.montant_estime) : null
   const ecart = fin ? ecartMontant(fin, { montant_estime: montantDossier }) : null
   const finance = fin && fin.mode !== 'comptant'
+  const champs = libellesChamps(fin?.mode)
+  const estime = fin ? estimation(fin) : null
   const jours = fin?.statut === 'depose' ? joursDepuis(fin.date_statut) : null
 
   const choisirMode = (mode) => {
@@ -164,6 +168,7 @@ export default function BlocFinancement({ dossier, fin, organismes, ecrire }) {
           )}
 
           <div className="grid grid-cols-2 gap-2 mt-3">
+            <ChampNombre id="fin-duree" libelle={champs.duree} unite={champs.uniteDuree} valeur={fin.duree_mois} onSauver={(n) => ecrire({ duree_mois: n == null ? null : Math.round(n) })} />
             <div className="col-span-2 flex flex-col gap-0.5">
               <label htmlFor="fin-organisme" className="text-xs text-texte-doux px-1">Organisme</label>
               <input
@@ -185,8 +190,14 @@ export default function BlocFinancement({ dossier, fin, organismes, ecrire }) {
             </div>
             <ChampNombre id="fin-montant" libelle="Montant financé" unite="€" valeur={fin.montant_finance} onSauver={(n) => ecrire({ montant_finance: n, montant_ref: n == null ? null : montantDossier })} />
             <ChampNombre id="fin-apport" libelle="Apport" unite="€" valeur={fin.apport} onSauver={(n) => ecrire({ apport: n })} />
-            <ChampNombre id="fin-duree" libelle="Durée" unite="mois" valeur={fin.duree_mois} onSauver={(n) => ecrire({ duree_mois: n == null ? null : Math.round(n) })} />
-            <ChampNombre id="fin-mensualite" libelle="Mensualité" unite="€" valeur={fin.mensualite} onSauver={(n) => ecrire({ mensualite: n })} />
+            <ChampNombre
+              id="fin-mensualite"
+              libelle={champs.paiement}
+              unite={champs.unitePaiement}
+              valeur={fin.mensualite}
+              onSauver={(n) => ecrire({ mensualite: n })}
+              aide={fin.mensualite == null && estime != null ? (fin.mode === 'echelonne' ? `${eurosDec(estime)} par échéance (calculé)` : `environ ${eurosDec(estime)}/mois, hors intérêts`) : null}
+            />
           </div>
 
           {fin.statut === 'depose' && (

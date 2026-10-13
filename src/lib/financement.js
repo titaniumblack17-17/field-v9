@@ -8,7 +8,7 @@ export const MODES = [
   ['comptant', 'Comptant'],
   ['banque', 'Banque'],
   ['leasing', 'Leasing'],
-  ['echelonne', 'Échelonné'],
+  ['echelonne', 'En plusieurs fois'],
   ['mixte', 'Mixte'],
 ]
 export const STATUTS = [
@@ -20,6 +20,24 @@ export const STATUTS = [
 ]
 export const MODES_LABELS = Object.fromEntries(MODES)
 export const STATUTS_LABELS = Object.fromEntries(STATUTS)
+
+/** Libellés des champs selon le mode : « En plusieurs fois » parle de fois et d'échéances, les autres de mois et de mensualité. */
+export const libellesChamps = (mode) =>
+  mode === 'echelonne'
+    ? { duree: 'Nombre de fois', uniteDuree: 'fois', paiement: 'Montant par échéance', unitePaiement: '€' }
+    : { duree: 'Durée (mois)', uniteDuree: 'mois', paiement: 'Mensualité', unitePaiement: '€' }
+
+/**
+ * Estimation du paiement périodique quand il n'est pas saisi : (financé − apport) / durée, intérêts exclus.
+ * Jamais écrite en base : une valeur saisie la remplace, et elle suit le montant et l'apport tant qu'elle est vide.
+ */
+export const estimation = (fin) => {
+  const financé = nombre(fin?.montant_finance)
+  const apport = nombre(fin?.apport) ?? 0
+  const durée = nombre(fin?.duree_mois)
+  if (financé == null || !durée || durée <= 0 || financé - apport <= 0) return null
+  return Math.round(((financé - apport) / durée) * 100) / 100
+}
 
 /** Un délai de relance du dossier déposé : au-delà, on relance l'organisme. */
 export const JOURS_RELANCE = 10
@@ -63,6 +81,10 @@ export function useFinancement(dossierId) {
   const [organismes, setOrganismes] = useState([])
   const courant = useRef(null)
   courant.current = fin
+  // Écritures locales en cours (envoi direct ou mise en file) : tant qu'il y en a, une lecture ou un écho de la base
+  // ne fait pas foi (il peut précéder notre écriture et la faire disparaître de l'écran, ou faire recréer la ligne).
+  const enVol = useRef(0)
+  const recharger = useRef(null)
 
   useEffect(() => {
     let actif = true
@@ -79,12 +101,13 @@ export function useFinancement(dossierId) {
           })
       )
         .then(({ valeur }) => {
-          if (!actif) return
+          if (!actif || enVol.current > 0) return
           if (valeur && ligneEnFile('dossier_financement', valeur.id)) return
           if (!valeur && courant.current && ligneEnFile('dossier_financement', courant.current.id)) return
           setFin(valeur)
         })
         .catch(() => {})
+    recharger.current = charger
     charger()
     supabase
       .from('dossier_financement')
@@ -96,6 +119,7 @@ export function useFinancement(dossierId) {
     const canal = supabase
       .channel(`financement-${dossierId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dossier_financement', filter: `dossier_id=eq.${dossierId}` }, (p) => {
+        if (enVol.current > 0) return
         if (p.eventType === 'DELETE') {
           setFin((cur) => (cur && ligneEnFile('dossier_financement', cur.id) ? cur : null))
           return
@@ -112,25 +136,47 @@ export function useFinancement(dossierId) {
     }
   }, [dossierId])
 
-  /** Écrit des champs (création à la première écriture). Retourne quand l'écriture est faite ou mise en file. */
+  // Les écritures distantes partent l'une après l'autre : deux gestes rapprochés hors-ligne ne doivent pas se
+  // retrouver dans la file dans l'ordre inverse (une mise à jour rejouée avant la création de sa ligne n'atteint
+  // aucune ligne, sans erreur, et se perd). Et tant que la ligne attend dans la file, rien n'est envoyé en direct.
+  const chaine = useRef(Promise.resolve())
+
+  /** Écrit des champs (création à la première écriture). L'état local change tout de suite. */
   const ecrire = useCallback(
-    async (champs) => {
+    (champs) => {
       const existant = courant.current
+      let envoi
       if (!existant) {
         const ligne = { id: crypto.randomUUID(), dossier_id: dossierId, mode: 'banque', statut: 'a_proposer', date_statut: aujourdhui(), ...champs }
         courant.current = ligne
         setFin(ligne)
-        const { error } = await supabase.from('dossier_financement').insert(ligne)
-        if (error) mettreEnFile({ type: 'insert', table: 'dossier_financement', payload: ligne })
-        return
+        envoi = async () => {
+          const { error } = await supabase.from('dossier_financement').insert(ligne)
+          if (error) mettreEnFile({ type: 'insert', table: 'dossier_financement', payload: ligne })
+        }
+      } else {
+        const patch = { ...champs }
+        if (patch.statut && patch.statut !== existant.statut) patch.date_statut = aujourdhui()
+        courant.current = { ...existant, ...patch }
+        setFin(courant.current)
+        envoi = async () => {
+          if (ligneEnFile('dossier_financement', existant.id)) {
+            mettreEnFile({ type: 'update', table: 'dossier_financement', rowId: existant.id, champs: patch })
+            return
+          }
+          const { error } = await supabase.from('dossier_financement').update(patch).eq('id', existant.id)
+          if (error) mettreEnFile({ type: 'update', table: 'dossier_financement', rowId: existant.id, champs: patch })
+        }
       }
-      const patch = { ...champs }
-      if (patch.statut && patch.statut !== existant.statut) patch.date_statut = aujourdhui()
-      const suivant = { ...existant, ...patch }
-      courant.current = suivant
-      setFin(suivant)
-      const { error } = await supabase.from('dossier_financement').update(patch).eq('id', existant.id)
-      if (error) mettreEnFile({ type: 'update', table: 'dossier_financement', rowId: existant.id, champs: patch })
+      enVol.current += 1
+      chaine.current = chaine.current
+        .then(envoi)
+        .catch(() => {})
+        .finally(() => {
+          enVol.current -= 1
+          if (enVol.current === 0) recharger.current?.()
+        })
+      return chaine.current
     },
     [dossierId]
   )

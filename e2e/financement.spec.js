@@ -73,7 +73,7 @@ test('chaque mode et chaque statut : un tap, base, résumé, journal, pré-rempl
   await expect(b.getByRole('group', { name: 'Statut du financement' })).toHaveCount(0)
 
   // Chaque mode, un tap.
-  for (const [cle, libelle] of [['comptant', 'Comptant'], ['banque', 'Banque'], ['leasing', 'Leasing'], ['echelonne', 'Échelonné'], ['mixte', 'Mixte'], ['banque', 'Banque']]) {
+  for (const [cle, libelle] of [['comptant', 'Comptant'], ['banque', 'Banque'], ['leasing', 'Leasing'], ['echelonne', 'En plusieurs fois'], ['mixte', 'Mixte'], ['banque', 'Banque']]) {
     await b.getByRole('button', { name: `Mode : ${libelle}` }).click()
     await expect(b.getByRole('button', { name: `Mode : ${libelle}` })).toHaveAttribute('aria-pressed', 'true')
     await expect.poll(async () => (await ligneFin(D.A.id))?.mode).toBe(cle)
