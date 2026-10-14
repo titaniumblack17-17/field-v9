@@ -23,6 +23,7 @@ import {
   estDevis,
   fourchette,
   groupeDevis,
+  montantDepuisDevis,
   libellePastille,
   offresDe,
   parserReference,
@@ -123,6 +124,10 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
   const [confirmer, boîteConfirmation] = useConfirm()
   const champFichier = useRef(null)
   const [feuilleAjout, setFeuilleAjout] = useState(false)
+  // Devis en cours d'écartement : motif facultatif (puces rapides + saisie libre).
+  const [ecart, setEcart] = useState(null)
+  const listeRef = useRef([])
+  listeRef.current = liste
   const [dernierEchec, setDernierEchec] = useState(null)
   const zoneErreur = useRef(null)
   const champCollage = useRef(null)
@@ -280,6 +285,13 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
   // tout ce qu'on a écrit sont ignorées (voir echoPerime).
   const ecrire = async (f, champs) => {
     setListe((cur) => cur.map((x) => (x.id === f.id ? { ...x, ...champs } : x)))
+    // Le montant du dossier suit tout de suite (même règle que la base) : hors ligne, la base ne le recalculera
+    // qu'au rejeu, mais l'écran ne doit pas attendre.
+    listeRef.current = listeRef.current.map((x) => (x.id === f.id ? { ...x, ...champs } : x))
+    if (dossierId && ('decision' in champs || 'montant_ttc' in champs || 'cumule' in champs)) {
+      const local = montantDepuisDevis(listeRef.current)
+      if (local !== undefined) onMontantChange?.({ local })
+    }
     const suivi = ecritures.current.get(f.id) ?? { enCours: 0, attendu: {} }
     suivi.enCours += 1
     suivi.attendu = { ...suivi.attendu, ...champs }
@@ -393,6 +405,11 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
       setReport({ id: f.id, date: '' })
       return
     }
+    if (decision === 'ecarte') {
+      setReport(null)
+      setEcart({ id: f.id, motif: '' })
+      return
+    }
     if (decision === 'retenu') {
       if (variantesDe(f).length >= 2 && f.montant_ttc == null) {
         setErreur('Ce devis a plusieurs offres : retenez d’abord l’offre (ou le cumul) dans la liste sous le devis.')
@@ -413,6 +430,15 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
     }
     await appliquerDecisions([{ f, champs: champsDecision(decision) }], `« ${f.nom} » : ${DECISIONS_LIBELLES[decision].toLowerCase()}`)
   }
+
+  const ecarterDevis = async (f) => {
+    const motif = ecart?.motif ?? ''
+    setEcart(null)
+    await appliquerDecisions([{ f, champs: champsDecision('ecarte', { motif }) }], `« ${f.nom} » : écarté`)
+  }
+
+  // Retour à « à trancher » : efface la date et le motif d'écartement (champsDecision).
+  const remettreEnJeu = (f) => appliquerDecisions([{ f, champs: champsDecision('a_trancher') }], `« ${f.nom} » : remis en jeu`)
 
   const mettreDeCote = async (f) => {
     const date = report?.date || null
@@ -515,11 +541,11 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
   const nbATrancher = liste.filter(aTrancher).length
   // Devis actifs d'abord, puis « Reportés » (mis de côté), puis remplacés (grisés) ;
   // les autres documents suivent. Dans chaque groupe, l'ordre d'origine (récents d'abord).
-  const ordreGroupe = { actifs: 0, reportes: 1, remplaces: 2 }
+  const ordreGroupe = { actifs: 0, reportes: 1, remplaces: 2, ecartes: 3 }
   const listeAffichee = dossierId
     ? [...liste].sort((a, b) => {
-        const ga = estDevis(a) ? ordreGroupe[groupeDevis(a)] : 3
-        const gb = estDevis(b) ? ordreGroupe[groupeDevis(b)] : 3
+        const ga = estDevis(a) ? ordreGroupe[groupeDevis(a)] : 4
+        const gb = estDevis(b) ? ordreGroupe[groupeDevis(b)] : 4
         return ga - gb
       })
     : liste
@@ -644,7 +670,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
                 const ref = parserReference(f.nom)
                 const d = decisionDe(f)
                 return (
-                  <li key={f.id} className={`flex items-baseline gap-2 text-xs tabular-nums ${d === 'remplace' ? 'opacity-60' : ''}`}>
+                  <li key={f.id} className={`flex items-baseline gap-2 text-xs tabular-nums ${d === 'remplace' || d === 'ecarte' ? 'opacity-60' : ''}`}>
                     <span className="text-texte w-24 truncate flex-shrink-0">
                       {ref ? `n° ${ref.numero}${ref.revision}` : f.reference_devis ? `n° ${f.reference_devis}` : '—'}
                     </span>
@@ -716,7 +742,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
                 Reportés · {listeAffichee.filter((g) => estDevis(g) && groupeDevis(g) === 'reportes').length}
               </li>
             )}
-            <li className={`bg-carte rounded-xl shadow-sm ${groupe === 'remplaces' ? 'opacity-60' : ''}`}>
+            <li className={`bg-carte rounded-xl shadow-sm ${groupe === 'remplaces' || groupe === 'ecartes' ? 'opacity-60' : ''}`} data-decision={dossierId && estDevis(f) ? decision : undefined}>
               <div className="px-4 py-3 flex items-center gap-3">
               <span className="text-lg flex-shrink-0" aria-hidden="true">
                 {estPdf(f.type_mime) ? '📄' : '🖼️'}
@@ -833,13 +859,60 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
               </div>
               </div>
 
-              {dossierId && estDevis(f) && renommage !== f.id && aDesOffres && (
-                <p className="px-4 pb-1 -mt-1 text-[11px] text-texte-faible">
-                  Décision du devis : <span className={decision === 'a_trancher' ? 'text-alerte' : 'text-texte'}>{DECISIONS_LIBELLES[decision]}</span> (selon ses offres)
-                </p>
+              {dossierId && estDevis(f) && renommage !== f.id && aDesOffres && decision !== 'ecarte' && (
+                <div className="px-4 pb-1 -mt-1 flex items-center justify-between gap-2">
+                  <p className="text-[11px] text-texte-faible">
+                    Décision du devis : <span className={decision === 'a_trancher' ? 'text-alerte' : 'text-texte'}>{DECISIONS_LIBELLES[decision]}</span> (selon ses offres)
+                  </p>
+                  <button onClick={() => choisirDecision(f, 'ecarte')} className="min-h-11 px-2 -mr-2 text-[12px] font-medium text-texte-doux flex-shrink-0">
+                    Écarter ce devis
+                  </button>
+                </div>
               )}
 
-              {dossierId && estDevis(f) && renommage !== f.id && !aDesOffres && (
+              {dossierId && estDevis(f) && decision === 'ecarte' && renommage !== f.id && (
+                <div className="px-4 pb-3 -mt-1" data-testid="devis-ecarte">
+                  <p className="text-[11px] text-texte-faible">
+                    <span className="inline-block mr-1.5 px-2 py-0.5 rounded-full bg-fond border border-separateur text-texte-doux font-medium">Écarté</span>
+                    {f.ecarte_le && `le ${new Date(f.ecarte_le).toLocaleDateString('fr-FR')}`}
+                  </p>
+                  {f.motif_ecart && <p className="text-xs text-texte-doux mt-1">Motif : {f.motif_ecart}</p>}
+                  <button onClick={() => remettreEnJeu(f)} className="min-h-11 mt-1 px-4 rounded-full text-sm bg-fond text-texte border border-separateur">
+                    Remettre en jeu
+                  </button>
+                </div>
+              )}
+
+              {ecart?.id === f.id && (
+                <div className="px-4 pb-3" role="group" aria-label="Motif d'écartement">
+                  <p className="text-xs text-texte-faible mb-1.5">Motif (facultatif)</p>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {['Matériel non choisi', 'Trop cher', 'Concurrent', 'Autre'].map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setEcart((e) => ({ ...e, motif: e.motif === m ? '' : m }))}
+                        aria-pressed={ecart.motif === m}
+                        className={`min-h-11 px-3 rounded-full text-sm border ${ecart.motif === m ? 'bg-accent text-white border-accent' : 'bg-fond text-texte-doux border-separateur'}`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    aria-label="Motif libre"
+                    value={ecart.motif}
+                    onChange={(e) => setEcart((cur) => ({ ...cur, motif: e.target.value }))}
+                    placeholder="ou précisez…"
+                    className="w-full min-h-11 px-3 bg-fond border border-separateur rounded-imbrique text-texte mb-2"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => ecarterDevis(f)} className="min-h-11 px-4 rounded-full text-sm bg-accent text-white">Écarter ce devis</button>
+                    <button onClick={() => setEcart(null)} className="min-h-11 px-2 text-sm text-texte-doux">Annuler</button>
+                  </div>
+                </div>
+              )}
+
+              {dossierId && estDevis(f) && renommage !== f.id && !aDesOffres && decision !== 'ecarte' && (
                 <div className="px-4 pb-2 -mt-1">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[11px] text-texte-faible">
@@ -848,7 +921,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
                       {decision === 'mis_de_cote' && f.date_reprise && ` · reprise le ${new Date(f.date_reprise + 'T00:00:00').toLocaleDateString('fr-FR')}`}
                     </span>
                   </div>
-                  <div className="grid grid-cols-4 gap-1" role="group" aria-label={`Décision pour ${f.nom}`}>
+                  <div className="grid grid-cols-3 gap-1" role="group" aria-label={`Décision pour ${f.nom}`}>
                     {DECISIONS.map(([cle, libelle]) => (
                       <button
                         key={cle}

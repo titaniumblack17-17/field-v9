@@ -57,6 +57,14 @@ Viewport iPhone 390 × 844. Console sans erreur. Aucun défilement horizontal. C
 - [ ] Dashboard : « Potentiel ouvert » (À trancher / Reportées : offres · devis · dossiers + montants), anneau à 4 segments cliquables, listes avec motif par ligne.
 - [ ] Board et Dashboard affichent le même signé ; la RPC égale un recalcul indépendant.
 
+## 5 quater. Devis « Écarté » (refusé définitivement, le dossier reste actif)
+- [ ] Parmi les décisions d'un devis (≥ 44 px) : « Écarté », avec motif facultatif (puces « Matériel non choisi », « Trop cher », « Concurrent », « Autre » + saisie libre). Devis à offres : bouton « Écarter ce devis ».
+- [ ] Devis écarté : grisé, étiquette « Écarté », date et motif visibles, bouton « Remettre en jeu » (retour à « à trancher », motif et date effacés). « Annuler » 8 s.
+- [ ] Le montant du dossier se recalcule tout de suite, hors ligne comme en ligne (somme des seuls devis « retenu »), puis la base le confirme au rejeu.
+- [ ] Un devis écarté est exclu : du montant, de « Dossiers à trancher », du potentiel et des reportées (RPC dashboard_chiffres() ET listes), de « devis sans réponse » / « En attente du client » quand TOUS les devis du dossier sont écartés. Ses offres sont ignorées. Étape et statut du dossier inchangés.
+- [ ] Tuile « À trancher » = feuille du Pilotage = filtre « Dossiers à trancher » de Projets = base.
+- [ ] Le code précédent (production avant ce lot) charge fiche, accueil et Pilotage sans erreur face à un devis `ecarte`.
+
 ## 6. Capture / dictée
 - [ ] Capture texte et dictée créent la capture ; suggestion de dossier ; lien capture → dossier.
 

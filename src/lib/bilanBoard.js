@@ -1,4 +1,4 @@
-import { dossiersReportes, offresPlat } from './documents'
+import { dossiersReportes, dossiersSansDevisVivant, offresPlat } from './documents'
 import { fichiersDesProjetsActifs } from '../constants/dashboard'
 import { etatRappel, etatEcheanceTache, aujourdhui as calculerAujourdhui } from './rappel'
 import {
@@ -46,8 +46,10 @@ export function calculerBilan(dossiers, taches, devisSansMontant) {
     // cours : soit il se relance, soit il faut le passer perdu et rouvrir un
     // nouveau dossier si le client revient — mais ça se décide, ça ne se
     // laisse pas dormir en « Devis envoyé ».
+    // Tous les devis écartés : rien n'attend plus de réponse, pas de « devis sans réponse ».
+    const sansDevisVivant = dossiersSansDevisVivant(devisSansMontant)
     const devisSansReponse = dossiers
-      .filter((d) => joursDevisSansReponse(d) != null)
+      .filter((d) => joursDevisSansReponse(d) != null && !sansDevisVivant.has(d.id))
       .sort((a, b) => joursDevisSansReponse(b) - joursDevisSansReponse(a))
 
     const aRappeler = dossiers

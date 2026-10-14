@@ -51,6 +51,7 @@ export const DECISIONS = [
   ['alternative', 'Alternative'],
   ['remplace', 'Remplacé'],
   ['mis_de_cote', 'Mis de côté'],
+  ['ecarte', 'Écarté'],
 ]
 export const DECISIONS_LIBELLES = { a_trancher: 'À trancher', ...Object.fromEntries(DECISIONS) }
 export const decisionDe = (f) => f?.decision ?? 'a_trancher'
@@ -68,6 +69,9 @@ export function champsDecision(decision, extras = {}) {
     champs.date_reprise = extras.date_reprise ?? null
   }
   if (decision === 'remplace') champs.remplace_par = extras.remplace_par ?? null
+  // Écarté : refusé définitivement (le dossier reste actif), motif facultatif. Toute autre décision l'efface.
+  champs.ecarte_le = decision === 'ecarte' ? maintenant() : null
+  champs.motif_ecart = decision === 'ecarte' ? (extras.motif?.trim() || null) : null
   return champs
 }
 
@@ -78,6 +82,8 @@ export const champsDecisionActuels = (f) => ({
   remplace_par: f.remplace_par ?? null,
   mis_de_cote_le: f.mis_de_cote_le ?? null,
   date_reprise: f.date_reprise ?? null,
+  ecarte_le: f.ecarte_le ?? null,
+  motif_ecart: f.motif_ecart ?? null,
 })
 
 // ── Numéro de devis : « NOM_PRODUIT_AAAAMMNNN[révision] » ──────────────────────
@@ -103,16 +109,42 @@ export function proposerRemplacement(liste, f) {
   const ref = parserReference(f.nom)
   if (!ref) return null
   const precedents = (liste ?? [])
-    .filter((g) => g.id !== f.id && estDevis(g) && g.dossier_id === f.dossier_id && decisionDe(g) !== 'remplace')
+    .filter((g) => g.id !== f.id && estDevis(g) && g.dossier_id === f.dossier_id && !['remplace', 'ecarte'].includes(decisionDe(g)))
     .map((g) => ({ g, r: parserReference(g.nom) }))
     .filter(({ r }) => r && r.racine === ref.racine && comparerReferences(r, ref) < 0)
     .sort((x, y) => comparerReferences(y.r, x.r))
   return precedents[0]?.g ?? null
 }
 
-/** Rang d'affichage : devis actifs, puis mis de côté (« Reportés »), puis remplacés. */
+/** Rang d'affichage : devis actifs, puis mis de côté (« Reportés »), puis remplacés, puis écartés. */
 export const groupeDevis = (f) =>
-  decisionDe(f) === 'mis_de_cote' ? 'reportes' : decisionDe(f) === 'remplace' ? 'remplaces' : 'actifs'
+  decisionDe(f) === 'mis_de_cote' ? 'reportes' : decisionDe(f) === 'remplace' ? 'remplaces' : decisionDe(f) === 'ecarte' ? 'ecartes' : 'actifs'
+
+/**
+ * Montant du dossier d'après ses devis, même règle que recalculer_montant_dossier() en base : somme des seuls devis
+ * « retenu » chiffrés (un devis écarté n'y entre pas). `undefined` : aucun devis, la saisie manuelle reste telle quelle ;
+ * `null` : des devis existent mais aucun n'est retenu (« à chiffrer »). Sert à afficher le nouveau montant tout de
+ * suite, y compris hors ligne, avant que la base ne l'ait recalculé.
+ */
+export function montantDepuisDevis(fichiers) {
+  const devis = (fichiers ?? []).filter(estDevis)
+  if (devis.length === 0) return undefined
+  const retenus = devis.filter((f) => decisionDe(f) === 'retenu' && f.montant_ttc != null)
+  return retenus.length ? retenus.reduce((t, f) => t + Number(f.montant_ttc), 0) : null
+}
+
+/** Dossiers dont tous les devis sont écartés : plus rien n'y attend de réponse (pas de relance ni d'attente automatiques). */
+export function dossiersSansDevisVivant(fichiers) {
+  const parDossier = new Map()
+  for (const f of fichiers ?? []) {
+    if (!estDevis(f) || !f.dossier_id) continue
+    const e = parDossier.get(f.dossier_id) ?? { total: 0, ecartes: 0 }
+    e.total += 1
+    if (decisionDe(f) === 'ecarte') e.ecartes += 1
+    parDossier.set(f.dossier_id, e)
+  }
+  return new Set([...parDossier].filter(([, e]) => e.total > 0 && e.total === e.ecartes).map(([id]) => id))
+}
 
 /**
  * Un devis est « à trancher » tant que Bruce n'a pas retenu d'offre alors que
@@ -121,6 +153,8 @@ export const groupeDevis = (f) =>
  */
 export function aTrancher(f) {
   if (!estDevis(f)) return false
+  // Un devis écarté est refusé : ni lui ni ses offres ne sont à trancher.
+  if (decisionDe(f) === 'ecarte') return false
   // Devis à offres : « à trancher » tant qu'au moins une offre l'est (état par offre).
   if (variantesDe(f).length >= 1) return offresDe(f).some((o) => o.etat === 'a_trancher')
   // Devis sans offres : sa décision, s'il a un montant à décider.
@@ -252,7 +286,7 @@ export function offresDe(f) {
 export function offresPlat(fichiers) {
   const sortie = []
   for (const f of fichiers ?? []) {
-    if (!estDevis(f) || !f.dossier_id) continue
+    if (!estDevis(f) || !f.dossier_id || decisionDe(f) === 'ecarte') continue // écarté : ses offres sont ignorées
     if (variantesDe(f).length >= 1) {
       for (const o of offresDe(f)) sortie.push({ f, fichier_id: f.id, dossier_id: f.dossier_id, ...o })
     } else if (f.montant_ttc != null) {

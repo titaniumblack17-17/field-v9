@@ -813,3 +813,20 @@ Limite connue : si le flux temps réel ne renvoie jamais l'écho d'une écriture
   aujourd'hui) via `ajouterRappel`, donc Todoist comme tout rappel. Optionnel : rien n'est créé sans le geste.
 - **V2 (non faite)** : échéancier généré en N fois avec cases « payé ».
 - Tests : `e2e/financement.spec.js` (modes, statuts, journal, hors-ligne, égalité tuile / liste / base, relance).
+
+## Devis « Écarté » (branche `feat/devis-ecarte`, non fusionnée)
+
+- **Base** (`supabase/migrations/20261017_devis_ecarte.sql`, retour : `supabase/rollback/20261017_devis_ecarte_rollback.sql`) :
+  `fichiers.decision` accepte `'ecarte'` (contrainte élargie), colonnes `ecarte_le` et `motif_ecart` (facultatif).
+  `dashboard_chiffres()` ignore les devis écartés dans les offres (donc potentiel, à trancher, reportées) et dans
+  `retard_devis` quand tous les devis du dossier sont écartés. Appliquée à la base avant la fusion ; vérifié : les
+  clés existantes sont strictement inchangées, et le code déjà en production lit un devis `ecarte` sans erreur.
+- **Règles** : `decision = 'ecarte'` n'est pas `'retenu'` — le montant du dossier (somme des devis retenus, trigger
+  `recalculer_montant_dossier`, inchangé) l'exclut déjà. Côté client : `offresPlat` saute les devis écartés, `aTrancher`
+  est faux, `groupeDevis` → `ecartes` (en bas de liste, grisé), `dossiersSansDevisVivant` retire « devis sans réponse »
+  (Board, Dashboard) et « En attente du client » (Projets). Le dossier garde son étape.
+- **Interface** (`PiecesJointes.jsx`) : « Écarté » dans le choix de décision ; panneau de motif ; « Remettre en jeu ».
+  Le montant du dossier est recalculé sur place (`montantDepuisDevis`) via `onMontantChange({ local })` : visible tout de
+  suite hors ligne ; l'écriture passe par la file existante (écritures d'un fichier sérialisées).
+- Tests : `e2e/devis-ecarte.spec.js` (écarter, motif, montant, remettre en jeu, offres ignorées, tuile = liste = base,
+  relance retirée, hors ligne).

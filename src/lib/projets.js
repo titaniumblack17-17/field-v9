@@ -1,5 +1,5 @@
 import { calculerBilan } from './bilanBoard'
-import { offresPlat, dossiersReportes } from './documents'
+import { offresPlat, dossiersReportes, dossiersSansDevisVivant } from './documents'
 import { nomClient } from './client'
 import { enAttenteAccord, nonConfirme, resume } from './financement'
 import { FAMILLES, familleDe, estProjetActif } from '../constants/dashboard'
@@ -44,6 +44,7 @@ export function construireProjets({ dossiers, fichiers, taches, activite = {}, f
   // « Reporté » : au moins une offre reportée (même nombre que « Offres reportées · dossiers » du Pilotage).
   const reportes = new Set(offres.filter((o) => o.etat === 'reportee').map((o) => o.dossier_id))
 
+  const sansDevisVivant = dossiersSansDevisVivant(fichiers)
   const avecDevis = new Set(fichiers.filter((f) => f.type_doc === 'devis').map((f) => f.dossier_id))
   const avecCdc = new Set(fichiers.filter((f) => f.type_doc === 'cdc').map((f) => f.dossier_id))
   const derniers = new Map() // dossier → dernier instant d'activité connu
@@ -74,7 +75,7 @@ export function construireProjets({ dossiers, fichiers, taches, activite = {}, f
     if (nbATrancher) motifs.push({ cle: 'atrancher', texte: `Devis à trancher · ${nbATrancher} offre${nbATrancher > 1 ? 's' : ''}` })
     for (const m of manquants) motifs.push({ cle: 'manquant', texte: m })
     if (attente) motifs.push({ cle: 'attente', texte: `En attente de ${motifAttente}${joursAttente != null ? ` · ${joursAttente} j` : ''}` })
-    else if (['devis_envoye', 'relance'].includes(d.statut) && joursAttente != null) motifs.push({ cle: 'attente', texte: `En attente du client · ${joursAttente} j` })
+    else if (['devis_envoye', 'relance'].includes(d.statut) && joursAttente != null && !sansDevisVivant.has(d.id)) motifs.push({ cle: 'attente', texte: `En attente du client · ${joursAttente} j` })
     if (reportes.has(d.id)) motifs.push({ cle: 'reporte', texte: 'Reporté' })
     const urgence = retard != null ? 1000 + retard : nbATrancher ? 600 : manquants.length ? 500 : motifs.some((m) => m.cle === 'attente') ? 300 : reportes.has(d.id) ? 100 : 0
     const derniere = Math.max(derniers.get(d.id) ?? 0, instant(d.statut_changed_at), instant(d.created_at))

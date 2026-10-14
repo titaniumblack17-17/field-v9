@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { lireAvecCache } from '../lib/cacheLecture'
 import { nomClient } from '../lib/client'
 import { aujourdhui as calculerAujourdhui, etatEcheanceTache, etatRappel } from '../lib/rappel'
-import { champsEcarterAutres, decisionsRequises, devisANettoyer, dossiersReportes, offresPlat, potentiel } from '../lib/documents'
+import { champsEcarterAutres, decisionsRequises, devisANettoyer, dossiersReportes, dossiersSansDevisVivant, offresPlat, potentiel } from '../lib/documents'
 import { mettreEnFile } from '../lib/fileAttente'
 import {
   ETAPES_PROJET_LABELS,
@@ -337,9 +337,10 @@ export default function Dashboard({ onBack, onOpenDossier, onPipeline, onProjets
         retard.push(ligne(d, `Tâche · ${etatEcheanceTache(t.echeance)?.texte} — ${t.texte}`, `tache-${t.id}`))
       }
     }
+    const sansDevisVivant = dossiersSansDevisVivant(fichiers)
     for (const d of projets) {
       const jours = joursDevisSansReponse(d)
-      if (jours != null && !dusIds.has(d.id)) retard.push(ligne(d, `Devis sans réponse · ${jours} j`, `devis-${d.id}`))
+      if (jours != null && !dusIds.has(d.id) && !sansDevisVivant.has(d.id)) retard.push(ligne(d, `Devis sans réponse · ${jours} j`, `devis-${d.id}`))
     }
 
     // Financement : mêmes définitions que la clé « financement » de la RPC (projets actifs ; signé = comme « Signé »).

@@ -171,7 +171,14 @@ export default function DossierDetail({ dossier, onBack, onDirtyChange, onOpenCl
   // Le montant est recalculé en base à chaque devis lu ou requalifié. On le
   // relit dans la fiche ET dans la référence d'origine : sinon l'écart entre
   // les deux ferait croire à une modification non enregistrée.
-  const relireMontant = async () => {
+  const relireMontant = async (local) => {
+    // Montant calculé sur place (décision d'un devis) : affiché tout de suite, hors ligne comme en ligne ; la base
+    // le recalcule de son côté et la relecture suivante le confirme.
+    if (local && 'local' in local) {
+      dossier.montant_estime = local.local
+      setValues((v) => ({ ...v, montant_estime: local.local }))
+      return
+    }
     const { data } = await supabase
       .from('dossiers')
       .select('montant_estime')
