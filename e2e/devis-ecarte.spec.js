@@ -120,6 +120,7 @@ test('devis à deux offres : « Écarter ce devis » ; ses offres sont ignorées
   expect(apres.offres).toBe(avant.offres - 2)
   expect(apres.devis).toBe(avant.devis - 1)
   expect(apres.dossiers).toBe(avant.dossiers - 1)
+  await expect(carte(page, nom).getByText('Offres : décidez chacune')).toHaveCount(0) // plus proposées à la décision
   // Les offres gardent leur état dans le jsonb (rien n'est réécrit) : remettre en jeu les rend à nouveau à trancher.
   expect((await ligne(F.C1.id)).variantes.map((v) => v.etat)).toEqual(['a_trancher', 'a_trancher'])
   await carte(page, nom).getByRole('button', { name: 'Remettre en jeu' }).click()

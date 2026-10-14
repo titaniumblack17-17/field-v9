@@ -874,7 +874,7 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
                 <div className="px-4 pb-3 -mt-1" data-testid="devis-ecarte">
                   <p className="text-[11px] text-texte-faible">
                     <span className="inline-block mr-1.5 px-2 py-0.5 rounded-full bg-fond border border-separateur text-texte-doux font-medium">Écarté</span>
-                    {f.ecarte_le && `le ${new Date(f.ecarte_le).toLocaleDateString('fr-FR')}`}
+                    {f.ecarte_le && ` le ${new Date(f.ecarte_le).toLocaleDateString('fr-FR')}`}
                   </p>
                   {f.motif_ecart && <p className="text-xs text-texte-doux mt-1">Motif : {f.motif_ecart}</p>}
                   <button onClick={() => remettreEnJeu(f)} className="min-h-11 mt-1 px-4 rounded-full text-sm bg-fond text-texte border border-separateur">
@@ -1010,7 +1010,8 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
                 </div>
               )}
 
-              {variantesDe(f).length >= 1 && (
+              {/* Devis écarté : ses offres sont ignorées, on ne les propose plus à la décision (elles reviennent avec « Remettre en jeu »). */}
+              {variantesDe(f).length >= 1 && decision !== 'ecarte' && (
                 <OffresDevis f={f} onEtat={changerOffre} onProjet={changerProjet} onEcarterAutres={ecarterAutres} />
               )}
 
