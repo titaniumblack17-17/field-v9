@@ -65,6 +65,14 @@ Viewport iPhone 390 × 844. Console sans erreur. Aucun défilement horizontal. C
 - [ ] Tuile « À trancher » = feuille du Pilotage = filtre « Dossiers à trancher » de Projets = base.
 - [ ] Le code précédent (production avant ce lot) charge fiche, accueil et Pilotage sans erreur face à un devis `ecarte`.
 
+## 5 quinquies. Version affichée et mise à jour
+- [ ] Pied de page de l'accueil, discret : « Version <commit court> · jj/mm hh:mm » (heure de Paris), injecté au build ; sans débordement.
+- [ ] `version.json` (commit + heure du build) publié à chaque déploiement ; jamais mis en cache par le service worker ; lu avec `cache: no-store`.
+- [ ] Vérification au démarrage, à chaque retour au premier plan, au retour du réseau et toutes les 10 minutes. Hors ligne ou erreur : aucun message, aucun faux bandeau, un bandeau déjà affiché reste.
+- [ ] Version identique, ou publiée plus ANCIENNE (retour arrière) : aucun bandeau. Plus récente : « Nouvelle version disponible » + « Recharger » (≥ 44 px) qui vide le cache du service worker puis recharge.
+- [ ] Écriture en attente dans la file hors ligne : « Recharger » attend son envoi (message explicite), la page ne bouge pas, puis se recharge d'elle-même. Même garde pour le rechargement automatique du changement de service worker.
+- [ ] Adresse autre que field-v9.vercel.app (déploiement de test) : bandeau orange « Version de test, pas la production ». Poste de développement (localhost) : pas de bandeau.
+
 ## 6. Capture / dictée
 - [ ] Capture texte et dictée créent la capture ; suggestion de dossier ; lien capture → dossier.
 

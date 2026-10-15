@@ -35,6 +35,8 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
   const url = new URL(event.request.url)
   if (url.origin !== self.location.origin) return
+  // version.json (détection d'une version plus récente) : toujours le réseau, jamais mis en cache ni resservi.
+  if (url.pathname === '/version.json') return
 
   event.respondWith(
     fetch(event.request)

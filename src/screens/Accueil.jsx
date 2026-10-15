@@ -9,6 +9,7 @@ import {
   BoardFeuilles,
 } from '../components/BoardAffichage'
 import Dashboard from './Dashboard'
+import { libelleVersion } from '../lib/version'
 
 // Accueil unique : « Aujourd'hui » (tout le contenu utile du Board, mêmes
 // données, mêmes règles, un seul calcul) puis « Pilotage » (le Dashboard).
@@ -46,6 +47,7 @@ export default function Accueil({ onOpenDossier, onOpenClient, onClients, onPipe
             Ancien accueil
           </button>
         </div>
+        <p data-testid="version" className="mt-2 text-center text-[11px] text-texte-faible tabular-nums">{libelleVersion()}</p>
       </main>
       <BoardFeuilles b={b} onOpenDossier={onOpenDossier} onProjets={onProjets} />
     </div>

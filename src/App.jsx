@@ -23,6 +23,7 @@ import { assurerRappelDeRelance, synchroniserRappel } from './lib/rappel'
 import { verifierConnexionReelle } from './lib/reseau'
 import { diagnosticActif, journaliser } from './lib/diagnosticReseau'
 import DiagnosticReseau from './components/DiagnosticReseau'
+import BandeauVersion from './components/BandeauVersion'
 
 // Au-delà de cette absence, la réouverture de l'app ramène à l'accueil.
 export const DELAI_RETOUR_ACCUEIL_MS = 30 * 60 * 1000
@@ -539,6 +540,7 @@ export default function App() {
 
   return (
     <>
+      <BandeauVersion />
       {!enLigne && (
         <div className="sticky top-0 z-30 bg-erreur text-white text-xs font-medium text-center py-1.5">
           Hors ligne — reconnexion automatique dès que possible

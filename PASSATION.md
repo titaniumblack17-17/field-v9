@@ -830,3 +830,17 @@ Limite connue : si le flux temps réel ne renvoie jamais l'écho d'une écriture
   suite hors ligne ; l'écriture passe par la file existante (écritures d'un fichier sérialisées).
 - Tests : `e2e/devis-ecarte.spec.js` (écarter, motif, montant, remettre en jeu, offres ignorées, tuile = liste = base,
   relance retirée, hors ligne).
+
+## Affichage de la version et détection de mise à jour (branche `feat/affichage-version`, non fusionnée)
+
+- **Build** : `vite.config.js` (nouveau, rien d'autre n'y est configuré) injecte `__BUILD_COMMIT__` (SHA Vercel, sinon HEAD git)
+  et `__BUILD_TIME__`, et publie `dist/version.json` `{commit, commitComplet, builtAt}` à chaque build — mêmes valeurs que le bundle.
+- **Pied de page** : « Version 4493124 · 14/10 16:00 » en bas de l'accueil (`src/lib/version.js`, `Accueil.jsx`).
+- **Détection** : `useVersionEnLigne` lit `/version.json?t=…` (no-store) au démarrage, au retour au premier plan, au retour du réseau
+  et toutes les 10 min ; « plus récente » = commit différent ET construite après la nôtre. Échec réseau : on ne conclut rien.
+  `public/sw.js` laisse passer `/version.json` (jamais en cache).
+- **Bandeau** (`BandeauVersion.jsx`, monté dans `App.jsx`) : « Nouvelle version disponible » + « Recharger » (vide les caches puis
+  recharge). Avec des écritures dans la file hors ligne, le rechargement attend la file vide (`rechargerQuandFileVide`) ; le
+  rechargement automatique sur `controllerchange` (main.jsx) a la même garde. Bandeau orange sur toute adresse autre que
+  field-v9.vercel.app, hors localhost.
+- Tests : `e2e/version.spec.js` (pied de page, identique / ancienne, plus récente + cache vidé, file en attente, hors ligne, adresse de test).

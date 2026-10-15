@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
+import { rechargerQuandFileVide } from './lib/version'
 
 // Enregistré après le premier rendu, jamais bloquant : l'app fonctionne
 // normalement même si l'enregistrement échoue (navigateur trop ancien,
@@ -28,7 +29,8 @@ if (import.meta.env.PROD) {
     // apporterait rien.
     const hadController = Boolean(navigator.serviceWorker.controller)
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (hadController) window.location.reload()
+      // Jamais en pleine écriture hors ligne : on attend que la file soit vide.
+      if (hadController) rechargerQuandFileVide()
     })
 
     window.addEventListener('load', () => {
