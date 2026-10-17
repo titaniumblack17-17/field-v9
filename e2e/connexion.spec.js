@@ -12,15 +12,17 @@ const utilisateur = { id: 'u-test', aud: 'authenticated', role: 'authenticated',
 const reponseSession = (jetonAcces, refresh, expiresIn = 3600) => ({ access_token: jetonAcces, token_type: 'bearer', expires_in: expiresIn, expires_at: Math.floor(Date.now() / 1000) + expiresIn, refresh_token: refresh, user: utilisateur })
 const maintenantS = () => Math.floor(Date.now() / 1000)
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('fv9:e2e-connexion-reelle', '1'))
+test.beforeEach(async ({ context }) => {
+  await context.addInitScript(() => localStorage.setItem('fv9:e2e-connexion-reelle', '1'))
 })
 
 /** Simule /auth/v1/* ; `comportement` règle les réponses. Retourne les relevés d'appels. */
-async function simulerAuth(page, comportement = {}) {
-  const releves = { otp: [], verify: [], refresh: [], logout: 0, rest: [], ordre: [] }
+async function simulerAuth(cible, comportement = {}) {
+  const page = cible // une page ou un contexte entier (plusieurs fenêtres du même navigateur)
+  const releves = { otp: [], otpUrls: [], verify: [], refresh: [], logout: 0, rest: [], ordre: [] }
   await page.route('**/auth/v1/otp**', (route) => {
     releves.otp.push(JSON.parse(route.request().postData() ?? '{}'))
+    releves.otpUrls.push(route.request().url())
     if (comportement.otp === 'limite') return route.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ code: 429, error_code: 'over_email_send_rate_limit', msg: 'email rate limit exceeded' }) })
     if (comportement.otp === 'reseau') return route.abort('internetdisconnected')
     return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
@@ -40,6 +42,11 @@ async function simulerAuth(page, comportement = {}) {
     const n = releves.refresh.length
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reponseSession(jeton(maintenantS() + 3600, `r${n}`), `refresh-${n}`)) })
   })
+  await page.route('**/auth/v1/user**', (route) =>
+    comportement.user === 'refuse'
+      ? route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ code: 401, error_code: 'bad_jwt', msg: 'invalid JWT' }) })
+      : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(utilisateur) })
+  )
   await page.route('**/auth/v1/logout**', (route) => {
     releves.logout += 1
     return route.fulfill({ status: 204, body: '' })
@@ -60,19 +67,29 @@ const poserSession = async (page, session) => {
 }
 const sessionStockee = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('fv9-auth-token') ?? 'null'))
 const sansDebordement = (page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)
+const lienDe = (refresh = 'refresh-lien') => `/#access_token=${jeton(maintenantS() + 3600, 'lien')}&expires_in=3600&refresh_token=${refresh}&token_type=bearer&type=magiclink`
+// Mode code : « Recevoir le lien », puis « J'ai reçu un code ».
+const ouvrirModeCode = async (page) => {
+  await page.getByRole('button', { name: 'Recevoir le lien' }).click()
+  await expect(page.getByText(/^Lien envoyé à/)).toBeVisible()
+  await page.getByRole('button', { name: "J'ai reçu un code" }).click()
+}
 const appVisible = (page) => expect(page.getByText('Dossiers actifs').first()).toBeVisible()
 
-test('connexion complète : adresse pré-remplie, code à 6 chiffres, session créée, jeton envoyé avec les requêtes', async ({ page }) => {
+test('mode code : adresse pré-remplie, « J’ai reçu un code », 6 chiffres, session créée, jeton envoyé avec les requêtes', async ({ page }) => {
   const erreurs = []
   page.on('pageerror', (e) => erreurs.push(String(e)))
   const releves = await simulerAuth(page)
   await page.goto('/')
   await expect(page.getByLabel('Adresse e-mail')).toHaveValue(EMAIL)
   await expect(page.getByTestId('version')).toBeVisible() // pied de page version conservé
-  const envoyer = page.getByRole('button', { name: 'Recevoir un code' })
+  await expect(page.getByLabel('Code à 6 chiffres')).toHaveCount(0) // plus de champ de code par défaut
+  const envoyer = page.getByRole('button', { name: 'Recevoir le lien' })
   expect((await envoyer.boundingBox()).height).toBeGreaterThanOrEqual(44)
   expect(await sansDebordement(page)).toBe(true)
   await envoyer.click()
+  await expect(page.getByText(/^Lien envoyé à/)).toBeVisible()
+  await page.getByRole('button', { name: "J'ai reçu un code" }).click()
 
   // Étape du code : clavier numérique, remplissage automatique du code reçu, renvoi bloqué avec délai visible.
   const champ = page.getByLabel('Code à 6 chiffres')
@@ -98,7 +115,7 @@ test('connexion complète : adresse pré-remplie, code à 6 chiffres, session cr
 test('session conservée après rechargement : ni écran de connexion, ni nouveau code', async ({ page }) => {
   const releves = await simulerAuth(page)
   await page.goto('/')
-  await page.getByRole('button', { name: 'Recevoir un code' }).click()
+  await ouvrirModeCode(page)
   await page.getByLabel('Code à 6 chiffres').fill('123456')
   await appVisible(page)
   await page.reload()
@@ -112,7 +129,7 @@ test('messages d’erreur en français : code faux, code expiré, trop de demand
   await page.clock.install()
   const releves = await simulerAuth(page)
   await page.goto('/')
-  await page.getByRole('button', { name: 'Recevoir un code' }).click()
+  await ouvrirModeCode(page)
   const champ = page.getByLabel('Code à 6 chiffres')
   await expect(champ).toBeVisible()
   // Code faux
@@ -151,11 +168,11 @@ test('première demande : adresse non autorisée et absence de réseau sont dits
   await page.route('**/auth/v1/otp**', (route) => route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ code: 422, error_code: 'otp_disabled', msg: 'Signups not allowed for otp' }) }))
   await page.goto('/')
   await page.getByLabel('Adresse e-mail').fill('autre@exemple.fr')
-  await page.getByRole('button', { name: 'Recevoir un code' }).click()
+  await page.getByRole('button', { name: 'Recevoir le lien' }).click()
   await expect(page.getByRole('alert')).toHaveText("Cette adresse n'est pas autorisée.")
   await page.unroute('**/auth/v1/otp**')
   await page.route('**/auth/v1/otp**', (route) => route.abort('internetdisconnected'))
-  await page.getByRole('button', { name: 'Recevoir un code' }).click()
+  await page.getByRole('button', { name: 'Recevoir le lien' }).click()
   await expect(page.getByRole('alert')).toHaveText('Pas de réseau. Reconnectez-vous puis réessayez.')
   await expect(page.getByLabel('Adresse e-mail')).toBeVisible() // on reste sur le formulaire
 })
@@ -183,7 +200,7 @@ test('hors ligne avec session connue : l’app démarre, aucun écran de connexi
   await expect(page.getByTestId('version')).toBeVisible()
   await page.waitForTimeout(1500) // le renouvellement tenté en tâche de fond échoue : on ne déconnecte pas
   await expect(page.getByLabel('Adresse e-mail')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Recevoir un code' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Recevoir le lien' })).toHaveCount(0)
   expect((await sessionStockee(page)).refresh_token).toBe('refresh-0')
   expect(erreurs, erreurs.join('\n')).toEqual([])
 })
@@ -246,4 +263,113 @@ test('déconnexion dans Réglages : confirmation, session retirée, écran de co
   expect(releves.logout).toBeGreaterThanOrEqual(0)
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('fv9:file-attente') ?? '[]').length)).toBe(1) // la file reste
   await page.evaluate(() => localStorage.removeItem('fv9:file-attente'))
+})
+
+// ── Mode principal : le lien reçu par e-mail ─────────────────────────────────────────────────────────
+
+test('lien : « Recevoir le lien », message, aide iPhone, adresse de retour = origine de l’app, décompte puis renvoi', async ({ page }) => {
+  await page.clock.install()
+  const releves = await simulerAuth(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Recevoir le lien' }).click()
+  await expect(page.getByText(`Lien envoyé à ${EMAIL}. Ouvrez-le sur cet appareil.`)).toBeVisible()
+  await expect(page.getByText('Sur iPhone, ouvrez le lien dans Safari.')).toBeVisible()
+  await expect(page.getByLabel('Code à 6 chiffres')).toHaveCount(0)
+  expect(releves.otp[0].create_user).toBe(false)
+  expect(new URL(releves.otpUrls[0]).searchParams.get('redirect_to')).toBe(`${new URL(page.url()).origin}/`)
+  const renvoi = page.getByRole('button', { name: /^Renvoyer le lien/ })
+  await expect(renvoi).toBeDisabled()
+  await expect(renvoi).toHaveText(/\(\d+ s\)$/)
+  await page.clock.fastForward(61_000)
+  await expect(renvoi).toHaveText('Renvoyer le lien')
+  await renvoi.click()
+  await expect.poll(() => releves.otp.length).toBe(2)
+  expect((await page.getByRole('button', { name: "J'ai reçu un code" }).boundingBox()).height).toBeGreaterThanOrEqual(44)
+  expect(await sansDebordement(page)).toBe(true)
+})
+
+test('retour du lien : session lue dans l’adresse, adresse nettoyée, app ouverte, session conservée au rechargement', async ({ page }) => {
+  const erreurs = []
+  page.on('pageerror', (e) => erreurs.push(String(e)))
+  const releves = await simulerAuth(page)
+  await page.goto(lienDe())
+  await appVisible(page)
+  expect(new URL(page.url()).hash).toBe('') // aucun jeton laissé dans l'adresse
+  expect(new URL(page.url()).search).toBe('')
+  const s = await sessionStockee(page)
+  expect(s.user.email).toBe(EMAIL)
+  expect(s.refresh_token).toBe('refresh-lien')
+  await expect(page.getByTestId('version')).toBeVisible()
+  await page.reload()
+  await appVisible(page)
+  await expect(page.getByLabel('Adresse e-mail')).toHaveCount(0)
+  expect(releves.otp).toHaveLength(0) // aucun nouvel envoi
+  expect(erreurs, erreurs.join('\n')).toEqual([])
+})
+
+test('lien expiré ou déjà utilisé : message clair, adresse nettoyée, « Renvoyer un lien »', async ({ page }) => {
+  const releves = await simulerAuth(page)
+  await page.goto('/#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired')
+  await expect(page.getByRole('alert')).toHaveText('Ce lien a expiré ou a déjà été utilisé. Demandez-en un nouveau.')
+  expect(new URL(page.url()).hash).toBe('')
+  const renvoyer = page.getByRole('button', { name: 'Renvoyer un lien' })
+  expect((await renvoyer.boundingBox()).height).toBeGreaterThanOrEqual(44)
+  await expect(page.getByLabel('Adresse e-mail')).toHaveValue(EMAIL)
+  await renvoyer.click()
+  await expect(page.getByText(/^Lien envoyé à/)).toBeVisible()
+  expect(releves.otp).toHaveLength(1)
+  // Rechargement : l'ancien message ne revient pas
+  await page.reload()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+})
+
+test('lien réutilisé (erreur dans la requête) et lien invalide : messages distincts', async ({ page }) => {
+  await simulerAuth(page)
+  await page.goto('/?error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired')
+  await expect(page.getByRole('alert')).toHaveText('Ce lien a expiré ou a déjà été utilisé. Demandez-en un nouveau.')
+  expect(new URL(page.url()).search).toBe('')
+  await page.goto('/?essai=2#error=access_denied&error_description=Autre+probleme') // vraie navigation (adresse différente)
+  await expect(page.getByRole('alert')).toHaveText("Ce lien n'est pas valide. Demandez-en un nouveau.")
+  await expect(page.getByRole('button', { name: 'Renvoyer un lien' })).toBeVisible()
+})
+
+test('lien illisible (jeton refusé par le serveur) : on rend la main après quelques secondes', async ({ page }) => {
+  await page.clock.install()
+  await simulerAuth(page, { user: 'refuse' })
+  await page.goto(lienDe())
+  await expect(page.getByText('Connexion en cours…')).toBeVisible()
+  await page.clock.fastForward(9_000)
+  await expect(page.getByRole('alert')).toHaveText('Connexion impossible avec ce lien. Demandez-en un nouveau.')
+  await expect(page.getByLabel('Adresse e-mail')).toBeVisible()
+  expect(await sessionStockee(page)).toBeNull()
+})
+
+test('lien ouvert dans un AUTRE navigateur (contexte vierge) : connecté là, l’appareil qui a demandé reste en attente', async ({ browser, page }) => {
+  await simulerAuth(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Recevoir le lien' }).click()
+  await expect(page.getByText(/^Lien envoyé à/)).toBeVisible()
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await ctx.addInitScript(() => localStorage.setItem('fv9:e2e-connexion-reelle', '1'))
+  const autre = await ctx.newPage()
+  await simulerAuth(autre)
+  await autre.goto(lienDe('refresh-autre'))
+  await appVisible(autre)
+  expect((await sessionStockee(autre)).refresh_token).toBe('refresh-autre')
+  // Le navigateur d'origine n'a pas de session (stockage séparé) : il attend toujours, le code reste possible.
+  await expect(page.getByText(/^Lien envoyé à/)).toBeVisible()
+  expect(await sessionStockee(page)).toBeNull()
+  await ctx.close()
+})
+
+test('même navigateur, autre fenêtre : la fenêtre en attente se connecte aussi', async ({ context, page }) => {
+  await simulerAuth(context)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Recevoir le lien' }).click()
+  await expect(page.getByText(/^Lien envoyé à/)).toBeVisible()
+  const fenetre = await context.newPage()
+  await fenetre.goto(lienDe())
+  await appVisible(fenetre)
+  await appVisible(page) // la première fenêtre est passée sur l'app sans rien faire
+  await expect(page.getByText(/^Lien envoyé à/)).toHaveCount(0)
 })

@@ -862,3 +862,17 @@ Limite connue : si le flux temps réel ne renvoie jamais l'écho d'une écriture
 - **PRÉALABLE avant tout essai réel** : le gabarit d'e-mail « Magic Link » de Supabase (Authentication → Email Templates) doit contenir `{{ .Token }}`
   (le code à 6 chiffres). Le gabarit par défaut n'envoie qu'un lien. Réglage de tableau de bord, non modifiable depuis le dépôt.
 - **Temps B** (non appliqué) : `docs/securite-temps-b/` (plan, SQL de bascule table par table, SQL de retour arrière).
+
+### Connexion par LIEN (mode principal) — ajout sur la même branche
+- `Login.jsx` : « Recevoir le lien » (`signInWithOtp`, `shouldCreateUser: false`, `emailRedirectTo` = `window.location.origin + '/'`), écran « Lien envoyé »,
+  aide iPhone, décompte 60 s, « J'ai reçu un code » (le mode code d'avant est intact). `supabaseClient.js` : `flowType: 'implicit'`,
+  `detectSessionInUrl: true` : la session revient dans l'adresse (`#access_token=…`), valable dans n'importe quel navigateur (pas de PKCE).
+- `session.js` : `lireRetourLien` lit l'adresse UNE fois avant le démarrage du client ; une erreur (`otp_expired`, `access_denied`) est mémorisée puis
+  effacée de l'adresse ; des jetons sont laissés au client qui ouvre la session puis les efface (et `useSession` nettoie en secours).
+  Supabase répond pareil pour un lien expiré et un lien déjà utilisé (certains scanners de messagerie « consomment » le lien).
+- **À régler dans Supabase (tableau de bord)** : (1) Email Templates → « Magic Link » : le gabarit doit contenir `{{ .ConfirmationURL }}` (le lien) ET
+  `{{ .Token }}` (le code) ; (2) Authentication → URL Configuration : Site URL `https://field-v9.vercel.app` et, dans « Redirect URLs »,
+  `https://field-v9.vercel.app/**` et pour les versions de test `https://field-v9-*-dasilva-s-projects.vercel.app/**` ; sans cela, le lien
+  ramène sur le Site URL et non sur la version de test.
+- iPhone : un lien ouvert depuis Mail atterrit dans Safari, dont le stockage est séparé de l'app installée. Se connecter dans Safari ne connecte
+  donc pas la PWA : dans la PWA, utiliser « J'ai reçu un code » (le même e-mail porte le code).

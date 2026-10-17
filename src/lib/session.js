@@ -52,6 +52,48 @@ export const connexionDesactiveePourTests = () => {
   }
 }
 
+// ── Retour du lien reçu par e-mail ────────────────────────────────────────────────────────────────
+// Flux implicite : le lien ramène sur l'app avec la session dans l'adresse (#access_token=…) — elle s'ouvre donc dans
+// n'importe quel navigateur, pas seulement celui qui a demandé le lien. Une erreur (lien expiré, déjà utilisé, invalide)
+// revient aussi dans l'adresse (#error=access_denied&error_code=otp_expired&…) ou dans la requête.
+
+/** Lit l'adresse d'ouverture : { jetons: bool, erreur: { code, description } | null }. Pure (testable). */
+export function lireRetourLien(location) {
+  const parametres = new URLSearchParams((location.hash ?? '').replace(/^#/, ''))
+  for (const [cle, valeur] of new URLSearchParams(location.search ?? '')) if (!parametres.has(cle)) parametres.set(cle, valeur)
+  const jetons = parametres.has('access_token') && parametres.has('refresh_token')
+  const code = parametres.get('error_code') || parametres.get('error')
+  const erreur = code || parametres.get('error_description') ? { code: code ?? 'unspecified', description: parametres.get('error_description') ?? '' } : null
+  return { jetons, erreur }
+}
+
+/** Message affiché pour un lien refusé. Supabase répond pareil pour un lien expiré et un lien déjà utilisé. */
+export function messageLien(erreur) {
+  if (!erreur) return ''
+  if (erreur.code === 'otp_expired' || /expired|already|used/i.test(erreur.description)) return 'Ce lien a expiré ou a déjà été utilisé. Demandez-en un nouveau.'
+  return "Ce lien n'est pas valide. Demandez-en un nouveau."
+}
+
+/** Retire les paramètres de connexion de l'adresse affichée (jetons, erreurs) sans recharger. */
+export function nettoyerAdresse() {
+  try {
+    window.history.replaceState(window.history.state, '', window.location.pathname)
+  } catch {
+    // contexte sans historique : sans conséquence
+  }
+}
+
+// Lu UNE FOIS, avant que le client Supabase ne démarre. Une erreur est mémorisée puis effacée de l'adresse tout de
+// suite (le client n'y verra plus de lien à traiter) ; des jetons sont laissés en place : le client les lit, ouvre la session et les efface.
+const retour = typeof window !== 'undefined' ? lireRetourLien(window.location) : { jetons: false, erreur: null }
+let retourLien = { erreur: retour.erreur, jetons: retour.jetons }
+/** Ce que l'adresse d'ouverture contenait (valable jusqu'à ce que l'écran de connexion l'ait pris en compte). */
+export const retourLienInitial = () => retourLien
+export const effacerRetourLien = () => {
+  retourLien = { erreur: null, jetons: false }
+}
+if (retour.erreur && !retour.jetons) nettoyerAdresse()
+
 const estReseau = (err) =>
   err?.name === 'AuthRetryableFetchError' ||
   err?.status === 0 ||

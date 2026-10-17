@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { connexionDesactiveePourTests, sessionLocale } from '../lib/session'
+import { connexionDesactiveePourTests, nettoyerAdresse, sessionLocale } from '../lib/session'
 
 /**
  * État de connexion : 'connecte' | 'deconnecte'. Décidé tout de suite et sans réseau d'après la session enregistrée
@@ -34,6 +34,7 @@ export function useSession() {
       } else if (s) {
         setEtat('connecte')
         setEmail(s.user?.email ?? null)
+        if (/access_token=/.test(window.location.hash)) nettoyerAdresse() // jetons du lien : jamais laissés dans l'adresse
       }
     })
     return () => {

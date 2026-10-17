@@ -12,7 +12,9 @@ export const supabase = createClient(
       storageKey: CLE_SESSION,
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: false,
+      // Lien reçu par e-mail : la session est lue dans l'adresse (flux implicite, valable dans n'importe quel navigateur).
+      detectSessionInUrl: true,
+      flowType: 'implicit',
     },
   }
 )

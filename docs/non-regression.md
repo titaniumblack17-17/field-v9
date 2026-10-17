@@ -74,7 +74,10 @@ Viewport iPhone 390 × 844. Console sans erreur. Aucun défilement horizontal. C
 - [ ] Adresse autre que field-v9.vercel.app (déploiement de test) : bandeau orange « Version de test, pas la production ». Poste de développement (localhost) : pas de bandeau.
 
 ## 5 sexies. Connexion par code (temps A, sans RLS)
-- [ ] Sans session locale : écran de connexion seul (adresse pré-remplie avec la dernière utilisée, « Recevoir un code »), puis code à 6 chiffres (clavier numérique, remplissage automatique du code), validation automatique au 6ᵉ chiffre ; version affichée en pied.
+- [ ] Sans session locale : écran de connexion seul, mode principal = LIEN : adresse pré-remplie, « Recevoir le lien » ; puis « Lien envoyé à <adresse>. Ouvrez-le sur cet appareil. », « Sur iPhone, ouvrez le lien dans Safari. », « Renvoyer le lien (N s) » (60 s) et le lien discret « J'ai reçu un code » ; aucun champ de code par défaut ; version affichée en pied.
+- [ ] Le lien (flux implicite, `emailRedirectTo` = origine de l'app, production ou test) ouvre la session dans N'IMPORTE QUEL navigateur ; l'adresse est nettoyée ; une autre fenêtre du même navigateur se connecte aussi ; l'appareil qui a demandé le lien, s'il est dans un autre navigateur, reste en attente (le code le dépanne).
+- [ ] Lien expiré, déjà utilisé ou invalide (erreur dans l'adresse) : message clair et « Renvoyer un lien » ; adresse nettoyée ; le message ne revient pas au rechargement.
+- [ ] Mode code (« J'ai reçu un code ») : code à 6 chiffres (clavier numérique, remplissage automatique), validation au 6ᵉ chiffre.
 - [ ] Erreurs en français : code incorrect, code expiré (plus d'une heure après l'envoi), trop de demandes, pas de réseau, adresse non autorisée ; « Renvoyer le code (N s) » bloqué 60 s avec décompte visible.
 - [ ] Session persistante : conservée après rechargement et fermeture de l'app ; jeton renouvelé tout seul ; jamais de nouveau code tant que la session locale existe.
 - [ ] Hors ligne avec session connue : l'app démarre normalement, jamais d'écran de connexion bloquant ; la file d'écritures se remplit ; au retour du réseau le jeton est renouvelé PUIS la file part, sans perte.

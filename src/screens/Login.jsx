@@ -1,38 +1,58 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { DELAI_RENVOI_S, dernierEmail, messageConnexion, retenirEmail } from '../lib/session'
+import { DELAI_RENVOI_S, dernierEmail, effacerRetourLien, messageConnexion, messageLien, retenirEmail, retourLienInitial } from '../lib/session'
 import { libelleVersion } from '../lib/version'
 
-// Connexion par code à 6 chiffres envoyé par e-mail (jamais un lien : ouvert depuis Mail sur iPhone, un lien
-// atterrit dans Safari et non dans l'app installée, dont le stockage est séparé). Un seul utilisateur existe côté
-// Supabase ; `shouldCreateUser: false` empêche toute autre adresse de se créer un compte.
+// Connexion par LIEN reçu par e-mail (mode principal) ou par code à 6 chiffres (« J'ai reçu un code »). Un seul
+// utilisateur existe côté Supabase ; `shouldCreateUser: false` empêche toute autre adresse de se créer un compte.
+// Flux implicite : le lien fonctionne même ouvert dans un autre navigateur que celui qui l'a demandé. Sur iPhone,
+// un lien ouvert depuis Mail atterrit dans Safari, dont le stockage est séparé de l'app installée : d'où le code.
 export default function Login() {
-  const [etape, setEtape] = useState('email') // email → envoi → code → verification
+  // email → envoi → lien (lien envoyé) → code → verification ; 'retour' : lien en cours de lecture
+  const [depart] = useState(retourLienInitial)
+  const [etape, setEtape] = useState(depart.jetons ? 'retour' : 'email')
   const [email, setEmail] = useState(dernierEmail)
   const [code, setCode] = useState('')
-  const [erreur, setErreur] = useState('')
+  const [erreur, setErreur] = useState(() => (depart.erreur ? messageLien(depart.erreur) : ''))
+  const [lienRefuse] = useState(Boolean(depart.erreur))
+  // L'adresse d'ouverture n'est prise en compte qu'une fois : une déconnexion plus tard n'affiche pas un vieux message.
+  useEffect(() => effacerRetourLien(), [])
   const [envoyeA, setEnvoyeA] = useState(null)
-  const [finRenvoi, setFinRenvoi] = useState(0) // instant (ms) à partir duquel un nouveau code peut être demandé
+  const [finRenvoi, setFinRenvoi] = useState(0) // instant (ms) à partir duquel un nouvel envoi est possible
   const [maintenant, setMaintenant] = useState(() => Date.now())
   const restant = Math.max(0, Math.ceil((finRenvoi - maintenant) / 1000))
   const verificationEnCours = useRef(false)
 
-  // Compte à rebours visible avant de pouvoir renvoyer un code. Calculé sur l'heure réelle (échéance), pas en décomptant
-  // des ticks : une app mise en arrière-plan puis rouverte affiche le bon délai.
+  // Compte à rebours calculé sur l'heure réelle (échéance) : une app mise en arrière-plan puis rouverte affiche le bon délai.
   useEffect(() => {
     if (finRenvoi <= Date.now()) return undefined
     const t = setInterval(() => setMaintenant(Date.now()), 1000)
     return () => clearInterval(t)
   }, [finRenvoi])
 
-  const envoyerCode = async (e) => {
+  // Lien en cours de lecture : si la session n'arrive pas (lien illisible), on rend la main au lieu de rester bloqué.
+  useEffect(() => {
+    if (etape !== 'retour') return undefined
+    const t = setTimeout(() => {
+      setErreur('Connexion impossible avec ce lien. Demandez-en un nouveau.')
+      setEtape('email')
+    }, 8000)
+    return () => clearTimeout(t)
+  }, [etape])
+
+  // depuis : écran d'où part la demande ('email' | 'lien' | 'code'). Le même envoi sert au lien et au code (même message).
+  const envoyer = async (depuis, e) => {
     e?.preventDefault()
     const adresse = email.trim().toLowerCase()
     if (!adresse) return
-    setEtape('envoi')
+    if (depuis === 'email') setEtape('envoi')
     setErreur('')
     try {
-      const { error } = await supabase.auth.signInWithOtp({ email: adresse, options: { shouldCreateUser: false } })
+      const { error } = await supabase.auth.signInWithOtp({
+        email: adresse,
+        // Le lien ramène sur l'adresse d'où la demande est faite (production ou version de test).
+        options: { shouldCreateUser: false, emailRedirectTo: `${window.location.origin}/` },
+      })
       if (error) throw error
       retenirEmail(adresse)
       setEmail(adresse)
@@ -40,11 +60,10 @@ export default function Login() {
       setMaintenant(Date.now())
       setFinRenvoi(Date.now() + DELAI_RENVOI_S * 1000)
       setCode('')
-      setEtape('code')
+      setEtape(depuis === 'code' ? 'code' : 'lien')
     } catch (err) {
       setErreur(messageConnexion(err, { phase: 'envoi' }))
-      // Un renvoi refusé depuis l'étape du code laisse l'écran du code ; une première demande revient au formulaire.
-      setEtape(envoyeA ? 'code' : 'email')
+      setEtape(depuis)
     }
   }
 
@@ -78,9 +97,13 @@ export default function Login() {
       <div className="w-full max-w-sm space-y-4">
         <h1 className="text-2xl font-bold text-texte">Field V9</h1>
 
-        {!enCode ? (
-          <form onSubmit={envoyerCode} className="space-y-3">
-            <p className="text-sm text-texte-doux">Un code à 6 chiffres vous est envoyé par e-mail.</p>
+        {etape === 'retour' && (
+          <p role="status" className="text-sm text-texte-doux">Connexion en cours…</p>
+        )}
+
+        {(etape === 'email' || etape === 'envoi') && (
+          <form onSubmit={(e) => envoyer('email', e)} className="space-y-3">
+            <p className="text-sm text-texte-doux">Un lien de connexion vous est envoyé par e-mail.</p>
             <label htmlFor="email" className="block text-xs text-texte-doux px-1">Adresse e-mail</label>
             <input
               id="email"
@@ -94,10 +117,32 @@ export default function Login() {
               className="w-full min-h-12 rounded-imbrique border border-separateur bg-carte px-3 text-texte"
             />
             <button type="submit" disabled={etape === 'envoi' || !email.trim()} className="w-full min-h-12 rounded-carte bg-accent text-white font-semibold disabled:opacity-60">
-              {etape === 'envoi' ? 'Envoi du code…' : 'Recevoir un code'}
+              {etape === 'envoi' ? 'Envoi du lien…' : lienRefuse ? 'Renvoyer un lien' : 'Recevoir le lien'}
             </button>
           </form>
-        ) : (
+        )}
+
+        {etape === 'lien' && (
+          <div className="space-y-3">
+            <p className="text-[15px] text-texte">
+              Lien envoyé à <span className="font-medium break-all">{email}</span>. Ouvrez-le sur cet appareil.
+            </p>
+            <p className="text-sm text-texte-doux">Sur iPhone, ouvrez le lien dans Safari.</p>
+            <button type="button" onClick={() => envoyer('lien')} disabled={restant > 0} className="w-full min-h-12 rounded-carte border border-separateur bg-carte text-texte font-medium disabled:text-texte-faible">
+              {restant > 0 ? `Renvoyer le lien (${restant} s)` : 'Renvoyer le lien'}
+            </button>
+            <div className="flex items-center justify-between">
+              <button type="button" onClick={() => { setErreur(''); setEtape('code') }} className="min-h-11 text-sm text-texte-doux underline">
+                J'ai reçu un code
+              </button>
+              <button type="button" onClick={() => { setEtape('email'); setEnvoyeA(null); setErreur('') }} className="min-h-11 text-sm text-texte-doux">
+                Changer d'adresse
+              </button>
+            </div>
+          </div>
+        )}
+
+        {enCode && (
           <form
             onSubmit={(e) => {
               e.preventDefault()
@@ -106,7 +151,7 @@ export default function Login() {
             className="space-y-3"
           >
             <p className="text-sm text-texte-doux">
-              Code envoyé à <span className="text-texte font-medium">{email}</span>.
+              Code envoyé à <span className="text-texte font-medium">{email}</span> (dans le même e-mail que le lien).
             </p>
             <label htmlFor="code" className="block text-xs text-texte-doux px-1">Code à 6 chiffres</label>
             <input
@@ -127,19 +172,11 @@ export default function Login() {
               {etape === 'verification' ? 'Vérification…' : 'Valider'}
             </button>
             <div className="flex items-center justify-between">
-              <button type="button" onClick={envoyerCode} disabled={restant > 0} className="min-h-11 text-sm text-accent-vif font-medium disabled:text-texte-faible">
+              <button type="button" onClick={() => envoyer('code')} disabled={restant > 0} className="min-h-11 text-sm text-accent-vif font-medium disabled:text-texte-faible">
                 {restant > 0 ? `Renvoyer le code (${restant} s)` : 'Renvoyer le code'}
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEtape('email')
-                  setEnvoyeA(null)
-                  setErreur('')
-                }}
-                className="min-h-11 text-sm text-texte-doux"
-              >
-                Changer d'adresse
+              <button type="button" onClick={() => { setErreur(''); setEtape('lien') }} className="min-h-11 text-sm text-texte-doux">
+                Retour
               </button>
             </div>
           </form>
