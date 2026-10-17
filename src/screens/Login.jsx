@@ -127,7 +127,7 @@ export default function Login() {
             <p className="text-[15px] text-texte">
               Lien envoyé à <span className="font-medium break-all">{email}</span>. Ouvrez-le sur cet appareil.
             </p>
-            <p className="text-sm text-texte-doux">Sur iPhone, ouvrez le lien dans Safari.</p>
+            <p className="text-sm text-texte-doux">Sur iPhone avec l'app installée : saisissez le code à 6 chiffres reçu dans le même e-mail (« J'ai reçu un code »). Dans Safari ou sur ordinateur : ouvrez le lien.</p>
             <button type="button" onClick={() => envoyer('lien')} disabled={restant > 0} className="w-full min-h-12 rounded-carte border border-separateur bg-carte text-texte font-medium disabled:text-texte-faible">
               {restant > 0 ? `Renvoyer le lien (${restant} s)` : 'Renvoyer le lien'}
             </button>

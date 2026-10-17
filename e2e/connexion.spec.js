@@ -100,9 +100,19 @@ test('mode code : adresse pré-remplie, « J’ai reçu un code », 6 chiffres, 
   await expect(page.getByRole('button', { name: /^Renvoyer le code \(\d+ s\)$/ })).toBeDisabled()
   expect(await sansDebordement(page)).toBe(true)
 
+  // Exactement 6 chiffres : les lettres sont refusées, au-delà de 6 chiffres rien n'est ajouté, la validation attend le 6ᵉ.
+  await champ.pressSequentially('12a3b45')
+  await expect(champ).toHaveValue('12345')
+  expect(releves.verify).toHaveLength(0)
+  await champ.fill('')
+  await champ.pressSequentially('9876543')
+  await expect.poll(() => releves.verify.length).toBe(1)
+  expect(releves.verify[0].token).toBe('987654') // le 7ᵉ chiffre n'a jamais été saisi : exactement 6 chiffres
+  await expect(page.getByRole('alert')).toContainText('Code incorrect') // faux code simulé : le champ est vidé, on repart de zéro
   await champ.fill('123456') // le 6ᵉ chiffre déclenche la vérification
   await appVisible(page)
-  expect(releves.verify).toEqual([{ email: EMAIL, token: '123456', type: 'email', gotrue_meta_security: {} }])
+  expect(releves.verify).toHaveLength(2) // le faux code, puis le bon
+  expect(releves.verify.at(-1)).toEqual({ email: EMAIL, token: '123456', type: 'email', gotrue_meta_security: {} })
   const s = await sessionStockee(page)
   expect(s.user.email).toBe(EMAIL)
   expect(s.refresh_token).toBe('refresh-v')
@@ -273,7 +283,7 @@ test('lien : « Recevoir le lien », message, aide iPhone, adresse de retour = o
   await page.goto('/')
   await page.getByRole('button', { name: 'Recevoir le lien' }).click()
   await expect(page.getByText(`Lien envoyé à ${EMAIL}. Ouvrez-le sur cet appareil.`)).toBeVisible()
-  await expect(page.getByText('Sur iPhone, ouvrez le lien dans Safari.')).toBeVisible()
+  await expect(page.getByText("Sur iPhone avec l'app installée : saisissez le code à 6 chiffres reçu dans le même e-mail (« J'ai reçu un code »). Dans Safari ou sur ordinateur : ouvrez le lien.")).toBeVisible()
   await expect(page.getByLabel('Code à 6 chiffres')).toHaveCount(0)
   expect(releves.otp[0].create_user).toBe(false)
   expect(new URL(releves.otpUrls[0]).searchParams.get('redirect_to')).toBe(`${new URL(page.url()).origin}/`)
