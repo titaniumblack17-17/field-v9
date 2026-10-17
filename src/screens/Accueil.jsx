@@ -14,7 +14,7 @@ import { libelleVersion } from '../lib/version'
 // Accueil unique : « Aujourd'hui » (tout le contenu utile du Board, mêmes
 // données, mêmes règles, un seul calcul) puis « Pilotage » (le Dashboard).
 // L'ancien Board reste accessible par « Ancien accueil » en pied de page.
-export default function Accueil({ onOpenDossier, onOpenClient, onClients, onPipeline, onProjets, onCapture, onAncienAccueil }) {
+export default function Accueil({ onOpenDossier, onOpenClient, onClients, onPipeline, onProjets, onCapture, onAncienAccueil, onReglages }) {
   const b = useBoardData()
   // Une seule liste « à trancher » : la ligne d'Aujourd'hui ouvre la feuille du Pilotage.
   const ouvrirPilotage = useRef(null)
@@ -42,10 +42,15 @@ export default function Accueil({ onOpenDossier, onOpenClient, onClients, onPipe
           <BoardQualite b={b} />
         </section>
 
-        <div className="mt-10 flex justify-center">
+        <div className="mt-10 flex justify-center gap-2">
           <button onClick={onAncienAccueil} className="min-h-11 px-4 text-xs text-texte-faible underline">
             Ancien accueil
           </button>
+          {onReglages && (
+            <button onClick={onReglages} className="min-h-11 px-4 text-xs text-texte-faible underline">
+              Réglages
+            </button>
+          )}
         </div>
         <p data-testid="version" className="mt-2 text-center text-[11px] text-texte-faible tabular-nums">{libelleVersion()}</p>
       </main>

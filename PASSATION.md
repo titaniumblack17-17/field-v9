@@ -844,3 +844,21 @@ Limite connue : si le flux temps réel ne renvoie jamais l'écho d'une écriture
   rechargement automatique sur `controllerchange` (main.jsx) a la même garde. Bandeau orange sur toute adresse autre que
   field-v9.vercel.app, hors localhost.
 - Tests : `e2e/version.spec.js` (pied de page, identique / ancienne, plus récente + cache vidé, file en attente, hors ligne, adresse de test).
+
+## Connexion par code — temps A (branche `feat/auth-connexion-code-otp`, non fusionnée ; RLS NON activé)
+
+- **Flux** (`src/screens/Login.jsx`) : `signInWithOtp({ email, shouldCreateUser: false })` puis `verifyOtp({ type: 'email' })`. Un seul utilisateur existe
+  dans Supabase Auth (titaniumblack17@gmail.com) ; `shouldCreateUser: false` empêche toute autre adresse. Code (jamais un lien : ouvert depuis Mail
+  il atterrit dans Safari, pas dans la PWA installée). Renvoi bloqué 60 s (décompte calculé sur l'heure réelle). Supabase répond pareil pour un code
+  faux et un code périmé : le message « expiré » repose sur le temps écoulé depuis l'envoi (> 1 h).
+- **Session** (`src/lib/supabaseClient.js`, `src/lib/session.js`, `src/hooks/useSession.js`) : stockage `fv9-auth-token`, jeton renouvelé automatiquement.
+  L'état connecté est décidé SANS réseau d'après la session enregistrée (pas de jeton de renouvellement = pas de session). L'écran de connexion
+  n'apparaît donc que sans session locale ou après un `SIGNED_OUT` (renouvellement refusé, déconnexion). `App.jsx` : les hooks (dont la file hors ligne)
+  tournent même sur l'écran de connexion. `executerActionEnFile` appelle `assurerJeton()` avant chaque envoi : le jeton périmé est renouvelé d'abord.
+- **Réglages** (`src/screens/Reglages.jsx`, lien en bas de l'accueil) : déconnexion (révocation serveur si le réseau répond en 2,5 s, puis retrait local).
+- **Tests** : `e2e/connexion.spec.js` (routes `/auth/v1/*` simulées, faux jetons, aucun e-mail). Les autres specs passent par une porte ouverte réservée au
+  serveur de développement (`VITE_E2E_SANS_CONNEXION=1` dans les deux configs Playwright ; `import.meta.env.DEV` est faux en production).
+  CONSÉQUENCE : un test e2e lancé contre field-v9.vercel.app tombe désormais sur l'écran de connexion (il faudra une session de test réelle).
+- **PRÉALABLE avant tout essai réel** : le gabarit d'e-mail « Magic Link » de Supabase (Authentication → Email Templates) doit contenir `{{ .Token }}`
+  (le code à 6 chiffres). Le gabarit par défaut n'envoie qu'un lien. Réglage de tableau de bord, non modifiable depuis le dépôt.
+- **Temps B** (non appliqué) : `docs/securite-temps-b/` (plan, SQL de bascule table par table, SQL de retour arrière).

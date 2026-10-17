@@ -25,5 +25,7 @@ export default defineConfig({
     command: 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: true,
+    // Serveur de développement des tests : la porte de connexion est ouverte (voir src/lib/session.js). Jamais en production.
+    env: { VITE_E2E_SANS_CONNEXION: '1' },
   },
 })

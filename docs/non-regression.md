@@ -73,6 +73,16 @@ Viewport iPhone 390 × 844. Console sans erreur. Aucun défilement horizontal. C
 - [ ] Écriture en attente dans la file hors ligne : « Recharger » attend son envoi (message explicite), la page ne bouge pas, puis se recharge d'elle-même. Même garde pour le rechargement automatique du changement de service worker.
 - [ ] Adresse autre que field-v9.vercel.app (déploiement de test) : bandeau orange « Version de test, pas la production ». Poste de développement (localhost) : pas de bandeau.
 
+## 5 sexies. Connexion par code (temps A, sans RLS)
+- [ ] Sans session locale : écran de connexion seul (adresse pré-remplie avec la dernière utilisée, « Recevoir un code »), puis code à 6 chiffres (clavier numérique, remplissage automatique du code), validation automatique au 6ᵉ chiffre ; version affichée en pied.
+- [ ] Erreurs en français : code incorrect, code expiré (plus d'une heure après l'envoi), trop de demandes, pas de réseau, adresse non autorisée ; « Renvoyer le code (N s) » bloqué 60 s avec décompte visible.
+- [ ] Session persistante : conservée après rechargement et fermeture de l'app ; jeton renouvelé tout seul ; jamais de nouveau code tant que la session locale existe.
+- [ ] Hors ligne avec session connue : l'app démarre normalement, jamais d'écran de connexion bloquant ; la file d'écritures se remplit ; au retour du réseau le jeton est renouvelé PUIS la file part, sans perte.
+- [ ] Jeton de renouvellement refusé (révoqué) : retour à l'écran de connexion ; les écritures en file restent sur l'appareil.
+- [ ] Réglages (lien en bas de l'accueil) : adresse connectée, « Se déconnecter » (confirmation qui mentionne les écritures en attente), version en pied.
+- [ ] Le client envoie le jeton de l'utilisateur ; la base reste ouverte (RLS non activé) ; aucune table modifiée.
+- [ ] Les tests automatiques ouvrent la porte uniquement sur le serveur de développement (VITE_E2E_SANS_CONNEXION=1) : jamais en production ; un test e2e sur le site publié exige désormais une vraie session.
+
 ## 6. Capture / dictée
 - [ ] Capture texte et dictée créent la capture ; suggestion de dossier ; lien capture → dossier.
 

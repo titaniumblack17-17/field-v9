@@ -18,7 +18,10 @@ const Dashboard = React.lazy(() => import('./screens/Dashboard'))
 const Catalogue = React.lazy(() => import('./screens/Catalogue'))
 import useConfirm from './hooks/useConfirm'
 import { tailleFile, ecouterTailleFile, viderFileAvecRepli } from './lib/fileAttente'
-import { supabase } from './lib/supabaseClient'
+import { supabase, assurerJeton } from './lib/supabaseClient'
+import { useSession } from './hooks/useSession'
+import Login from './screens/Login'
+import Reglages from './screens/Reglages'
 import { assurerRappelDeRelance, synchroniserRappel } from './lib/rappel'
 import { verifierConnexionReelle } from './lib/reseau'
 import { diagnosticActif, journaliser } from './lib/diagnosticReseau'
@@ -114,6 +117,8 @@ function useEnLigne() {
 // L'exécuteur ne sait rien encore à ce stade (Tâche 6 seule) — les Tâches
 // 7-9 ajoutent un cas à ce switch à chaque action câblée sur la file.
 async function executerActionEnFile(action) {
+  // Jeton périmé pendant une coupure : il est renouvelé AVANT l'envoi, puis la file part (sans réseau, l'action reste en file).
+  await assurerJeton()
   switch (action.type) {
     case 'note': {
       // supabase-js ne lève jamais sur un échec d'insert (réseau coupé,
@@ -277,6 +282,7 @@ function useFileAttente(enLigne) {
 }
 
 export default function App() {
+  const { etat: etatConnexion, email } = useSession()
   const enLigne = useEnLigne()
   const tailleFileAttente = useFileAttente(enLigne)
 
@@ -498,6 +504,8 @@ export default function App() {
         onDashboard={() => push({ name: 'dashboard' })}
       />
     )
+  } else if (view.name === 'reglages') {
+    écran = <Reglages onBack={back} email={email} />
   } else {
     // Écran de démarrage (stack initiale : [{ name: 'accueil' }]) — aussi le
     // repli par défaut pour un nom de vue inconnu, plutôt qu'un écran vide.
@@ -512,6 +520,7 @@ export default function App() {
         onProjets={(famille, filtre) => push({ name: 'projets', famille, filtre })}
         onCapture={() => push({ name: 'capture' })}
         onAncienAccueil={() => push({ name: 'brief' })}
+        onReglages={() => push({ name: 'reglages' })}
       />
     )
   }
@@ -537,6 +546,17 @@ export default function App() {
         : 'max-w-3xl'
 
   const attente = <p className="text-texte-faible text-sm p-4">Chargement…</p>
+
+  // Écran de connexion seulement s'il n'existe AUCUNE session locale (jamais bloquant hors ligne avec une session connue).
+  // Les hooks ci-dessus tournent quand même : la file d'écritures en attente garde sa place et repart après connexion.
+  if (etatConnexion === 'deconnecte') {
+    return (
+      <>
+        <BandeauVersion />
+        <Login />
+      </>
+    )
+  }
 
   return (
     <>

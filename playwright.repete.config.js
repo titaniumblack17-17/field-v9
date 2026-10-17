@@ -13,5 +13,5 @@ export default {
     isMobile: large < 768,
     hasTouch: large < 768,
   },
-  webServer: { command: `npm run dev -- --port ${port} --strictPort`, url: `http://localhost:${port}`, reuseExistingServer: true },
+  webServer: { command: `npm run dev -- --port ${port} --strictPort`, url: `http://localhost:${port}`, reuseExistingServer: true, env: { VITE_E2E_SANS_CONNEXION: '1' } },
 }
