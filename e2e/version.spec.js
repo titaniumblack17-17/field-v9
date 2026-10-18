@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './base.js'
 
 // Version affichée, détection d'une version plus récente en ligne, hors ligne, adresse de test. Aucune donnée
 // n'est lue ni écrite en base : tout se joue sur le pied de page, les bandeaux et la file hors ligne locale.

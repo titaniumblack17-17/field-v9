@@ -876,3 +876,15 @@ Limite connue : si le flux temps réel ne renvoie jamais l'écho d'une écriture
   ramène sur le Site URL et non sur la version de test.
 - iPhone : un lien ouvert depuis Mail atterrit dans Safari, dont le stockage est séparé de l'app installée. Se connecter dans Safari ne connecte
   donc pas la PWA : dans la PWA, utiliser « J'ai reçu un code » (le même e-mail porte le code).
+
+## Tests e2e : trafic Supabase allégé (branche `feat/tests-allegement-reseau`, non fusionnée)
+
+- **Contexte** : l'offre gratuite a dépassé 5 Go de trafic sortant ; 85 % des requêtes venaient des passes Playwright. **Aucune modification de l'application,
+  de la base ni de la production** : uniquement `e2e/`, les configs Playwright et la documentation.
+- **Mesure initiale** (proxy de journalisation, hors dépôt, une passe complète à 390 px) : 10 166 requêtes, 33,8 Mo reçus (25 % de pré-vérifications OPTIONS ;
+  22 % de requêtes bloquables : `loupe_memoire`, `rapport_hebdo`, deux fonctions Todoist, temps réel ; 982 appels Todoist réels par passe, cause du 429).
+- **Mécanisme** : `e2e/base.js` (test étendu : routes de substitution, serveur Realtime factice, compteur), `e2e/compteur.js`, `e2e/reporter-requetes.js`
+  (résumé + alerte rouge), `e2e/cors.spec.js` (vraies pré-vérifications). Mode léger : `E2E_LEGER=1` → config `grep` = fichiers critiques + étiquette `@leger`.
+- **À savoir** : (1) quand une route est installée, Playwright répond lui-même aux OPTIONS du navigateur (c'est la source de l'essentiel du gain) : voir `cors.spec.js` ;
+  (2) le scénario « financement hors ligne » est connu pour échouer par intermittence sur délai (rejeu avec reprises 4/8/16/30 s) ; (3) les tests ne comptent que ce que
+  le navigateur et les aides Node envoient : la mesure serveur se refait avec un proxy qui relaie vers Supabase (`VITE_SUPABASE_URL=http://localhost:5190`).

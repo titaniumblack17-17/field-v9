@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './base.js'
 import { ouvrirDocuments, annuler } from './aides.js'
 
 // La base peut déjà porter une décision alors que le bandeau « Annuler » montre encore la précédente (il ne

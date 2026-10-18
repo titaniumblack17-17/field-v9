@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, RE_SUPABASE } from './base.js'
 import { rendu } from './aides.js'
 
 // Accueil unique : « Aujourd'hui » (le Board) puis « Pilotage » (le Dashboard).
@@ -59,7 +59,7 @@ const lireNombres = async (page) => {
   }
 }
 
-test('ouverture à froid : Aujourd\'hui puis Pilotage, aucune pastille Board/Dashboard, ancien accueil par lien discret', async ({ page }) => {
+test('ouverture à froid : Aujourd\'hui puis Pilotage, aucune pastille Board/Dashboard, ancien accueil par lien discret', { tag: '@leger' }, async ({ page }) => {
   const problemes = surveiller(page)
   await accueil(page)
   const hAuj = await page.getByRole('heading', { name: "Aujourd'hui" }).boundingBox()
@@ -86,7 +86,7 @@ test('ouverture à froid : Aujourd\'hui puis Pilotage, aucune pastille Board/Das
   expect(problemes).toEqual([])
 })
 
-test('N identique : l\'ancien Board et « Aujourd\'hui » lisent exactement les mêmes nombres', async ({ page }) => {
+test('N identique : l\'ancien Board et « Aujourd\'hui » lisent exactement les mêmes nombres', { tag: '@leger' }, async ({ page }) => {
   const problemes = surveiller(page)
   // Les données de Bruce bougent en direct : on confirme sur des lectures successives des deux écrans,
   // sans attendre un délai — une divergence qui persiste sur trois lectures est un vrai défaut.
@@ -118,7 +118,7 @@ test('N identique : « En retard » du Pilotage = actions d\'« Aujourd\'hui »,
 
 // ─── Une fonction de l'inventaire = un test ───────────────────────────────────
 
-test('A1 recherche rapide : résultats, fiche complète, retour à l\'accueil', async ({ page }) => {
+test('A1 recherche rapide : résultats, fiche complète, retour à l\'accueil', { tag: '@leger' }, async ({ page }) => {
   const [client] = await lire('clients?select=id,nom_praticien&nom_praticien=not.is.null&nom_praticien=not.ilike.*ZZTEST*&limit=1')
   await accueil(page)
   const champ = page.getByRole('searchbox', { name: 'Rechercher un client' })
@@ -275,7 +275,7 @@ test('C4 « Devis à trancher » : N devis · M dossiers, feuille, ouverture du 
   await expect(page.getByRole('dialog').getByRole('heading')).toContainText(`${at.devis} devis`)
 })
 
-test('D1 jauge détaillée, D2 qualité, D3 anomalies, D4 rapport hebdo : dans Pilotage', async ({ page }) => {
+test('D1 jauge détaillée, D2 qualité, D3 anomalies, D4 rapport hebdo : dans Pilotage', { tag: ['@loupe', '@rapport-hebdo'] }, async ({ page }) => {
   await accueil(page)
   const pil = page.getByLabel('Pilotage', { exact: true })
   await expect(pil.locator('section.scroll-mt-32').filter({ hasText: /^Objectif \d{4}/ })).toBeVisible()
@@ -347,9 +347,9 @@ test('retour d\'arrière-plan : plus de 30 min ramène à l\'accueil, moins de 3
   expect(problemes).toEqual([])
 })
 
-test('hors-ligne : accueil servi depuis le cache, avertissements des deux zones, pas de débordement', async ({ page }) => {
+test('hors-ligne : accueil servi depuis le cache, avertissements des deux zones, pas de débordement', { tag: '@leger' }, async ({ page }) => {
   await accueil(page) // remplit le cache
-  await page.route(/supabase\.co/, (route) => route.abort())
+  await page.route(RE_SUPABASE, (route) => route.abort())
   await page.reload()
   // Les délais de réconciliation hors-ligne (6 à 12 s) sont ceux de l'ancien Board, inchangés
   await expect(page.getByText(/Version hors ligne/)).toBeVisible({ timeout: 30_000 })
@@ -394,7 +394,7 @@ test('chaque tuile d\'Aujourd\'hui dit ce qu\'elle compte', async ({ page }) => 
   await expect(tuile(page, 'Objectif')).toContainText('€')
 })
 
-test('« à trancher » : la ligne d\'Aujourd\'hui et la tuile du Pilotage ouvrent la MÊME liste, avec le même N', async ({ page }) => {
+test('« à trancher » : la ligne d\'Aujourd\'hui et la tuile du Pilotage ouvrent la MÊME liste, avec le même N', { tag: '@leger' }, async ({ page }) => {
   await accueil(page)
   const ligne = aujourdhui(page).locator('button', { hasText: /^Devis à trancher/ })
   if (!(await ligne.count())) test.skip(true, 'Aucun devis à trancher')

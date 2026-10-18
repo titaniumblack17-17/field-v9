@@ -5,6 +5,24 @@ Viewport iPhone 390 × 844. Console sans erreur. Aucun défilement horizontal. C
 ## 0. Build
 - [ ] `npm run build` : ESLint + Vite passent sans erreur ni avertissement bloquant.
 
+## 0 bis. Règle d'usage des tests e2e (trafic Supabase limité : offre gratuite, 5 Go de trafic sortant)
+- **Pendant le développement : suite LÉGÈRE** — `E2E_LEGER=1 npm run e2e` (scénarios critiques : connexion lien/code, accueil, fiche, décisions, financement,
+  file hors ligne, devis écarté, version, ajout de document, pré-vérifications CORS). **Suite COMPLÈTE seulement avant une fusion en production.**
+  Jamais deux passes complètes d'affilée sans raison (une relance ne se justifie que par un échec sur délai de 15 s). Éviter `--repeat-each` sur la suite entière.
+- Tous les specs importent `test` depuis `e2e/base.js` (jamais `@playwright/test`). Il court-circuite, SANS toucher à l'application, ce qui ne sert pas au scénario :
+  `loupe_memoire`, `rapport_hebdo`, les fonctions Todoist (réponse vide : Todoist n'est plus jamais appelé) et le temps réel (serveur WebSocket de substitution,
+  canaux abonnés mais aucun événement). Les requêtes de données (dossiers, fichiers, clients, RPC…) partent toujours vers la vraie base.
+- Un scénario qui UTILISE une de ces ressources la réclame : étiquette de test (`{ tag: '@temps-reel' | '@loupe' | '@rapport-hebdo' | '@todoist' }`) ou, pour un
+  fichier entier, `test.use({ autoriser: ['temps-reel'] })`. Pour une passe de diagnostic : `E2E_REEL=temps-reel,todoist`. Si un scénario échoue parce qu'il
+  dépendait d'une de ces ressources, le signaler (ne pas ajouter l'étiquette en silence).
+- Pré-vérifications CORS : tant que Playwright intercepte des requêtes, il répond lui-même aux OPTIONS du navigateur. `e2e/cors.spec.js` envoie donc de VRAIES
+  pré-vérifications à Supabase (fonctions Edge appelées par l'app, API de données, stockage, authentification) avec les en-têtes du navigateur : c'est le garde-fou
+  contre un défaut CORS masqué (cause de trois fonctions Edge mortes une journée). À ne jamais retirer des deux modes.
+- Coupure du réseau vers Supabase dans un test : `page.route(RE_SUPABASE, …)` (importé de `./base.js`), jamais une adresse écrite en dur (le proxy de mesure change l'adresse).
+- Fin de passe : le rapporteur affiche le total des requêtes Supabase (navigateur + aides de test), les octets et le top 5 des chemins ; alerte ROUGE au-dessus de
+  **5 000 requêtes (léger)** ou **7 000 (complet)**, par largeur d'écran (une passe = une largeur : 390 ou 1280). La mesure serveur (tout compris) se fait avec
+  le proxy de journalisation (voir PASSATION.md).
+
 ## 1. Board / accueil (BriefSoir)
 - [ ] Total remonté, accordéons « À traiter » fermés par défaut ; chaque chiffre mène à l'écran filtré correspondant, Retour revient.
 - [ ] Brief du soir et rapport hebdo s'ouvrent.

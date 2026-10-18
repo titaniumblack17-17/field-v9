@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './base.js'
 import fs from 'node:fs'
 
 // Smoke test de fin de phase : Brief du soir, rapport hebdo, capture (en ligne
@@ -43,7 +43,7 @@ const surveiller = (page) => {
   return p
 }
 
-test('Brief du soir : Priorité du jour, Aussi à traiter, rapport hebdo', async ({ page }) => {
+test('Brief du soir : Priorité du jour, Aussi à traiter, rapport hebdo', { tag: ['@loupe', '@rapport-hebdo'] }, async ({ page }) => {
   const problemes = surveiller(page)
   await page.goto('/')
   // La carte « Priorité du jour » est devenue la bande « À appeler » ; son
@@ -79,7 +79,7 @@ test('capture : envoi en ligne, puis hors-ligne mis en file et rejoué', async (
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('fv9:file-attente') ?? '[]').length)).toBe(0)
 })
 
-test('rappel : création, synchro Todoist, clôture', async ({ page }) => {
+test('rappel : création, synchro Todoist, clôture', { tag: '@todoist' }, async ({ page }) => {
   const problemes = surveiller(page)
   await page.goto('/')
   await page.locator('input[type=search]').fill('ZZTEST-SMOKE')

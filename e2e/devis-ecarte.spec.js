@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './base.js'
 import { ouvrirDocuments, versDashboard } from './aides.js'
 
 // Décision « Écarté » au niveau d'un devis. Fixtures ZZTEST propres à ce passage (un dossier par scénario), supprimées en

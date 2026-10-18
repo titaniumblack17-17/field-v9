@@ -1,6 +1,9 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './base.js'
 import { journaliser, noter } from './diag.js'
 import { ouvrirDocuments, rendu, attendreEchos } from './aides.js'
+
+// Ce fichier teste le temps réel : il garde le vrai (le reste de la suite utilise un serveur Realtime de substitution).
+test.use({ autoriser: ['temps-reel'] })
 
 // Défaut « mise à jour perdue » : l'écho temps réel d'une écriture ANCIENNE arrive après une
 // écriture plus récente et remet la fiche en arrière ; le geste suivant part alors d'un état

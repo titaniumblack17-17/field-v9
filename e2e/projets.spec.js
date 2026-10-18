@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, RE_SUPABASE } from './base.js'
 import { FAMILLES } from '../src/constants/dashboard.js'
 import { ETAPES_PROJET_LABELS } from '../src/constants/dossiers.js'
 import { rendu } from './aides.js'
@@ -159,7 +159,7 @@ test('recherche texte : client, titre ; vider rétablit la liste', async ({ page
   await expect(lignes(page)).toHaveCount(n0)
 })
 
-test('ouverture d\'une fiche et retour : filtres, tri, recherche et position conservés', async ({ page }) => {
+test('ouverture d\'une fiche et retour : filtres, tri, recherche et position conservés', { tag: '@leger' }, async ({ page }) => {
   const problemes = surveiller(page)
   await ouvrirListe(page)
   await chip(page, 'Famille Devis').click()
@@ -208,10 +208,10 @@ test('points d\'entrée : pastille « Projets » (accueil et ancien accueil), fa
   await expect(page.getByRole('heading', { name: 'Projets' })).toBeVisible()
 })
 
-test('hors-ligne : la liste vient de la dernière version connue, signalée', async ({ page }) => {
+test('hors-ligne : la liste vient de la dernière version connue, signalée', { tag: '@leger' }, async ({ page }) => {
   await ouvrirListe(page)
   const n = await lignes(page).count()
-  await page.route(/supabase\.co/, (route) => route.abort())
+  await page.route(RE_SUPABASE, (route) => route.abort())
   await page.reload()
   await page.getByRole('button', { name: 'Projets', exact: true }).click({ timeout: 30_000 })
   await expect(page.getByText(/Version hors ligne/)).toBeVisible({ timeout: 40_000 })
@@ -254,7 +254,7 @@ test.describe('fiche projet', () => {
     await expect(page.getByRole('heading', { level: 1 }).first()).toContainText(titre)
   }
 
-  test('synthèse : étape, montant, objectif, devis — chaque zone mène au bon écran', async ({ page }) => {
+  test('synthèse : étape, montant, objectif, devis — chaque zone mène au bon écran', { tag: '@leger' }, async ({ page }) => {
     const problemes = surveiller(page)
     await ouvrir(page, `${NOM} projet`)
     const synthese = page.getByLabel('Synthèse du projet')

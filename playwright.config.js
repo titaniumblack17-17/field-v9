@@ -4,6 +4,8 @@
 import { defineConfig } from '@playwright/test'
 import 'dotenv/config'
 
+const RE_LEGER = /(connexion|decisions|financement|financement-champs|rejeu-hors-ligne|historique|devis-ecarte|version|ajout-pdf-whatsapp|cors)\.spec\.js|@leger/
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 60_000,
@@ -12,7 +14,11 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   workers: 1,
   globalSetup: './e2e/verrou-global.js',
-  reporter: [['list']],
+  // Rapporteur de requêtes Supabase en fin de passe (voir e2e/reporter-requetes.js).
+  reporter: [['list'], ['./e2e/reporter-requetes.js'], ...(process.env.PLAYWRIGHT_JSON_OUTPUT_NAME ? [['json']] : [])],
+  // Mode léger (E2E_LEGER=1) : seulement les scénarios critiques — fichiers entiers ci-dessous + scénarios étiquetés @leger.
+  // La suite complète reste celle de la mise en production.
+  grep: process.env.E2E_LEGER === '1' ? RE_LEGER : undefined,
   use: {
     baseURL: 'http://localhost:5173',
     viewport: { width: 390, height: 844 },

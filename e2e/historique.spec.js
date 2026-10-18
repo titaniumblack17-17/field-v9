@@ -1,4 +1,7 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './base.js'
+
+// Ce fichier teste le temps réel : il garde le vrai (le reste de la suite utilise un serveur Realtime de substitution).
+test.use({ autoriser: ['temps-reel'] })
 
 // Historique des étapes : dossier jetable (ZZTEST-HISTO), supprimé à la fin.
 // Étape de test « négociation » : elle ne crée ni rappel ni tâche Todoist.

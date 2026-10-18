@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './base.js'
 import { ouvrirDocuments, versDashboard, annuler } from './aides.js'
 import { journaliser } from './diag.js'
 import { potentiel } from '../src/lib/documents.js'

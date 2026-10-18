@@ -1,6 +1,9 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './base.js'
 import { journaliser, noter } from './diag.js'
 import { ouvrirDocuments, rendu } from './aides.js'
+
+// Ce fichier teste le temps réel : il garde le vrai (le reste de la suite utilise un serveur Realtime de substitution).
+test.use({ autoriser: ['temps-reel'] })
 
 // Rejeu hors-ligne de deux gestes sur des offres d'un MÊME devis, dans les deux ordres possibles.
 // Les écritures sont coupées (PATCH sur `fichiers` abandonné) pendant que l'application reste

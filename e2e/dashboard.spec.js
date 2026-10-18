@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, RE_SUPABASE } from './base.js'
 import { FAMILLES } from '../src/constants/dashboard.js'
 import { ETAPES_PROJET_LABELS, ETAPES_SIGNEES, estEnAttente, exerciceDe } from '../src/constants/dossiers.js'
 import { aTrancher } from '../src/lib/documents.js'
@@ -266,7 +266,7 @@ for (const [nom, largeur, hauteur] of [['iPhone 390', 390, 844], ['ordinateur 12
 
     test('hors-ligne : dernières valeurs connues signalées', async ({ page }) => {
       await ouvrirDashboard(page) // remplit le cache
-      await page.route(/supabase\.co/, (route) => route.abort())
+      await page.route(RE_SUPABASE, (route) => route.abort())
       await page.reload()
       // La reprise hors-ligne attend les délais de réconciliation (6 à 12 s, inchangés)
       await versDashboard(page, 30_000)
@@ -277,7 +277,7 @@ for (const [nom, largeur, hauteur] of [['iPhone 390', 390, 844], ['ordinateur 12
   })
 }
 
-test('temps réel : un dossier créé, déplacé puis supprimé met le Dashboard à jour', async ({ page }) => {
+test('temps réel : un dossier créé, déplacé puis supprimé met le Dashboard à jour', { tag: '@temps-reel' }, async ({ page }) => {
   await ouvrirDashboard(page)
   const pipeline = page.getByLabel('Pipeline', { exact: true }).first()
   const nbFamille = async (libelle) =>

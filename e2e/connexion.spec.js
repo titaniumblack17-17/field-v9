@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './base.js'
 
 // Connexion par code (Supabase Auth, temps A : RLS non activé). Aucun e-mail n'est envoyé, aucun compte n'est touché :
 // toutes les routes /auth/v1/* sont simulées, avec de faux jetons. Les lectures et écritures de données partent vers la

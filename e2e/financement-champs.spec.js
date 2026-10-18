@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './base.js'
 
 // Champs du bloc Financement selon le mode : durée en premier, estimation du paiement périodique (jamais écrite
 // en base), libellés propres à « En plusieurs fois » avec le même stockage. Fixtures ZZTEST propres à ce passage.

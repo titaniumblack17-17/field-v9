@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './base.js'
 import { aTrancher, potentiel } from '../src/lib/documents.js'
 
 // Lecture seule sur la base réelle : ces tests n'écrivent rien (« Plus tard »

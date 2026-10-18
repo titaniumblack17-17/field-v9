@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './base.js'
 import { versDashboard } from './aides.js'
 
 // Financement d'un projet (V1). Fixtures ZZTEST propres à ce passage ; tout est supprimé en fin (le financement

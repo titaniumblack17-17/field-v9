@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './base.js'
 
 // Une lecture qui ne revient jamais (constaté : GET /dossiers resté en vol 45 s en suite complète) ne doit
 // pas laisser l'écran sur « Chargement… » : au-delà du délai, dernière version connue, signalée comme telle.

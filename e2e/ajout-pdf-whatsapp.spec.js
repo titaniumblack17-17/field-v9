@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './base.js'
 
 // PDF reçu par WhatsApp, enregistré dans Fichiers puis ajouté depuis l'iPhone : nom à espaces et accents,
 // type MIME parfois vide. Fixtures ZZTEST uniques à ce passage, fichiers du dépôt retirés en fin.
