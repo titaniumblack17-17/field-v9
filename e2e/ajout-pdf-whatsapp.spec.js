@@ -2,8 +2,6 @@ import { test, expect } from './base.js'
 
 // PDF reçu par WhatsApp, enregistré dans Fichiers puis ajouté depuis l'iPhone : nom à espaces et accents,
 // type MIME parfois vide. Fixtures ZZTEST uniques à ce passage, fichiers du dépôt retirés en fin.
-// Ces deux scénarios dépendent du temps réel : l'application n'ajoute pas un document envoyé à la liste elle-même, il n'apparaît que par l'événement
-// d'insertion (voir le backlog de PASSATION.md) — d'où l'étiquette @temps-reel (vrai temps réel, en passe complète comme en léger).
 const NOM = `ZZTEST-WA-${Math.random().toString(36).slice(2, 8)}`
 const NOM_PDF = 'WhatsApp Document 2026-10-12 at 11.02.33 – Éléonore côté (1).pdf'
 const NOM_PDF_SANS_TYPE = 'WhatsApp Document 2026-10-12 at 11.05.10 è.pdf'
@@ -57,7 +55,7 @@ test('le champ fichier accepte explicitement .pdf', async ({ page }) => {
   expect(accept).toContain('.pdf')
 })
 
-test('PDF au nom WhatsApp (espaces, accents) : en base, rangé « autre », type PDF ; sans type MIME aussi', { tag: '@temps-reel' }, async ({ page }) => {
+test('PDF au nom WhatsApp (espaces, accents) : en base, rangé « autre », type PDF ; sans type MIME aussi', async ({ page }) => {
   await ouvrirFiche(page)
   const champ = page.locator('input[type=file][data-ajout=dossier]')
   await champ.setInputFiles({ name: NOM_PDF, mimeType: 'application/pdf', buffer: PDF })
@@ -96,7 +94,7 @@ test('iPhone : la feuille d’ajout porte la ligne d’aide WhatsApp et mène au
   await ctx.close()
 })
 
-test('hors ligne : message visible (jamais muet), puis « Réessayer » envoie au retour du réseau', { tag: '@temps-reel' }, async ({ page, context }) => {
+test('hors ligne : message visible (jamais muet), puis « Réessayer » envoie au retour du réseau', async ({ page, context }) => {
   await ouvrirFiche(page)
   const nom = 'WhatsApp Document 2026-10-12 at 11.20.00 hors ligne.pdf'
   await context.setOffline(true)

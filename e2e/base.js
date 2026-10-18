@@ -75,6 +75,8 @@ async function installer(context, permis, titre) {
   if (!permis('temps-reel')) {
     // Serveur Realtime de substitution (protocole Phoenix v2) : jointures et battements acquittés, aucun événement.
     await context.routeWebSocket(/\/realtime\/v1\/websocket/, (ws) => {
+      const abonnements = [] // { topic, filtres } : ce que l'application a demandé d'écouter (voir echoRealtime)
+      ;(context.__factices ??= []).push({ ws, abonnements })
       ws.onMessage((message) => {
         let m
         try {
@@ -86,6 +88,7 @@ async function installer(context, permis, titre) {
         const [joinRef, ref, topic, evenement, charge] = m
         if (evenement === 'heartbeat') return ws.send(JSON.stringify([null, ref, 'phoenix', 'phx_reply', { status: 'ok', response: {} }]))
         const filtres = (charge?.config?.postgres_changes ?? []).map((f, i) => ({ id: i + 1, ...f }))
+        if (evenement === 'phx_join') abonnements.push({ topic, filtres })
         ws.send(JSON.stringify([joinRef, ref, topic, 'phx_reply', { status: 'ok', response: evenement === 'phx_join' ? { postgres_changes: filtres } : {} }]))
       })
     })
@@ -109,4 +112,24 @@ export const test = base.extend({
     await terminer()
   },
 })
+/**
+ * Fait arriver un événement temps réel (INSERT / UPDATE / DELETE) aux abonnements de l'application, à travers le serveur
+ * Realtime factice (inactif quand le scénario utilise le vrai temps réel). Retourne le nombre de canaux atteints.
+ * Sert à tester « l'écho n'arrive jamais » (on n'appelle pas cette fonction) et « l'écho arrive en retard ».
+ */
+export function echoRealtime(context, { table, type = 'INSERT', record, ancien = {} }) {
+  let atteints = 0
+  for (const { ws, abonnements } of context.__factices ?? []) {
+    for (const { topic, filtres } of abonnements) {
+      for (const f of filtres) {
+        if (f.table !== table || !(f.event === '*' || f.event === type)) continue
+        const m = /^(\w+)=eq\.(.+)$/.exec(f.filter ?? '')
+        if (m && String(record[m[1]]) !== m[2]) continue
+        ws.send(JSON.stringify([null, null, topic, 'postgres_changes', { ids: [f.id], data: { schema: 'public', table, commit_timestamp: new Date().toISOString(), type, record, old_record: ancien, columns: [], errors: null } }]))
+        atteints += 1
+      }
+    }
+  }
+  return atteints
+}
 export { expect }

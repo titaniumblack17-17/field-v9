@@ -895,3 +895,51 @@ Limite connue : si le flux temps réel ne renvoie jamais l'écho d'une écriture
   Mis en évidence par `e2e/ajout-pdf-whatsapp.spec.js` (2 scénarios étiquetés `@temps-reel` pour cette raison).
 - **`GET /dossiers` rechargé 1 118 fois par passe complète** (≈ 14 Ko l'unité, 15,5 Mo, près de la moitié des octets d'une passe) : l'app relit toute la liste des dossiers
   (avec les clients) à chaque chargement d'écran et à chaque événement. Sujet de l'application, volontairement non traité dans les tests (pas de mémorisation des lectures lourdes).
+
+## Ajout d'un document : affichage immédiat (branche `feat/ajout-document-local`, non fusionnée)
+
+- **Défaut corrigé** : un document envoyé (PDF reçu par WhatsApp, collage, sélecteur) n'apparaissait dans la liste que par l'événement temps réel d'insertion ;
+  si l'événement n'arrivait pas, il fallait recharger alors qu'il était bien enregistré. `PiecesJointes.jsx` (`envoyerEtSuivre`) l'ajoute maintenant à la liste
+  dès que l'insertion réussit (même règle que l'écho : un identifiant déjà présent n'est pas ajouté deux fois, quel que soit l'ordre d'arrivée).
+- **Devis déposé** : le montant (ou les offres) lu par la fonction n'arrivait aussi que par l'événement de mise à jour. Après la lecture (`lireDevis`), la ligne est
+  relue UNE fois (`relireFichier`), seulement si `analyse_at` n'a pas changé (donc si l'écho du résultat n'est pas arrivé) ; une écriture locale en vol l'emporte.
+- **Hors ligne : inchangé** (« Pas de réseau… » + « Réessayer ») : un fichier n'entre pas dans la file d'écritures (stockage local). Une vraie file d'envoi
+  (IndexedDB) reste un lot à part.
+- Tests : `e2e/ajout-document-local.spec.js` (écho jamais reçu ; écho tardif injecté ×2 ; devis sans écho = montant visible, 1 relecture ; devis avec écho = 0 relecture ;
+  vrai temps réel = 1 ligne) ; helper `echoRealtime` dans `e2e/base.js` (événement injecté par le serveur Realtime factice). Les 2 scénarios WhatsApp n'ont plus
+  l'étiquette `@temps-reel`. Vérifié : les nouveaux scénarios échouent sur l'ancien code et passent sur le nouveau.
+
+### Audit du rechargement de la liste des dossiers (lecture seule, non appliqué — pour plus tard)
+**Constat (journaux Supabase, 24 h au 18/10/2026, par agent utilisateur)** :
+
+| Origine | Requêtes | dont GET /dossiers | dont OPTIONS |
+|---|---|---|---|
+| Tests Playwright | 75 594 (85 %) | 10 031 | 14 419 |
+| Outils Node (aides de test, scripts) | 6 322 | 736 | 42 |
+| Autre (fonctions Edge, planifié) | 4 939 | 14 | 0 |
+| iPhone de Bruce | 1 490 | 94 | 653 |
+| Mac (navigateur réel) | 826 | 146 | 45 |
+
+Usage réel ≈ 240 GET /dossiers par jour (≈ 3,4 Mo, 14 Ko compressés l'unité), ≈ 2 300 requêtes par jour : 100 à 150 Mo par mois, 2 à 3 % du plafond de 5 Go.
+Le dépassement venait des passes de tests (une passe complète : 15,7 Mo de dossiers, 1 118 lectures, dont 826 « liste complète »).
+
+**Déclencheurs de la liste complète** (`select=*, clients(…)`) :
+1. Ouverture de l'accueil : `useBoardData` (Board) ET `Dashboard` (Pilotage) lisent chacun la liste = 2 lectures par ouverture ; les écrans se démontent quand on
+   les quitte, donc chaque retour d'une fiche à l'accueil en refait 2 (≈ 92 % des 826 lectures d'une passe).
+2. Pilotage et Projets : tout événement temps réel sur `dossiers`, `fichiers`, `dossier_note_taches`, `dossier_financement` (+ `pipeline_snapshots` pour le Pilotage)
+   relance le chargement complet de l'écran (reprise 500 ms). Board et Pipeline, eux, corrigent leur liste sur place (pas de relecture).
+3. Ouverture de Projets / Pipeline (lecture allégée `type in …`), retour à l'accueil après 30 min d'arrière-plan, rejeu de la file (via les événements).
+4. Aucun rafraîchissement au retour au premier plan, aucun minuteur sur les dossiers.
+
+**Options (aucune appliquée)** :
+
+| Option | Gain | Risque |
+|---|---|---|
+| A. Une seule lecture partagée Board + Pilotage sur l'accueil | −50 % des lectures d'ouverture | Faible à moyen : couplage des deux écrans (ils s'alignent mieux entre eux) |
+| B. Ne relire que si une écriture a eu lieu (indicateur posé par événements et écritures locales, durée de validité courte) | −80 % des retours d'écran | Moyen à élevé : liste périmée si l'événement temps réel manque ; relecture forcée au retour au premier plan après quelques minutes |
+| C. Colonnes plus légères | −30 à 50 % des octets (à mesurer) | Moyen : une colonne retirée qu'un écran utilise s'affiche vide sans erreur → test de contrat par écran |
+| D. Corriger sur place (Pilotage, Projets) au lieu de relire | ≈ 8 % des lectures | Faible à moyen |
+| E. Requêtes conditionnelles (`If-None-Match`) | octets ≈ 0 quand rien n'a changé | À vérifier (l'API honore-t-elle l'étiquette ?) ; changement du client Supabase |
+| F. iPhone : OPTIONS = 44 % de ses requêtes (653/1 490) | requêtes (pas d'octets) | Élevé : relais de même origine |
+
+Ordre conseillé si l'on agit : A puis C ; B seulement si les mesures le justifient. Gain réel pour l'usage de Bruce : faible (3 % du plafond).

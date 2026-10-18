@@ -227,6 +227,10 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
       setDernierEchec(fichier) // gardé en mémoire pour « Réessayer » (un fichier ne tient pas dans la file hors-ligne)
       return
     }
+    // Le document enregistré s'affiche tout de suite, sans attendre l'événement temps réel (qui peut ne jamais arriver :
+    // réseau faible, instabilité du service). Même règle que l'écho d'insertion : un identifiant déjà présent n'est pas
+    // ajouté deux fois, quel que soit l'ordre d'arrivée de l'un et de l'autre.
+    if (ligne) setListe((cur) => (cur.some((f) => f.id === ligne.id) ? cur : [ligne, ...cur]))
     // Un devis déposé sur un dossier se lit tout de suite : c'est le moment où
     // le chiffre est utile, et le seul où l'on pense à le vérifier.
     if (ligne && estDevis(ligne) && estPdf(fichier.type || null)) lireDevis(ligne)
@@ -257,8 +261,23 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
 
   // Lecture du total TTC d'un devis. Réservée aux PDF d'un dossier : sur une
   // fiche client, un PDF n'appartient à aucun chiffrage.
+  // Relit une ligne de fichier quand l'événement temps réel qui devait la mettre à jour n'est pas arrivé. Une écriture
+  // locale en vol ou en file l'emporte (jamais écrasée par la base).
+  const relireFichier = async (id) => {
+    const occupe = () => {
+      const s = ecritures.current.get(id)
+      return Boolean(s && s.enCours > 0) || ligneEnFile('fichiers', id)
+    }
+    if (occupe()) return
+    const { data, error } = await supabase.from('fichiers').select('*').eq('id', id).maybeSingle()
+    if (error || !data || occupe()) return
+    setListe((cur) => cur.map((x) => (x.id === id ? data : x)))
+  }
+
   const lireDevis = async (fichier) => {
     if (!dossierId || !estPdf(fichier.type_mime) || !estDevis(fichier)) return
+    // Horodatage d'analyse avant la lecture : s'il a changé après, l'écho temps réel du résultat est déjà arrivé.
+    const analyseAvant = listeRef.current.find((x) => x.id === fichier.id)?.analyse_at ?? null
     setAnalyse((cur) => new Set(cur).add(fichier.id))
     const { error: err } = await supabase.functions.invoke('devis-montant-v2', {
       body: { fichierId: fichier.id },
@@ -269,8 +288,14 @@ export default function PiecesJointes({ clientId, dossierId, onMontantChange, ou
       return suite
     })
     if (err) setErreur('Lecture du devis impossible.')
-    // Le montant du dossier est recalculé en base : l'écran doit aller le relire.
-    else onMontantChange?.()
+    else {
+      // Le montant du dossier est recalculé en base : l'écran doit aller le relire.
+      onMontantChange?.()
+      // Le résultat de la lecture (montant, offres) arrive normalement par l'événement temps réel. S'il n'est pas là,
+      // on relit cette seule ligne ; s'il est là (horodatage d'analyse changé), aucune requête de plus.
+      const locale = listeRef.current.find((x) => x.id === fichier.id)
+      if (locale && (locale.analyse_at ?? null) === analyseAvant) await relireFichier(fichier.id)
+    }
   }
 
   // Écriture d'un ou plusieurs champs d'un fichier : appliquée tout de suite à

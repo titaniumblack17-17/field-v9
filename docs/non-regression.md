@@ -104,6 +104,11 @@ Viewport iPhone 390 × 844. Console sans erreur. Aucun défilement horizontal. C
 - [ ] Le client envoie le jeton de l'utilisateur ; la base reste ouverte (RLS non activé) ; aucune table modifiée.
 - [ ] Les tests automatiques ouvrent la porte uniquement sur le serveur de développement (VITE_E2E_SANS_CONNEXION=1) : jamais en production ; un test e2e sur le site publié exige désormais une vraie session.
 
+## 5 septies. Ajout d'un document : affichage immédiat
+- [ ] Un document envoyé (sélecteur, collage, PDF reçu par WhatsApp) apparaît dans la liste dès que l'enregistrement en base réussit, sans attendre le temps réel ; si l'événement d'insertion arrive ensuite (ou deux fois), il n'y a toujours qu'une ligne (déduplication par identifiant).
+- [ ] Un devis déposé : son montant (ou ses offres) est visible même si l'événement de mise à jour n'arrive jamais — la ligne est relue UNE fois, seulement si le résultat de la lecture n'est pas déjà arrivé par le temps réel (aucune requête de plus sinon).
+- [ ] Hors ligne : inchangé — « Pas de réseau… » et « Réessayer » (le fichier n'entre pas dans la file hors ligne ; une vraie file d'envoi est un lot à part).
+
 ## 6. Capture / dictée
 - [ ] Capture texte et dictée créent la capture ; suggestion de dossier ; lien capture → dossier.
 

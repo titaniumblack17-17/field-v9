@@ -4,7 +4,7 @@
 import { defineConfig } from '@playwright/test'
 import 'dotenv/config'
 
-const RE_LEGER = /(connexion|decisions|financement|financement-champs|rejeu-hors-ligne|historique|devis-ecarte|version|ajout-pdf-whatsapp|cors)\.spec\.js|@leger/
+const RE_LEGER = /(connexion|decisions|financement|financement-champs|rejeu-hors-ligne|historique|devis-ecarte|version|ajout-pdf-whatsapp|ajout-document-local|cors)\.spec\.js|@leger/
 
 export default defineConfig({
   testDir: './e2e',
