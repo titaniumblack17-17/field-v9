@@ -888,3 +888,10 @@ Limite connue : si le flux temps réel ne renvoie jamais l'écho d'une écriture
 - **À savoir** : (1) quand une route est installée, Playwright répond lui-même aux OPTIONS du navigateur (c'est la source de l'essentiel du gain) : voir `cors.spec.js` ;
   (2) le scénario « financement hors ligne » est connu pour échouer par intermittence sur délai (rejeu avec reprises 4/8/16/30 s) ; (3) les tests ne comptent que ce que
   le navigateur et les aides Node envoient : la mesure serveur se refait avec un proxy qui relaie vers Supabase (`VITE_SUPABASE_URL=http://localhost:5190`).
+
+### Backlog issu de l'allègement des tests (à traiter à part, côté application)
+- **L'app doit ajouter un document envoyé à la liste elle-même, sans dépendre du temps réel.** Aujourd'hui `PiecesJointes.jsx` n'insère pas la ligne renvoyée par
+  l'envoi : le document n'apparaît que par l'événement temps réel `INSERT` ; sans temps réel (coupure, service indisponible) il n'apparaît qu'après rechargement.
+  Mis en évidence par `e2e/ajout-pdf-whatsapp.spec.js` (2 scénarios étiquetés `@temps-reel` pour cette raison).
+- **`GET /dossiers` rechargé 1 118 fois par passe complète** (≈ 14 Ko l'unité, 15,5 Mo, près de la moitié des octets d'une passe) : l'app relit toute la liste des dossiers
+  (avec les clients) à chaque chargement d'écran et à chaque événement. Sujet de l'application, volontairement non traité dans les tests (pas de mémorisation des lectures lourdes).
