@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs'
 import 'dotenv/config'
-import { createClient } from '@supabase/supabase-js'
+import { clientDonnees } from './lib/supabase-env.mjs'
 import {
   parserVCards,
   clefTelephone,
@@ -27,13 +27,8 @@ if (!cheminFichier) {
   process.exit(1)
 }
 
-const { VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY } = process.env
-if (!VITE_SUPABASE_URL || !VITE_SUPABASE_ANON_KEY) {
-  console.error('VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY doivent être définis (fichier .env).')
-  process.exit(1)
-}
-
-const supabase = createClient(VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
+// Clé de service (.env.local) : voir scripts/lib/supabase-env.mjs. L'erreur de chaque écriture est contrôlée plus bas.
+const { supabase } = clientDonnees()
 
 const { data: clients, error: erreurClients } = await supabase
   .from('clients')

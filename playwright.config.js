@@ -2,7 +2,23 @@
 // build de production). Viewport iPhone 390 x 844, base Supabase réelle : les
 // tests n'écrivent que sur un client « ZZTEST-E2E » créé puis supprimé par eux.
 import { defineConfig } from '@playwright/test'
-import 'dotenv/config'
+import dotenv from 'dotenv'
+
+dotenv.config({ path: '.env.local', quiet: true }) // clé de service (temps B), jamais commitée — voir e2e/cle.js
+dotenv.config({ quiet: true })
+
+// Serveur de développement des tests. La porte de connexion est ouverte (voir src/lib/session.js) : jamais en production.
+// Une fois RLS activé, l'application « sans connexion » n'a plus de session : E2E_APP_CLE_SERVICE=1 lui injecte la clé de
+// service (opt-in, serveur de test local uniquement — la clé n'est jamais écrite dans un fichier ni publiée). Pour valider les
+// politiques elles-mêmes, utiliser plutôt une vraie session (voir docs/securite-temps-b/PLAN.md).
+export function envServeurTest() {
+  const env = { VITE_E2E_SANS_CONNEXION: '1' }
+  if (process.env.E2E_APP_CLE_SERVICE === '1') {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('E2E_APP_CLE_SERVICE=1 demande SUPABASE_SERVICE_ROLE_KEY (.env.local).')
+    env.VITE_SUPABASE_ANON_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  }
+  return env
+}
 
 const RE_LEGER = /(connexion|decisions|financement|financement-champs|rejeu-hors-ligne|historique|devis-ecarte|version|ajout-pdf-whatsapp|ajout-document-local|cors)\.spec\.js|@leger/
 
@@ -31,7 +47,6 @@ export default defineConfig({
     command: 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: true,
-    // Serveur de développement des tests : la porte de connexion est ouverte (voir src/lib/session.js). Jamais en production.
-    env: { VITE_E2E_SANS_CONNEXION: '1' },
+    env: envServeurTest(),
   },
 })

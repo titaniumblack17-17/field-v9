@@ -4,7 +4,7 @@ import { aTrancher, potentiel } from '../src/lib/documents.js'
 // Lecture seule sur la base réelle : ces tests n'écrivent rien (« Plus tard »
 // reste un état local de l'écran).
 const URL_DB = process.env.VITE_SUPABASE_URL
-const CLE = process.env.VITE_SUPABASE_ANON_KEY
+import { CLE } from './cle.js'
 const lire = async (chemin) => {
   const r = await fetch(`${URL_DB}/rest/v1/${chemin}`, { headers: { apikey: CLE, Authorization: `Bearer ${CLE}` } })
   return r.json()

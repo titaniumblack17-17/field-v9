@@ -9,7 +9,7 @@ const NOM = `ZZTEST-DEC-${Math.random().toString(36).slice(2, 8)}`
 // supprimé à la fin avec ses rappels et ses notes. Les appels Todoist sont coupés :
 // ces tests ne créent aucune tâche dans Todoist.
 const URL_DB = process.env.VITE_SUPABASE_URL
-const CLE = process.env.VITE_SUPABASE_ANON_KEY
+import { CLE } from './cle.js'
 const entetes = { apikey: CLE, Authorization: `Bearer ${CLE}`, 'content-type': 'application/json', Prefer: 'return=representation' }
 const rest = async (methode, chemin, corps) => {
   const r = await fetch(`${URL_DB}/rest/v1/${chemin}`, { method: methode, headers: entetes, body: corps ? JSON.stringify(corps) : undefined })

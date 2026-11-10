@@ -1,19 +1,14 @@
 #!/usr/bin/env node
 import 'dotenv/config'
-import { createClient } from '@supabase/supabase-js'
+import { clientDonnees } from './lib/supabase-env.mjs'
 
 // Passe en revue toutes les fiches clients incomplètes et déclenche
 // client-web-lookup (édge function, écriture automatique) sur chacune —
 // équivalent en lot du bouton « Chercher sur le web » de la fiche.
 // À relancer ponctuellement si de nouvelles fiches incomplètes s'accumulent.
 
-const { VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY } = process.env
-if (!VITE_SUPABASE_URL || !VITE_SUPABASE_ANON_KEY) {
-  console.error('VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY doivent être définis (fichier .env).')
-  process.exit(1)
-}
-
-const supabase = createClient(VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
+// Données : clé de service (temps B). Appel de la fonction Edge : clé publique (JWT valide, la fonction utilise sa propre clé de service).
+const { url: VITE_SUPABASE_URL, anon: VITE_SUPABASE_ANON_KEY, supabase } = clientDonnees()
 
 const { data: clients, error } = await supabase
   .from('clients')

@@ -18,7 +18,7 @@ qui se met à jour au fil du travail.
 ## Stack
 
 React 18 + Vite 5 + Tailwind 3 · Supabase `qgbdhwkdbmplvpflsgdt` (eu-west-3,
-RLS désactivée — usage strictement personnel, assumé) · déploiement Vercel
+sécurité RLS : temps B en cours, voir `docs/securite-temps-b/` — rien n'est encore basculé tant que Bruce n'a pas donné son feu vert) · déploiement Vercel
 automatique sur push `main` → https://field-v9.vercel.app
 
 ## Workflow

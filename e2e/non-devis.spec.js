@@ -9,7 +9,7 @@ const NOM = `ZZTEST-NONDEVIS-${Math.random().toString(36).slice(2, 8)}`
 // décision par défaut « a_trancher » en base, mais n'entrent JAMAIS dans « À trancher »
 // ni dans un montant. Cas adverse : ils portent ici offres, doute HT/TTC et montant.
 const URL_DB = process.env.VITE_SUPABASE_URL
-const CLE = process.env.VITE_SUPABASE_ANON_KEY
+import { CLE } from './cle.js'
 const entetes = { apikey: CLE, Authorization: `Bearer ${CLE}`, 'content-type': 'application/json', Prefer: 'return=representation' }
 const rest = async (methode, chemin, corps) => {
   const r = await fetch(`${URL_DB}/rest/v1/${chemin}`, { method: methode, headers: entetes, body: corps ? JSON.stringify(corps) : undefined })

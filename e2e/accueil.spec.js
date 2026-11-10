@@ -6,7 +6,7 @@ import { rendu } from './aides.js'
 // sont comptés, jamais cliqués). Un test par fonction de l'inventaire
 // (docs/inventaire-accueil.md).
 const URL_DB = process.env.VITE_SUPABASE_URL
-const CLE = process.env.VITE_SUPABASE_ANON_KEY
+import { CLE } from './cle.js'
 const lire = async (chemin) => {
   const r = await fetch(`${URL_DB}/rest/v1/${chemin}`, { headers: { apikey: CLE, Authorization: `Bearer ${CLE}` } })
   return r.json()

@@ -3,7 +3,7 @@ import { ouvrirDocuments, rendu } from './aides.js'
 import { journaliser, noter } from './diag.js'
 
 const URL_DB = process.env.VITE_SUPABASE_URL
-const CLE = process.env.VITE_SUPABASE_ANON_KEY
+import { CLE } from './cle.js'
 const entetes = { apikey: CLE, Authorization: `Bearer ${CLE}`, 'content-type': 'application/json', Prefer: 'return=representation' }
 
 const rest = async (methode, chemin, corps) => {

@@ -1,12 +1,10 @@
 #!/usr/bin/env node
-import 'dotenv/config'
-import { createClient } from '@supabase/supabase-js'
+import { clientDonnees } from './lib/supabase-env.mjs'
 
 // Imprime "id\tnom" pour chaque fiche incomplète, une par ligne — consommé
 // par un script bash qui appelle client-web-lookup via curl (plus fiable
 // ici que des fetch() Node enchaînés, qui échouaient en rafale).
-const { VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY } = process.env
-const supabase = createClient(VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
+const { supabase } = clientDonnees() // clé de service si présente (temps B), sinon clé publique
 
 const { data: clients, error } = await supabase
   .from('clients')

@@ -6,7 +6,7 @@ test.use({ autoriser: ['temps-reel'] })
 // Historique des étapes : dossier jetable (ZZTEST-HISTO), supprimé à la fin.
 // Étape de test « négociation » : elle ne crée ni rappel ni tâche Todoist.
 const URL_DB = process.env.VITE_SUPABASE_URL
-const CLE = process.env.VITE_SUPABASE_ANON_KEY
+import { CLE } from './cle.js'
 const entetes = { apikey: CLE, Authorization: `Bearer ${CLE}`, 'content-type': 'application/json', Prefer: 'return=representation' }
 const rest = async (methode, chemin, corps) => {
   const r = await fetch(`${URL_DB}/rest/v1/${chemin}`, { method: methode, headers: entetes, body: corps ? JSON.stringify(corps) : undefined })

@@ -5,7 +5,7 @@ import { versDashboard } from './aides.js'
 // et son journal partent avec le dossier, en cascade). Todoist n'est jamais appelé : l'appel est intercepté.
 const NOM = `ZZTEST-FIN-${Math.random().toString(36).slice(2, 8)}`
 const URL_DB = process.env.VITE_SUPABASE_URL
-const CLE = process.env.VITE_SUPABASE_ANON_KEY
+import { CLE } from './cle.js'
 const entetes = { apikey: CLE, Authorization: `Bearer ${CLE}`, 'content-type': 'application/json', Prefer: 'return=representation' }
 const rest = async (methode, chemin, corps) => {
   const r = await fetch(`${URL_DB}/rest/v1/${chemin}`, { method: methode, headers: entetes, body: corps ? JSON.stringify(corps) : undefined })

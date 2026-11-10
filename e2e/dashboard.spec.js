@@ -11,7 +11,7 @@ const NOM = `ZZTEST-DASH-${Math.random().toString(36).slice(2, 8)}`
 // Lecture seule : le Dashboard n'écrit rien ; les chiffres affichés sont comparés
 // à un recalcul indépendant fait ici depuis les lignes brutes de la base.
 const URL_DB = process.env.VITE_SUPABASE_URL
-const CLE = process.env.VITE_SUPABASE_ANON_KEY
+import { CLE } from './cle.js'
 const entetes = { apikey: CLE, Authorization: `Bearer ${CLE}`, 'content-type': 'application/json' }
 const lire = async (chemin) => (await fetch(`${URL_DB}/rest/v1/${chemin}`, { headers: entetes })).json()
 const rpc = async () => (await fetch(`${URL_DB}/rest/v1/rpc/dashboard_chiffres`, { method: 'POST', headers: entetes, body: '{}' })).json()
