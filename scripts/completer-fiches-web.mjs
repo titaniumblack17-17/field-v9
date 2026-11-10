@@ -8,7 +8,7 @@ import { clientDonnees } from './lib/supabase-env.mjs'
 // À relancer ponctuellement si de nouvelles fiches incomplètes s'accumulent.
 
 // Données : clé de service (temps B). Appel de la fonction Edge : clé publique (JWT valide, la fonction utilise sa propre clé de service).
-const { url: VITE_SUPABASE_URL, anon: VITE_SUPABASE_ANON_KEY, supabase } = clientDonnees()
+const { url: VITE_SUPABASE_URL, anon: VITE_SUPABASE_ANON_KEY, supabase } = clientDonnees({ ecriture: true })
 
 const { data: clients, error } = await supabase
   .from('clients')

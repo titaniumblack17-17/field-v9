@@ -22,7 +22,7 @@ if (!cheminFichier) {
 }
 
 // Clé de service (.env.local) : voir scripts/lib/supabase-env.mjs. L'erreur de chaque écriture est contrôlée plus bas.
-const { supabase } = clientDonnees()
+const { supabase } = clientDonnees({ ecriture: true })
 
 const texteVCard = readFileSync(cheminFichier, 'utf8')
 const cartes = parserVCards(texteVCard)

@@ -17,7 +17,7 @@ revoke all on public.widget_jetons from anon, authenticated;
 
 -- ── Étape 2 (additive) : fonction à jeton (security definer, chemin de recherche figé)
 create or replace function public.widget_chiffres_board_jeton(p_jeton text)
-returns setof record
+returns table (dossiers_actifs integer, objectif_pourcent integer, a_traiter integer, sav_ouverts integer)
 language plpgsql security definer set search_path = public, extensions
 as $$
 begin
@@ -29,8 +29,7 @@ begin
   return query select * from public.widget_chiffres_board();
 end;
 $$;
--- ⚠ À ADAPTER avant exécution : « returns setof record » exige une liste de colonnes à l'appel. Au moment d'appliquer, remplacer par
--- le type de retour réel de widget_chiffres_board() (voir son \df+ : dossiers_actifs, objectif_pourcent, …) en copiant sa signature.
+-- Type de retour copié du schéma réel (lecture seule, 10/11/2026) : TABLE(dossiers_actifs integer, objectif_pourcent integer, a_traiter integer, sav_ouverts integer).
 revoke all on function public.widget_chiffres_board_jeton(text) from public;
 grant execute on function public.widget_chiffres_board_jeton(text) to anon;  -- anon appelle, mais ne passe que si le jeton est bon
 

@@ -18,7 +18,7 @@ critique à la plus critique, avec une vérification et un retour arrière prêt
 4. **Sauvegarde** : export de la base avant la première bascule (Supabase → Database → Backups, ou `pg_dump`).
 5. **Consommateurs de la clé publique à migrer d'abord** : voir le tableau ci-dessous. Préparation faite sur la branche
    `feat/securite-temps-b-preparation` (aucune base touchée) : scripts et e2e lisent `SUPABASE_SERVICE_ROLE_KEY` dans `.env.local`
-   (ignoré par git) et retombent sur la clé publique avec un avertissement si elle est absente — rien ne change tant que RLS est désactivé.
+   (ignoré par git) et retombent sur la clé publique en lecture seulement si elle est absente ; un script qui écrit s'arrête (exit 1).
 6. **Fournir la clé de service** : la copier (Supabase → Settings → API → `service_role`) dans `.env.local` sous `SUPABASE_SERVICE_ROLE_KEY=`.
    Jamais dans `.env`, jamais préfixée `VITE_`, jamais collée dans le chat ni commitée.
 
@@ -41,9 +41,7 @@ critique à la plus critique, avec une vérification et un retour arrière prêt
 | Tâches locales Claude (Plaud) | aucune clé du dépôt (MCP) | — | Rien dans le dépôt ; à vérifier au premier passage après bascule |
 
 **Application sous test (e2e)** : elle tourne en mode « sans connexion » (clé publique, sans session). Une fois `clients`/`dossiers` protégés,
-elle ne verra plus rien. Deux options : (a) `E2E_APP_CLE_SERVICE=1` injecte la clé de service dans le serveur de dev de test local (opt-in ; ne valide
-PAS les politiques, seulement le reste de l'app) ; (b) recommandé avant la bascule de `clients`/`dossiers` : une vraie session de test créée via l'API
-admin (non écrite à ce jour — à décider avec Bruce). Les e2e n'ont pas été lancés pendant cette préparation.
+elle ne verra plus rien. Option « clé de service dans le serveur de dev » SUPPRIMÉE (la clé ne doit jamais atteindre un serveur qui sert le front). Il faudra une vraie session de test créée via l'API admin avant la bascule de `clients`/`dossiers` (non écrite à ce jour). Les e2e n'ont pas été lancés pendant cette préparation.
 
 ## Tâches planifiées
 | Tâche | Où | Horaire | Ce qu'elle appelle | Effet de RLS | Action |
